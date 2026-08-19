@@ -77,8 +77,6 @@ export function FlowToolPage() {
     );
   }
 
-  const selectedVersion = versions.data?.find((item) => item.id === versionId);
-
   return (
     <div className="app">
       <header className="topbar">
@@ -182,14 +180,6 @@ export function FlowToolPage() {
           </div>
         </>
       )}
-
-      {selectedVersion !== undefined &&
-        selectedVersion.routing_model === "sequence" && (
-          <p className="banner banner--warn">
-            This version routes by question order, not by edges, so it has no map. Only
-            graph-routed versions can be shown here.
-          </p>
-        )}
     </div>
   );
 }

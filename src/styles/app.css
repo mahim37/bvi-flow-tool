@@ -9,28 +9,48 @@
  */
 
 :root {
-  --bg: #f8fafc;
+  --bg: #faf5ec;
+  --bg-2: #f1e7d2;
   --surface: #ffffff;
-  --border: #cbd5e1;
-  --border-strong: #94a3b8;
-  --text: #0f172a;
-  --text-muted: #475569;
-  --accent: #1d4ed8;
+  --border: #e6dbc2;
+  --border-strong: #d6c6a0;
+  --text: #1a1a1a;
+  --text-dim: #4a473f;
+  --text-muted: #766c5c;
+  --accent: #1a1a1a;
   --accent-text: #ffffff;
+  --accent-soft: #f1e7d2;
+  --accent-2: #c99568;
+  --emphasis: #9a3412;
+  --emphasis-soft: #f3e0d2;
+  --gold: #9a5209;
+  --green: #166534;
   --danger: #b91c1c;
-  --warn-bg: #fffbeb;
-  --warn-border: #d97706;
-  --info-bg: #eff6ff;
-  --error-bg: #fef2f2;
-  --focus: #1d4ed8;
+  --warn-bg: #fbf0dd;
+  --warn-border: #9a5209;
+  --info-bg: #f1e7d2;
+  --error-bg: #fbeae6;
+  --focus: #1a1a1a;
+
+  --canvas-bg: #faf5ec;
+  --canvas-dot: #f1e7d2;
+
+  --radius-sm: 6px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --shadow-sm: 0 1px 3px rgba(20, 16, 8, 0.08);
+  --shadow-md: 0 4px 16px rgba(20, 16, 8, 0.1);
 
   color-scheme: light;
   font-family:
-    system-ui,
     -apple-system,
+    BlinkMacSystemFont,
     "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
     sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text);
   background: var(--bg);
 }
@@ -49,6 +69,7 @@ body {
 :focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .sr-only {
@@ -63,6 +84,26 @@ body {
   border: 0;
 }
 
+/* A warm, quiet scrollbar rather than the platform default slab -- it
+   should read as part of the page, not as chrome bolted on top of it. */
+.sidebar,
+.panel {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.sidebar::-webkit-scrollbar,
+.panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.panel::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid var(--surface);
+}
+
 /* ---------- shell ---------- */
 
 .app {
@@ -74,15 +115,20 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
+  gap: 18px;
+  padding: 14px 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
 }
 
 .topbar__title {
-  font-size: 1rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   margin: 0;
+  white-space: nowrap;
 }
 
 .topbar__picker {
@@ -93,6 +139,7 @@ body {
 .topbar__picker select {
   max-width: 520px;
   width: 100%;
+  font-weight: 600;
 }
 
 .topbar__identity {
@@ -101,6 +148,7 @@ body {
   gap: 10px;
   color: var(--text-muted);
   font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .layout {
@@ -112,8 +160,10 @@ body {
 
 .canvas {
   min-height: 0;
-  background: radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0 /
-    24px 24px;
+  background:
+    radial-gradient(circle at 1px 1px, var(--canvas-dot) 1.5px, transparent 0) 0 0 / 26px
+      26px,
+    var(--canvas-bg);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }
@@ -122,22 +172,23 @@ body {
 
 .sidebar {
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px 14px;
   background: var(--surface);
 }
 
 .sidebar__block + .sidebar__block {
-  margin-top: 20px;
-  padding-top: 16px;
+  margin-top: 22px;
+  padding-top: 18px;
   border-top: 1px solid var(--border);
 }
 
 .sidebar__heading {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 
 .sidebar__label {
@@ -156,12 +207,32 @@ body {
 input,
 select {
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px 12px;
   font: inherit;
+  font-weight: 500;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+input:hover,
+select:hover {
+  border-color: var(--text-muted);
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+input[type="search"] {
+  background-image: none;
 }
 
 .list {
@@ -174,12 +245,13 @@ select {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
   cursor: pointer;
+  transition: background-color 0.12s ease;
 }
 
 .list__item:hover {
@@ -187,12 +259,12 @@ select {
 }
 
 .list__item--active {
-  background: var(--info-bg);
+  background: var(--accent-soft);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .list__code {
-  font-weight: 600;
+  font-weight: 700;
   margin-right: 6px;
 }
 
@@ -203,13 +275,14 @@ select {
 
 .list__tag {
   margin-left: 6px;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
   border: 1px solid var(--border-strong);
-  border-radius: 3px;
-  padding: 0 4px;
+  border-radius: 999px;
+  padding: 1px 7px;
 }
 
 .diagnostics,
@@ -222,14 +295,90 @@ select {
 summary {
   cursor: pointer;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 5px 4px;
-  border-radius: 4px;
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  list-style: none;
 }
 
-summary:hover {
-  background: var(--bg);
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.12s ease;
+}
+
+details[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.diagnostics__label,
+.sections__name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Decorative only: a stable colour per position in the section list, so a
+   section is recognisable by colour on the canvas legend and in this list
+   without the API needing to own a colour field. */
+.sections > li .sections__name::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 9px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--section-dot, var(--text-muted));
+}
+
+.sections > li:nth-child(12n + 1) .sections__name {
+  --section-dot: #3a5fe0;
+}
+.sections > li:nth-child(12n + 2) .sections__name {
+  --section-dot: #c2551a;
+}
+.sections > li:nth-child(12n + 3) .sections__name {
+  --section-dot: #7c4dd6;
+}
+.sections > li:nth-child(12n + 4) .sections__name {
+  --section-dot: #1f9e6d;
+}
+.sections > li:nth-child(12n + 5) .sections__name {
+  --section-dot: #c0392b;
+}
+.sections > li:nth-child(12n + 6) .sections__name {
+  --section-dot: #0e9488;
+}
+.sections > li:nth-child(12n + 7) .sections__name {
+  --section-dot: #b8860b;
+}
+.sections > li:nth-child(12n + 8) .sections__name {
+  --section-dot: #d1478a;
+}
+.sections > li:nth-child(12n + 9) .sections__name {
+  --section-dot: #2f7bd6;
+}
+.sections > li:nth-child(12n + 10) .sections__name {
+  --section-dot: #4c9a2a;
+}
+.sections > li:nth-child(12n + 11) .sections__name {
+  --section-dot: #8a5a2c;
+}
+.sections > li:nth-child(12n) .sections__name {
+  --section-dot: #6b7280;
 }
 
 .diagnostics__count,
@@ -238,20 +387,22 @@ summary:hover {
   color: var(--text-muted);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0 8px;
-  font-size: 0.8rem;
+  padding: 1px 9px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--bg);
 }
 
 /* Count badges carry a border and a numeral, so the emphasis below is a
    third channel rather than the only one. */
 .diagnostics__count--some {
-  color: var(--danger);
-  border-color: var(--danger);
-  font-weight: 700;
+  color: var(--emphasis);
+  border-color: var(--emphasis);
+  background: var(--emphasis-soft);
 }
 
 .diagnostics__meaning {
-  margin: 4px 4px 6px;
+  margin: 4px 4px 8px;
   font-size: 0.8rem;
   color: var(--text-muted);
 }
@@ -264,44 +415,52 @@ summary:hover {
 }
 
 .legend li + li {
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 /* ---------- detail panel ---------- */
 
 .panel {
   overflow-y: auto;
-  padding: 16px;
+  padding: 20px;
   background: var(--surface);
+}
+
+.panel__header {
+  margin: 0;
 }
 
 .panel__title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .panel__prompt {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   color: var(--text-muted);
 }
 
 .panel__section {
-  margin-top: 20px;
-  padding-top: 14px;
+  margin-top: 22px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
 }
 
 .panel__heading {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 
 .panel__subheading {
-  font-size: 0.85rem;
-  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 10px;
 }
 
 .panel__hint {
@@ -313,33 +472,37 @@ summary:hover {
 .meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 14px 0 0;
+  gap: 10px;
+  margin: 16px 0 0;
 }
 
 .meta dt {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
 }
 
 .meta dd {
-  margin: 2px 0 0;
-  font-size: 0.9rem;
+  margin: 3px 0 0;
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
 }
 
 .badge {
   border: 1px solid var(--border-strong);
+  background: var(--bg);
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 3px 12px;
   font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .options {
@@ -349,7 +512,7 @@ summary:hover {
 }
 
 .options li {
-  padding: 5px 0;
+  padding: 7px 2px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -377,8 +540,19 @@ summary:hover {
 .edges__row {
   display: flex;
   gap: 10px;
-  padding: 8px 0;
+  padding: 10px 2px;
   border-bottom: 1px solid var(--border);
+}
+
+.edges__rule {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.edges__target {
+  font-weight: 600;
 }
 
 .edges__priority {
@@ -389,6 +563,7 @@ summary:hover {
   border: 1px solid var(--border-strong);
   text-align: center;
   font-size: 0.75rem;
+  font-weight: 700;
   line-height: 20px;
   color: var(--text-muted);
 }
@@ -399,14 +574,14 @@ summary:hover {
 }
 
 .edges__guard {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .edges__controls {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 8px;
   align-items: center;
 }
 
@@ -416,10 +591,11 @@ summary:hover {
 }
 
 .edges__add {
-  margin-top: 14px;
-  padding: 12px;
+  margin-top: 16px;
+  padding: 14px;
   border: 1px dashed var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
+  background: var(--bg);
 }
 
 .incoming {
@@ -429,7 +605,7 @@ summary:hover {
 }
 
 .incoming li {
-  padding: 4px 0;
+  padding: 5px 0;
 }
 
 .incoming__guard {
@@ -444,7 +620,7 @@ summary:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 12px 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -483,7 +659,7 @@ summary:hover {
   display: block;
   font-size: 0.8rem;
   color: var(--text-muted);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 .field--inline {
@@ -498,16 +674,22 @@ summary:hover {
 
 .button {
   font: inherit;
-  padding: 6px 12px;
-  border-radius: 4px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 999px;
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    filter 0.12s ease;
 }
 
 .button:hover:not(:disabled) {
   background: var(--bg);
+  border-color: var(--text-muted);
 }
 
 .button:disabled {
@@ -519,6 +701,7 @@ summary:hover {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-text);
+  box-shadow: var(--shadow-sm);
 }
 
 .button--primary:hover:not(:disabled) {
@@ -528,11 +711,17 @@ summary:hover {
 .button--danger {
   color: var(--danger);
   border-color: var(--danger);
+  background: var(--surface);
+}
+
+.button--danger:hover:not(:disabled) {
+  background: var(--error-bg);
 }
 
 .button--quiet {
   border-color: transparent;
   color: var(--text-muted);
+  background: transparent;
 }
 
 .link {
@@ -540,15 +729,17 @@ summary:hover {
   background: none;
   padding: 0;
   font: inherit;
+  font-weight: 600;
   color: var(--accent);
   text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
 }
 
 .banner {
   margin: 8px 0 0;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-strong);
   font-size: 0.88rem;
 }
@@ -588,24 +779,28 @@ summary:hover {
   justify-content: center;
   padding: 24px;
   gap: 10px;
+  background: var(--bg);
 }
 
 .login__card {
   width: 100%;
   max-width: 340px;
-  padding: 24px;
+  padding: 28px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .login__title {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .login__subtitle {
-  margin: 4px 0 18px;
+  margin: 4px 0 20px;
   color: var(--text-muted);
   font-size: 0.85rem;
 }

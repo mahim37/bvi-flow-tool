@@ -13,23 +13,28 @@ import type { StylesheetCSS } from "cytoscape";
  * The full legend is rendered as text in the sidebar, because a shape
  * vocabulary nobody can look up is not much better than colour alone.
  */
+const FONT =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
 export const CANVAS_STYLE: StylesheetCSS[] = [
   {
     selector: "node",
     css: {
       shape: "round-rectangle",
-      "background-color": "#f8fafc",
-      "border-color": "#64748b",
+      "corner-radius": "14",
+      "background-color": "#ffffff",
+      "border-color": "#d6c6a0",
       "border-width": 2,
       label: "data(label)",
-      color: "#0f172a",
-      "font-size": 13,
-      "font-weight": 600,
+      color: "#1a1a1a",
+      "font-family": FONT,
+      "font-size": 14,
+      "font-weight": 700,
       "text-valign": "center",
       "text-halign": "center",
       width: "label",
-      height: 34,
-      padding: "10px",
+      height: 38,
+      padding: "14px",
       "text-wrap": "none",
     },
   },
@@ -39,8 +44,8 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: "node[?isEntry]",
     css: {
       shape: "ellipse",
-      "background-color": "#dbeafe",
-      "border-color": "#1d4ed8",
+      "background-color": "#e2ece4",
+      "border-color": "#166534",
       "border-width": 3,
     },
   },
@@ -48,10 +53,10 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: "node[?isDecision]",
     css: {
       shape: "diamond",
-      "background-color": "#ede9fe",
-      "border-color": "#6d28d9",
-      height: 46,
-      padding: "18px",
+      "background-color": "#f3e0d2",
+      "border-color": "#9a5209",
+      height: 50,
+      padding: "20px",
     },
   },
   {
@@ -65,8 +70,8 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: "node[?isUnreachable]",
     css: {
       "border-style": "dashed",
-      "background-color": "#fff7ed",
-      "border-color": "#c2410c",
+      "background-color": "#f3e0d2",
+      "border-color": "#9a3412",
       opacity: 0.85,
     },
   },
@@ -78,10 +83,10 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: 'node[kind = "archived"]',
     css: {
       shape: "round-rectangle",
-      "background-color": "#f1f5f9",
+      "background-color": "#f1e7d2",
       "border-style": "dashed",
-      "border-color": "#94a3b8",
-      color: "#475569",
+      "border-color": "#d6c6a0",
+      color: "#766c5c",
       "font-style": "italic",
     },
   },
@@ -89,8 +94,8 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: 'node[kind = "end"]',
     css: {
       shape: "round-tag",
-      "background-color": "#e2e8f0",
-      "border-color": "#475569",
+      "background-color": "#f1e7d2",
+      "border-color": "#766c5c",
       "border-style": "solid",
       "border-width": 2,
     },
@@ -99,7 +104,7 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: 'node[kind = "missing"]',
     css: {
       shape: "octagon",
-      "background-color": "#fee2e2",
+      "background-color": "#fbe2dc",
       "border-color": "#b91c1c",
       "border-style": "dashed",
       "border-width": 3,
@@ -108,9 +113,9 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
   {
     selector: "edge",
     css: {
-      width: 2,
-      "line-color": "#94a3b8",
-      "target-arrow-color": "#94a3b8",
+      width: 2.5,
+      "line-color": "#6f93f2",
+      "target-arrow-color": "#6f93f2",
       "target-arrow-shape": "triangle",
       // Bowed apart by geometry, not by priority. Cytoscape spreads
       // parallel edges by how many share the same pair of endpoints, so
@@ -120,9 +125,11 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "curve-style": "bezier",
       "control-point-step-size": 48,
       label: "data(guard)",
+      "font-family": FONT,
       "font-size": 11,
-      color: "#334155",
-      "text-background-color": "#ffffff",
+      "font-weight": 600,
+      color: "#4a473f",
+      "text-background-color": "#faf5ec",
       "text-background-opacity": 0.9,
       "text-background-padding": "2px",
       "text-rotation": "autorotate",
@@ -132,8 +139,8 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: "edge[?isBack]",
     css: {
       "line-style": "solid",
-      "line-color": "#7c3aed",
-      "target-arrow-color": "#7c3aed",
+      "line-color": "#c99568",
+      "target-arrow-color": "#c99568",
     },
   },
   {
@@ -142,8 +149,8 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: "edge[?isDead]",
     css: {
       "line-style": "dashed",
-      "line-color": "#ea580c",
-      "target-arrow-color": "#ea580c",
+      "line-color": "#9a3412",
+      "target-arrow-color": "#9a3412",
       opacity: 0.9,
     },
   },
@@ -160,12 +167,19 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     },
   },
   {
+    // The one thick, warm border on the canvas: it should read as "this is
+    // the thing you are looking at" from across the room, not just up
+    // close.
     selector: "node:selected",
-    css: { "border-color": "#0f172a", "border-width": 4, "overlay-opacity": 0.08 },
+    css: {
+      "border-color": "#9a3412",
+      "border-width": 5,
+      "overlay-opacity": 0,
+    },
   },
   {
     selector: "edge:selected",
-    css: { width: 4, "line-color": "#0f172a", "target-arrow-color": "#0f172a" },
+    css: { width: 4, "line-color": "#1a1a1a", "target-arrow-color": "#1a1a1a" },
   },
   {
     selector: ".dimmed",
@@ -173,6 +187,6 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
   },
   {
     selector: ".highlighted",
-    css: { "overlay-color": "#facc15", "overlay-opacity": 0.25, "overlay-padding": 6 },
+    css: { "overlay-color": "#9a5209", "overlay-opacity": 0.3, "overlay-padding": 6 },
   },
 ];
