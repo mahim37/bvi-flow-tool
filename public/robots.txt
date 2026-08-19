@@ -1,0 +1,6 @@
+# An internal, permission-gated tool that happens to sit on a public URL.
+# The `noindex` meta tag in index.html and the X-Robots-Tag header in
+# vercel.json say the same thing; this is the copy a crawler reads before
+# it fetches anything at all.
+User-agent: *
+Disallow: /
