@@ -1,0 +1,633 @@
+/*
+ * One stylesheet, plain CSS, custom properties for the palette.
+ *
+ * No utility framework and no component library: this is an internal tool
+ * with one screen, and the accessibility requirements (spec 4.11) are
+ * easier to hold onto in CSS somebody can read end to end than spread
+ * across class strings. Every colour below is a token so the contrast
+ * decisions live in one place.
+ */
+
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --border: #cbd5e1;
+  --border-strong: #94a3b8;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --accent: #1d4ed8;
+  --accent-text: #ffffff;
+  --danger: #b91c1c;
+  --warn-bg: #fffbeb;
+  --warn-border: #d97706;
+  --info-bg: #eff6ff;
+  --error-bg: #fef2f2;
+  --focus: #1d4ed8;
+
+  color-scheme: light;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+/* Focus is never removed, only restyled. A keyboard user has to be able to
+   see where they are (spec 4.11). */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- shell ---------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar__title {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.topbar__picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar__picker select {
+  max-width: 520px;
+  width: 100%;
+}
+
+.topbar__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 380px;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas {
+  min-height: 0;
+  background: radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0 /
+    24px 24px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+/* ---------- sidebar ---------- */
+
+.sidebar {
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.sidebar__block + .sidebar__block {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar__heading {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.sidebar__label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.sidebar__count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 6px 0;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.list__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.list__item:hover {
+  background: var(--bg);
+}
+
+.list__item--active {
+  background: var(--info-bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.list__code {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.list__prompt {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.list__tag {
+  margin-left: 6px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.diagnostics,
+.sections {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 4px;
+  border-radius: 4px;
+}
+
+summary:hover {
+  background: var(--bg);
+}
+
+.diagnostics__count,
+.sections__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 0.8rem;
+}
+
+/* Count badges carry a border and a numeral, so the emphasis below is a
+   third channel rather than the only one. */
+.diagnostics__count--some {
+  color: var(--danger);
+  border-color: var(--danger);
+  font-weight: 700;
+}
+
+.diagnostics__meaning {
+  margin: 4px 4px 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.legend {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.legend li + li {
+  margin-top: 3px;
+}
+
+/* ---------- detail panel ---------- */
+
+.panel {
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.panel__title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.panel__prompt {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
+.panel__section {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.panel__heading {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.panel__subheading {
+  font-size: 0.85rem;
+  margin: 0 0 8px;
+}
+
+.panel__hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 0;
+}
+
+.meta dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.meta dd {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+}
+
+.options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.options li {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.options__code {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.options__fault,
+.edges__fault {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+.edges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: edge;
+}
+
+.edges__row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.edges__priority {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 20px;
+  color: var(--text-muted);
+}
+
+.edges__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.edges__guard {
+  font-weight: 600;
+}
+
+.edges__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.edges__controls select {
+  width: auto;
+  min-width: 120px;
+}
+
+.edges__add {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+}
+
+.incoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.incoming li {
+  padding: 4px 0;
+}
+
+.incoming__guard {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ---------- draft bar ---------- */
+
+.draftbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.draftbar--draft {
+  background: var(--info-bg);
+  border-bottom: 2px solid var(--accent);
+}
+
+.draftbar__status {
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+}
+
+.draftbar__note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.draftbar__form,
+.draftbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* ---------- shared ---------- */
+
+.field {
+  margin-bottom: 10px;
+}
+
+.field label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.field--inline {
+  margin-bottom: 0;
+}
+
+.field--inline input,
+.field--inline select {
+  width: auto;
+  min-width: 160px;
+}
+
+.button {
+  font: inherit;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.button--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.button--danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.button--quiet {
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.banner {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  font-size: 0.88rem;
+}
+
+/* Each banner keeps its border and its wording; colour is the faster
+   signal, never the only one. */
+.banner--error {
+  background: var(--error-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.banner--warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+.banner--info {
+  background: var(--info-bg);
+  border-color: var(--accent);
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 4px 0;
+}
+
+/* ---------- login / gate ---------- */
+
+.login,
+.gate {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 10px;
+}
+
+.login__card {
+  width: 100%;
+  max-width: 340px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.login__title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.login__subtitle {
+  margin: 4px 0 18px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.login__card .button {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.gate {
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .panel {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border);
+  }
+}
