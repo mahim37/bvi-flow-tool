@@ -1,0 +1,151 @@
+import { useEffect, useRef } from "react";
+import cytoscape from "cytoscape";
+import type { Core, ElementDefinition } from "cytoscape";
+import dagre from "cytoscape-dagre";
+
+import { CANVAS_STYLE } from "./canvasStyle";
+
+cytoscape.use(dagre);
+
+const LAYOUT = {
+  name: "dagre",
+  rankDir: "TB",
+  nodeSep: 45,
+  rankSep: 80,
+  animate: false,
+  fit: true,
+  padding: 40,
+} as const;
+
+interface CanvasProps {
+  elements: ElementDefinition[];
+  selectedId: string | null;
+  /** Ids the sidebar or a diagnostic list is pointing at. Highlighted
+   * rather than filtered: hiding the rest would answer "where is this
+   * question" by removing the context that makes the answer mean
+   * anything. */
+  highlightedIds: readonly string[];
+  onSelectNode: (id: string | null) => void;
+  onSelectEdge: (id: string) => void;
+}
+
+/** The id set, in a form that is cheap to compare. A change here means
+ * nodes appeared or vanished, which is the only thing worth re-running
+ * dagre for -- see the layout effect. */
+function nodeSignature(elements: ElementDefinition[]): string {
+  return elements
+    .filter((element) => element.group === "nodes")
+    .map((element) => element.data.id)
+    .sort()
+    .join("|");
+}
+
+export function Canvas({
+  elements,
+  selectedId,
+  highlightedIds,
+  onSelectNode,
+  onSelectEdge,
+}: CanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<Core | null>(null);
+  const signatureRef = useRef<string>("");
+  const selectHandlers = useRef({ onSelectNode, onSelectEdge });
+  selectHandlers.current = { onSelectNode, onSelectEdge };
+
+  useEffect(() => {
+    if (containerRef.current === null) return;
+    const cy = cytoscape({
+      container: containerRef.current,
+      style: CANVAS_STYLE,
+      // Boxing and multi-select would let a drag produce a selection this
+      // app has no verb for; one thing at a time matches the detail panel,
+      // which is the only place a selection goes.
+      boxSelectionEnabled: false,
+      selectionType: "single",
+      wheelSensitivity: 0.2,
+    });
+    cyRef.current = cy;
+
+    cy.on("tap", "node", (event) => {
+      selectHandlers.current.onSelectNode(event.target.id() as string);
+    });
+    cy.on("tap", "edge", (event) => {
+      selectHandlers.current.onSelectEdge(event.target.id() as string);
+    });
+    cy.on("tap", (event) => {
+      if (event.target === cy) selectHandlers.current.onSelectNode(null);
+    });
+
+    return () => {
+      cy.destroy();
+      cyRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (cy === null) return;
+
+    const incoming = new Map(elements.map((element) => [element.data.id, element]));
+
+    cy.batch(() => {
+      // Diffed in place rather than replaced wholesale, because replacing
+      // discards every node position and the graph would jump to a fresh
+      // layout after each edit. Retargeting one arrow should move that
+      // arrow, not the map.
+      cy.elements().forEach((element) => {
+        if (!incoming.has(element.id())) element.remove();
+      });
+      for (const element of elements) {
+        const id = element.data.id;
+        if (id === undefined) continue;
+        const existing = cy.getElementById(id);
+        if (existing.nonempty()) existing.data(element.data);
+        else cy.add(element);
+      }
+    });
+
+    const signature = nodeSignature(elements);
+    if (signature !== signatureRef.current) {
+      signatureRef.current = signature;
+      cy.layout(LAYOUT).run();
+    }
+  }, [elements]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (cy === null) return;
+    cy.batch(() => {
+      cy.elements().unselect();
+      if (selectedId !== null) cy.getElementById(selectedId).select();
+    });
+  }, [selectedId]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (cy === null) return;
+    cy.batch(() => {
+      cy.elements().removeClass("highlighted");
+      for (const id of highlightedIds) cy.getElementById(id).addClass("highlighted");
+    });
+  }, [highlightedIds]);
+
+  return (
+    <div
+      className="canvas"
+      ref={containerRef}
+      // The canvas is a picture as far as assistive technology is
+      // concerned: cytoscape draws to a <canvas> element with no DOM to
+      // traverse. Rather than fake a tree that would go stale, the same
+      // information is available in full as real, focusable DOM -- the
+      // section list, the search results and the detail panel -- and this
+      // says so instead of pretending to be navigable.
+      role="img"
+      aria-label={
+        "Questionnaire flow diagram. Use the question list and detail panel " +
+        "for a keyboard-navigable view of the same routing."
+      }
+    />
+  );
+}
