@@ -50,7 +50,7 @@ anyway. There are **no environment variables to set**; the API origin is the
 one line in `vercel.json`:
 
 ```json
-{ "source": "/api/(.*)", "destination": "https://therewirelab.com/api/$1" }
+{ "source": "/api/(.*)", "destination": "https://bvi-dev.therewirelab.com/api/$1" }
 ```
 
 Change that line to point a branch at staging. It is hardcoded rather than

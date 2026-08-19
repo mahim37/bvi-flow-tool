@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://therewirelab.com/api/$1"
+      "destination": "https://bvi-dev.therewirelab.com/api/$1"
     },
     {
       "source": "/(.*)",
