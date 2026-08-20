@@ -42,7 +42,10 @@ describe("nodes", () => {
   it("labels a node by its code, never by its position", () => {
     // Under graph routing `display_order` is presentational. A label built
     // from it would reintroduce the identity problem explicit edges exist
-    // to remove: insert a question and every label shifts.
+    // to remove: insert a question and every label shifts. The visible
+    // label (break-backend parity: prompt first, then a type glyph and
+    // the code) still has to carry that same code regardless of
+    // `display_order`, even though the code is no longer the whole label.
     const graph = makeGraph();
     const shuffled = makeGraph({
       questions: graph.questions.map((question) => ({
@@ -51,8 +54,11 @@ describe("nodes", () => {
       })),
     });
 
-    expect(nodes(shuffled).get(Q1)?.label).toBe("Q1");
-    expect(nodes(shuffled).get(Q2)?.label).toBe("Q2");
+    const shuffledLabels = nodes(shuffled);
+    expect(nodes().get(Q1)?.label).toBe(shuffledLabels.get(Q1)?.label);
+    expect(nodes().get(Q2)?.label).toBe(shuffledLabels.get(Q2)?.label);
+    expect(shuffledLabels.get(Q1)?.label?.endsWith("Q1")).toBe(true);
+    expect(shuffledLabels.get(Q2)?.label?.endsWith("Q2")).toBe(true);
   });
 
   it("marks the entry, the decision point and the terminal from the audit", () => {

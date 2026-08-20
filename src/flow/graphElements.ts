@@ -1,6 +1,59 @@
 import type { ElementDefinition } from "cytoscape";
 
-import type { Edge, Graph, Question, UUID } from "../api/types";
+import type { AnswerType, Edge, Graph, Question, Section, UUID } from "../api/types";
+
+/**
+ * Ported from break-backend's question_graph_editor (static/question_graph_editor/app.js)
+ * for visual parity: the exact 16-color section palette, answer-type
+ * glyphs and truncation break's own canvas uses. Kept here rather than in
+ * canvasStyle.ts because these are element-data concerns (which color,
+ * which glyph) rather than style-rule concerns (what a color/glyph looks
+ * like once assigned).
+ */
+const PALETTE = [
+  "#2f6fd6",
+  "#c15c1f",
+  "#7c4fd1",
+  "#1f9d5c",
+  "#c33d35",
+  "#12897d",
+  "#a3760a",
+  "#c94a7c",
+  "#1479b0",
+  "#5c8a0f",
+  "#8a6328",
+  "#a530c2",
+  "#c72b45",
+  "#4353d1",
+  "#0f8f5c",
+  "#8324d6",
+];
+
+const TYPE_GLYPH: Record<AnswerType, string> = {
+  single_choice: "◉",
+  multi_choice: "☰",
+  scale: "#",
+  free_text: "✎",
+};
+
+function trunc(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+function sectionColorMap(sections: readonly Section[]): Map<UUID, string> {
+  const ordered = [...sections].sort((a, b) => a.display_order - b.display_order);
+  return new Map(
+    ordered.map((section, index) => [
+      section.id,
+      PALETTE[index % PALETTE.length] ?? NO_SECTION_COLOR,
+    ]),
+  );
+}
+
+/** Break's fallback for a question with no section — kept as the same
+ * grey rather than reusing a palette color, so "unfiled" never reads as
+ * "assigned to a section that happens to look like this." */
+const NO_SECTION_COLOR = "#6b6355";
 
 /**
  * One shared terminal node, not one per question that can stop.
@@ -24,16 +77,27 @@ export const isSyntheticNode = (id: string) =>
 
 export type NodeKind = "question" | "archived" | "end" | "missing";
 
+/** Exactly one badge per node (break's `badgeClassFor`) -- a node is never
+ * asked to carry two structural facts as two icons, so the corner stays
+ * legible. Priority order matches break's: a branch is the more
+ * actionable fact than "unreachable," which in turn outranks entry/
+ * terminal. */
+export type BadgeKind = "entry" | "terminal" | "branch" | "unreachable";
+
 export interface NodeData {
   id: string;
   kind: NodeKind;
-  /** What the node is called. Always the question's `code`, never its
-   * position: `display_order` is presentational under graph routing, so
-   * labelling a node "Q12" from its index would put the identity problem
-   * the edge model exists to remove straight back into the UI -- insert a
-   * question and every label anyone wrote down shifts. */
+  /** The on-canvas label: the prompt (truncated), then the answer-type
+   * glyph and the question's `code` on a second line -- never
+   * `display_order`, which is presentational under graph routing, so a
+   * position-based label would shift every time a question is inserted
+   * elsewhere in the flow. Structural state (entry/branch/terminal/
+   * unreachable) is carried entirely by `badgeKind`, not by anything in
+   * this text -- see break's own `nodeLabel`/`badgeClassFor` split. */
   label: string;
   prompt: string;
+  sectionColor: string;
+  badgeKind: BadgeKind | null;
   isEntry: boolean;
   isTerminal: boolean;
   isDecision: boolean;
@@ -56,7 +120,23 @@ export interface EdgeData {
 }
 
 export function questionLabel(question: Question): string {
-  return question.code;
+  return `${trunc(question.prompt, 60)}\n${TYPE_GLYPH[question.answer_type]} ${question.code}`;
+}
+
+/** Break's `badgeClassFor`, minus the pending-new/-delete/-modified cases
+ * this app doesn't (yet) compute on the canvas -- see ReviewView/DiffList
+ * for where that data already lives. */
+function badgeKindFor(
+  isDecision: boolean,
+  isUnreachable: boolean,
+  isEntry: boolean,
+  isTerminal: boolean,
+): BadgeKind | null {
+  if (isDecision) return "branch";
+  if (isUnreachable) return "unreachable";
+  if (isEntry) return "entry";
+  if (isTerminal) return "terminal";
+  return null;
 }
 
 export function guardLabel(edge: Edge, question: Question | undefined): string {
@@ -88,10 +168,15 @@ export function buildElements(graph: Graph): ElementDefinition[] {
     }
   }
 
+  const sectionColor = sectionColorMap(graph.sections);
   const elements: ElementDefinition[] = [];
 
   for (const question of graph.questions) {
     const archived = question.archived_at !== null;
+    const isEntry = !archived && question.id === entryId;
+    const isTerminal = !archived && terminals.has(question.id);
+    const isDecision = !archived && decisions.has(question.id);
+    const isUnreachable = !archived && unreachable.has(question.id);
     const data: NodeData = {
       id: question.id,
       // An archived question is drawn only while something still points at
@@ -101,10 +186,14 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       kind: archived ? "archived" : "question",
       label: questionLabel(question),
       prompt: question.prompt,
-      isEntry: !archived && question.id === entryId,
-      isTerminal: !archived && terminals.has(question.id),
-      isDecision: !archived && decisions.has(question.id),
-      isUnreachable: !archived && unreachable.has(question.id),
+      sectionColor: question.section
+        ? (sectionColor.get(question.section) ?? NO_SECTION_COLOR)
+        : NO_SECTION_COLOR,
+      badgeKind: archived ? null : badgeKindFor(isDecision, isUnreachable, isEntry, isTerminal),
+      isEntry,
+      isTerminal,
+      isDecision,
+      isUnreachable,
       hasFault: !archived && faultedQuestions.has(question.id),
     };
     elements.push({ data, group: "nodes" });
@@ -122,6 +211,8 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       kind: "missing",
       label: "Unknown question",
       prompt: `This version has no question with id ${targetId}.`,
+      sectionColor: NO_SECTION_COLOR,
+      badgeKind: null,
       isEntry: false,
       isTerminal: false,
       isDecision: false,
@@ -138,6 +229,8 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       kind: "end",
       label: "End of flow",
       prompt: "No further question is served.",
+      sectionColor: NO_SECTION_COLOR,
+      badgeKind: null,
       isEntry: false,
       isTerminal: true,
       isDecision: false,
