@@ -77,18 +77,6 @@ export interface Version {
    * between. Always false for anything that is not a draft.
    */
   is_stale: boolean;
-  /**
-   * When this version went live, and who pressed the button.
-   *
-   * Both live on the `ChangeRequest` rather than on the version --
-   * publishing is something that happened to a proposal -- and the server
-   * joins them through the reverse one-to-one so no client has to. Null
-   * for a seeded or imported version, which has no proposal and never had
-   * one: those appeared rather than being published, and the release list
-   * says so instead of inventing a date.
-   */
-  published_at: Timestamp | null;
-  published_by_email: string | null;
   created: Timestamp;
   modified: Timestamp;
 }
