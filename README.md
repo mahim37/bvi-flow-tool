@@ -21,7 +21,7 @@ npm install
 npm run dev
 ```
 
-`vite.config.ts` proxies `/api` to `http://localhost:8000`. Override with
+`vite.config.ts` proxies `/api` to http://localhost:8000. Override with
 `VITE_API_PROXY_TARGET` in a `.env` file (see `.env.example`).
 
 **The proxy is not a convenience.** All three session cookies are issued
