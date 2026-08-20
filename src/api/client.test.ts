@@ -160,6 +160,80 @@ describe("errors", () => {
     });
   });
 
+  it("carries the blocking edges out of a refused option delete", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      respond(
+        400,
+        {
+          detail: "1 edge(s) are guarded by q1.yes.",
+          blocking_edges: [
+            {
+              edge_id: "edge-1",
+              from_question_id: "q-1",
+              from_question_code: "q1",
+              from_question_prompt: "Are you employed?",
+            },
+          ],
+        },
+        false,
+      ),
+    );
+
+    const caught = await request("/api/x/", { method: "DELETE" }).catch(
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).blockingEdges).toEqual([
+      {
+        edgeId: "edge-1",
+        fromQuestionId: "q-1",
+        fromQuestionCode: "q1",
+        fromQuestionPrompt: "Are you employed?",
+      },
+    ]);
+    expect((caught as ApiError).blockingQuestions).toBeNull();
+  });
+
+  it("carries the blocking questions out of a refused section delete", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      respond(
+        400,
+        {
+          detail: "1 question(s) are still filed under sec_health.",
+          blocking_questions: [{ id: "q-1", code: "q1", prompt: "Are you employed?" }],
+        },
+        false,
+      ),
+    );
+
+    const caught = await request("/api/x/", { method: "DELETE" }).catch(
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).blockingQuestions).toEqual([
+      { id: "q-1", code: "q1", prompt: "Are you employed?" },
+    ]);
+    expect((caught as ApiError).blockingEdges).toBeNull();
+  });
+
+  it("ignores a malformed blocking-edge row rather than throwing", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      respond(
+        400,
+        { detail: "refused", blocking_edges: [{ edge_id: "edge-1" }] },
+        false,
+      ),
+    );
+
+    const caught = await request("/api/x/", { method: "DELETE" }).catch(
+      (error: unknown) => error,
+    );
+
+    expect((caught as ApiError).blockingEdges).toEqual([]);
+  });
+
   it("tells a failed CSRF check apart from a permission refusal", async () => {
     // Both are 403. Only one of them is a statement about the account, and
     // announcing "you do not have edit access" at a stale token would be

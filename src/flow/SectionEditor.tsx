@@ -1,12 +1,15 @@
 import { useId, useState } from "react";
 
+import { ApiError } from "../api/client";
 import { useAddSection, useRemoveSection, useUpdateSection } from "../api/queries";
-import type { Graph, Section } from "../api/types";
+import type { Graph, Section, UUID } from "../api/types";
+import { BlockingList } from "./BlockingList";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 interface SectionRowProps {
   graph: Graph;
   section: Section;
+  onSelectQuestion: (id: UUID) => void;
 }
 
 /**
@@ -17,7 +20,7 @@ interface SectionRowProps {
  * deliberately, per its own docstring -- so there is no slot to collide
  * with and no whole-list reorder verb to route through.
  */
-function SectionRow({ graph, section }: SectionRowProps) {
+function SectionRow({ graph, section, onSelectQuestion }: SectionRowProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const updateSection = useUpdateSection(versionId);
@@ -48,6 +51,13 @@ function SectionRow({ graph, section }: SectionRowProps) {
   const pending = updateSection.isPending || removeSection.isPending;
   const error =
     writeErrorMessage(updateSection.error) ?? writeErrorMessage(removeSection.error);
+  // Named, not just counted: `editing.SectionNotEmptyError.detail_payload`
+  // lists the actual questions still filed here, so the hint below is
+  // somewhere to click through to rather than a number to go hunting for.
+  const blockingQuestions =
+    removeSection.error instanceof ApiError
+      ? removeSection.error.blockingQuestions
+      : null;
 
   // Filed questions block the delete, and the server refuses rather than
   // orphaning them. This count is a hint and not a gate: `graph/` serves
@@ -132,15 +142,31 @@ function SectionRow({ graph, section }: SectionRowProps) {
       )}
 
       {error !== null && (
-        <p className="banner banner--error" role="alert">
-          {error}
-        </p>
+        <div className="banner banner--error" role="alert">
+          <p>{error}</p>
+          {blockingQuestions !== null && blockingQuestions.length > 0 && (
+            <BlockingList
+              items={blockingQuestions.map((question) => ({
+                questionId: question.id,
+                code: question.code,
+                prompt: question.prompt,
+              }))}
+              onSelectQuestion={onSelectQuestion}
+            />
+          )}
+        </div>
       )}
     </li>
   );
 }
 
-export function SectionEditor({ graph }: { graph: Graph }) {
+export function SectionEditor({
+  graph,
+  onSelectQuestion,
+}: {
+  graph: Graph;
+  onSelectQuestion: (id: UUID) => void;
+}) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const addSection = useAddSection(versionId);
@@ -168,7 +194,12 @@ export function SectionEditor({ graph }: { graph: Graph }) {
 
       <ul className="sectionedits">
         {sections.map((section) => (
-          <SectionRow key={section.id} graph={graph} section={section} />
+          <SectionRow
+            key={section.id}
+            graph={graph}
+            section={section}
+            onSelectQuestion={onSelectQuestion}
+          />
         ))}
         {sections.length === 0 && (
           <li className="empty">This version has no sections.</li>

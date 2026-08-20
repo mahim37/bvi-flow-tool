@@ -308,7 +308,7 @@ export function Sidebar({
               than in the detail panel: both are version-wide, and neither
               belongs to whichever question happens to be selected. */}
           <AddQuestion graph={graph} onAdded={onSelectQuestion} />
-          <SectionEditor graph={graph} />
+          <SectionEditor graph={graph} onSelectQuestion={onSelectQuestion} />
         </section>
       )}
 

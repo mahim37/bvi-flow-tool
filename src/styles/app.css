@@ -756,6 +756,34 @@ details[open] > summary::before {
   border-color: var(--accent);
 }
 
+.banner p {
+  margin: 0;
+}
+
+/* What a delete refusal is blocked by, named rather than counted -- see
+   `BlockingList`. Reuses `.link`'s underlined-button look so each row
+   reads the same as the detail panel's "Reached from" list. */
+.blockers {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.blockers li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.blockers__prompt {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
 .empty {
   color: var(--text-muted);
   font-size: 0.85rem;

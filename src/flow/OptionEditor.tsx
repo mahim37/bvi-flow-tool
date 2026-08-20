@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from "react";
 
+import { ApiError } from "../api/client";
 import {
   useAddOption,
   useRemoveOption,
@@ -8,12 +9,14 @@ import {
 } from "../api/queries";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { Graph, Question, QuestionOption, UUID } from "../api/types";
+import { BlockingList } from "./BlockingList";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 interface OptionEditorProps {
   graph: Graph;
   question: Question;
   editable: boolean;
+  onSelectQuestion: (id: UUID) => void;
 }
 
 interface OptionRowProps {
@@ -29,6 +32,7 @@ interface OptionRowProps {
   canMoveDown: boolean;
   onMove: (direction: -1 | 1) => void;
   disabled: boolean;
+  onSelectQuestion: (id: UUID) => void;
 }
 
 function OptionRow({
@@ -40,6 +44,7 @@ function OptionRow({
   canMoveDown,
   onMove,
   disabled,
+  onSelectQuestion,
 }: OptionRowProps) {
   const onWriteError = useWriteErrorHandler();
   const updateOption = useUpdateOption(versionId);
@@ -54,6 +59,11 @@ function OptionRow({
   const pending = updateOption.isPending || removeOption.isPending || disabled;
   const error =
     writeErrorMessage(updateOption.error) ?? writeErrorMessage(removeOption.error);
+  // Named, not just counted: `editing.OptionGuardedError.detail_payload`
+  // lists the actual edges a delete would strand, so the refusal is
+  // somewhere to click through to rather than a number to go hunting for.
+  const blockingEdges =
+    removeOption.error instanceof ApiError ? removeOption.error.blockingEdges : null;
 
   return (
     <li className="optedit">
@@ -150,15 +160,30 @@ function OptionRow({
       )}
 
       {error !== null && (
-        <p className="banner banner--error" role="alert">
-          {error}
-        </p>
+        <div className="banner banner--error" role="alert">
+          <p>{error}</p>
+          {blockingEdges !== null && blockingEdges.length > 0 && (
+            <BlockingList
+              items={blockingEdges.map((edge) => ({
+                questionId: edge.fromQuestionId,
+                code: edge.fromQuestionCode,
+                prompt: edge.fromQuestionPrompt,
+              }))}
+              onSelectQuestion={onSelectQuestion}
+            />
+          )}
+        </div>
       )}
     </li>
   );
 }
 
-export function OptionEditor({ graph, question, editable }: OptionEditorProps) {
+export function OptionEditor({
+  graph,
+  question,
+  editable,
+  onSelectQuestion,
+}: OptionEditorProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const addOption = useAddOption(versionId);
@@ -246,6 +271,7 @@ export function OptionEditor({ graph, question, editable }: OptionEditorProps) {
               canMoveDown={index < options.length - 1}
               onMove={(direction) => move(index, direction)}
               disabled={pending}
+              onSelectQuestion={onSelectQuestion}
             />
           ))}
         </ul>
