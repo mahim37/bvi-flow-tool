@@ -114,7 +114,13 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
-  z-index: 1;
+  /* `sticky` over `fixed`: it pins to the same spot once the page scrolls
+     past it, without needing a compensating margin-top on whatever comes
+     next -- `fixed` takes it out of flow and that offset would have to be
+     kept in sync by hand every time this bar's height changes. */
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .topbar__title {
@@ -134,6 +140,12 @@ body {
   max-width: 520px;
   width: 100%;
   font-weight: 600;
+}
+
+.topbar__editors {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .topbar__identity {
@@ -1317,8 +1329,51 @@ textarea:focus-visible {
   margin-bottom: 6px;
 }
 
-.sidebar__editor {
-  margin-bottom: 8px;
+/* `<details>` used as a dropdown trigger -- "Add a question" / "Edit
+   sections" in the topbar (VersionLayout). Positioned relative so
+   `.editor-panel` (the one wrapper element after `<summary>` in each) can
+   float under the button instead of pushing the rest of the topbar down. */
+.editor-dropdown {
+  position: relative;
+}
+
+.editor-dropdown > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.editor-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.editor-dropdown > summary:hover {
+  background: var(--bg);
+}
+
+.editor-dropdown[open] > summary {
+  border-color: var(--accent);
+}
+
+.editor-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 14px;
+  z-index: 20;
 }
 
 .panel__hint--warn {

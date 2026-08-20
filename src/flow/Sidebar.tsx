@@ -1,14 +1,9 @@
 import { useId, useMemo, useState } from "react";
 
 import type { Graph, Question, UUID } from "../api/types";
-import { AddQuestion } from "./AddQuestion";
-import { SectionEditor } from "./SectionEditor";
 
 interface SidebarProps {
   graph: Graph;
-  /** An open draft, so the content verbs are available. Everything else in
-   * here is a read and stays visible either way. */
-  editable: boolean;
   selectedId: UUID | null;
   onSelectQuestion: (id: UUID) => void;
   onHighlight: (ids: readonly string[]) => void;
@@ -112,7 +107,6 @@ function matches(question: Question, needle: string): boolean {
 
 export function Sidebar({
   graph,
-  editable,
   selectedId,
   onSelectQuestion,
   onHighlight,
@@ -298,19 +292,6 @@ export function Sidebar({
           )}
         </ul>
       </section>
-
-      {editable && (
-        <section className="sidebar__block" aria-labelledby="content-heading">
-          <h2 id="content-heading" className="sidebar__heading">
-            Content
-          </h2>
-          {/* Adding and renaming live beside the lists they change rather
-              than in the detail panel: both are version-wide, and neither
-              belongs to whichever question happens to be selected. */}
-          <AddQuestion graph={graph} onAdded={onSelectQuestion} />
-          <SectionEditor graph={graph} onSelectQuestion={onSelectQuestion} />
-        </section>
-      )}
 
       <section className="sidebar__block" aria-labelledby="legend-heading">
         <h2 id="legend-heading" className="sidebar__heading">

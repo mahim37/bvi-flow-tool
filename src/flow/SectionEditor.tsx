@@ -184,79 +184,79 @@ export function SectionEditor({
 
   return (
     <details
-      className="sidebar__editor"
+      className="editor-dropdown"
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>
-        <span className="diagnostics__label">Edit sections</span>
-      </summary>
+      <summary>Edit sections</summary>
 
-      <ul className="sectionedits">
-        {sections.map((section) => (
-          <SectionRow
-            key={section.id}
-            graph={graph}
-            section={section}
-            onSelectQuestion={onSelectQuestion}
-          />
-        ))}
-        {sections.length === 0 && (
-          <li className="empty">This version has no sections.</li>
-        )}
-      </ul>
+      <div className="editor-panel">
+        <ul className="sectionedits">
+          {sections.map((section) => (
+            <SectionRow
+              key={section.id}
+              graph={graph}
+              section={section}
+              onSelectQuestion={onSelectQuestion}
+            />
+          ))}
+          {sections.length === 0 && (
+            <li className="empty">This version has no sections.</li>
+          )}
+        </ul>
 
-      <form
-        className="editor"
-        onSubmit={(event) => {
-          event.preventDefault();
-          addSection.mutate(
-            { code, name },
-            {
-              onError: onWriteError,
-              onSuccess: () => {
-                setCode("");
-                setName("");
+        <form
+          className="editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            addSection.mutate(
+              { code, name },
+              {
+                onError: onWriteError,
+                onSuccess: () => {
+                  setCode("");
+                  setName("");
+                },
               },
-            },
-          );
-        }}
-      >
-        <h4 className="panel__subheading">Add a section</h4>
-        <div className="field field--inline">
-          <label htmlFor={nameId}>Name</label>
-          <input
-            id={nameId}
-            value={name}
-            required
-            disabled={addSection.isPending}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </div>
-        <div className="field field--inline">
-          <label htmlFor={codeId}>Code</label>
-          <input
-            id={codeId}
-            value={code}
-            required
-            disabled={addSection.isPending}
-            onChange={(event) => setCode(event.target.value)}
-          />
-        </div>
-        <button
-          className="button button--primary"
-          type="submit"
-          disabled={addSection.isPending || code.trim() === "" || name.trim() === ""}
+            );
+          }}
         >
-          {addSection.isPending ? "Adding…" : "Add section"}
-        </button>
-      </form>
+          <h4 className="panel__subheading">Add a section</h4>
+          <div className="field field--inline">
+            <label htmlFor={nameId}>Name</label>
+            <input
+              id={nameId}
+              value={name}
+              required
+              disabled={addSection.isPending}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <div className="field field--inline">
+            <label htmlFor={codeId}>Code</label>
+            <input
+              id={codeId}
+              value={code}
+              required
+              disabled={addSection.isPending}
+              onChange={(event) => setCode(event.target.value)}
+            />
+          </div>
+          <button
+            className="button button--primary"
+            type="submit"
+            disabled={addSection.isPending || code.trim() === "" || name.trim() === ""}
+          >
+            {addSection.isPending ? "Adding…" : "Add section"}
+          </button>
+        </form>
 
-      {error !== null && (
-        <p className="banner banner--error" role="alert">
-          {error}
-        </p>
-      )}
+        {error !== null && (
+          <p className="banner banner--error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
     </details>
   );
 }

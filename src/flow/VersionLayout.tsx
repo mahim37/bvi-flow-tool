@@ -11,8 +11,10 @@ import { ApiError } from "../api/client";
 import { useGraph, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { AddQuestion } from "./AddQuestion";
 import { DraftBar } from "./DraftBar";
 import { versionLabel } from "./labels";
+import { SectionEditor } from "./SectionEditor";
 import type { VersionContext } from "./versionContext";
 
 /** Versions arrive grouped by questionnaire, so the picker keeps the
@@ -103,10 +105,15 @@ export function VersionLayout() {
     );
   }
 
+  // A plain local rather than repeated `graph.data` reads: TypeScript
+  // narrows a `const` across the closures below (the `onAdded`/
+  // `onSelectQuestion` callbacks), which it will not do for a query
+  // object's property, re-evaluated on every access.
+  const graphData = graph.data;
   const editable =
-    graph.data !== undefined &&
-    graph.data.version.is_draft &&
-    graph.data.change_request?.status === "open";
+    graphData !== undefined &&
+    graphData.version.is_draft &&
+    graphData.change_request?.status === "open";
 
   return (
     <div className="app">
@@ -151,6 +158,30 @@ export function VersionLayout() {
             ))}
           </select>
         </label>
+
+        {graphData !== undefined && editable && (
+          // Always reachable rather than buried in a collapsed sidebar
+          // section: the version this bar names is exactly the draft these
+          // verbs write to, so this is the one place both belong regardless
+          // of which tab (Map/Review/Preview) is open. A jump to the new or
+          // refiled question goes through `?question=`, the same URL param
+          // the review screen already uses to point the map at a question --
+          // no local selection state to thread down from here.
+          <div className="topbar__editors">
+            <AddQuestion
+              graph={graphData}
+              onAdded={(id) =>
+                navigate(`/versions/${graphData.version.id}?question=${id}`)
+              }
+            />
+            <SectionEditor
+              graph={graphData}
+              onSelectQuestion={(id) =>
+                navigate(`/versions/${graphData.version.id}?question=${id}`)
+              }
+            />
+          </div>
+        )}
 
         <div className="topbar__identity">
           <span>{identity?.email}</span>
