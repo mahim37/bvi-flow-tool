@@ -129,7 +129,12 @@ export function DetailPanel({
           by mistake is undone. */}
       {editable && question.archived_at === null && (
         <>
-          <OptionEditor graph={graph} question={question} editable={editable} />
+          <OptionEditor
+            graph={graph}
+            question={question}
+            editable={editable}
+            onSelectQuestion={onSelectQuestion}
+          />
           <QuestionEditor graph={graph} question={question} />
         </>
       )}

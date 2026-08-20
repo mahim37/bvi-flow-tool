@@ -11,8 +11,10 @@ import { ApiError } from "../api/client";
 import { useGraph, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { AddQuestion } from "./AddQuestion";
 import { DraftBar } from "./DraftBar";
 import { versionLabel } from "./labels";
+import { SectionEditor } from "./SectionEditor";
 import type { VersionContext } from "./versionContext";
 
 /** Versions arrive grouped by questionnaire, so the picker keeps the
@@ -42,6 +44,22 @@ function versionOptionLabel(version: VersionListItem): string {
         : " (draft)"
       : "";
   return `${versionLabel(version)}${state} — ${version.question_count} questions`;
+}
+
+/** The picker's only view of a spawned product's lineage (phase 10):
+ * every version in a group carries the same
+ * `questionnaire_spawned_from_version`, so the first one answers for the
+ * whole group. `versionQuestionnaireName` is keyed by version id because
+ * that is the unit `questionnaire_spawned_from_version` names -- the
+ * questionnaire itself carries no separate list to look it up in. */
+function questionnaireGroupLabel(
+  group: { name: string; versions: VersionListItem[] },
+  versionQuestionnaireName: ReadonlyMap<UUID, string>,
+): string {
+  const spawnedFrom = group.versions[0]?.questionnaire_spawned_from_version;
+  if (spawnedFrom === null || spawnedFrom === undefined) return group.name;
+  const parentName = versionQuestionnaireName.get(spawnedFrom);
+  return parentName === undefined ? group.name : `${group.name} (from ${parentName})`;
 }
 
 export function VersionLayout() {
@@ -78,6 +96,17 @@ export function VersionLayout() {
     return [...seen.entries()].sort((left, right) => left[1].localeCompare(right[1]));
   }, [allVersions.data]);
 
+  // Keyed by version id, not questionnaire id: `questionnaire_spawned_from_version`
+  // names the specific version a product forked from, and that is the
+  // only handle this payload gives it.
+  const versionQuestionnaireName = useMemo(() => {
+    const map = new Map<UUID, string>();
+    for (const version of allVersions.data ?? []) {
+      map.set(version.id, version.questionnaire_name);
+    }
+    return map;
+  }, [allVersions.data]);
+
   const grouped = useMemo(
     () => groupByQuestionnaire(versions.data ?? []),
     [versions.data],
@@ -103,10 +132,15 @@ export function VersionLayout() {
     );
   }
 
+  // A plain local rather than repeated `graph.data` reads: TypeScript
+  // narrows a `const` across the closures below (the `onAdded`/
+  // `onSelectQuestion` callbacks), which it will not do for a query
+  // object's property, re-evaluated on every access.
+  const graphData = graph.data;
   const editable =
-    graph.data !== undefined &&
-    graph.data.version.is_draft &&
-    graph.data.change_request?.status === "open";
+    graphData !== undefined &&
+    graphData.version.is_draft &&
+    graphData.change_request?.status === "open";
 
   return (
     <div className="app">
@@ -141,7 +175,10 @@ export function VersionLayout() {
             disabled={versions.isPending}
           >
             {grouped.map(([id, group]) => (
-              <optgroup key={id} label={group.name}>
+              <optgroup
+                key={id}
+                label={questionnaireGroupLabel(group, versionQuestionnaireName)}
+              >
                 {group.versions.map((version) => (
                   <option key={version.id} value={version.id}>
                     {versionOptionLabel(version)}
@@ -151,6 +188,30 @@ export function VersionLayout() {
             ))}
           </select>
         </label>
+
+        {graphData !== undefined && editable && (
+          // Always reachable rather than buried in a collapsed sidebar
+          // section: the version this bar names is exactly the draft these
+          // verbs write to, so this is the one place both belong regardless
+          // of which tab (Map/Review/Preview) is open. A jump to the new or
+          // refiled question goes through `?question=`, the same URL param
+          // the review screen already uses to point the map at a question --
+          // no local selection state to thread down from here.
+          <div className="topbar__editors">
+            <AddQuestion
+              graph={graphData}
+              onAdded={(id) =>
+                navigate(`/versions/${graphData.version.id}?question=${id}`)
+              }
+            />
+            <SectionEditor
+              graph={graphData}
+              onSelectQuestion={(id) =>
+                navigate(`/versions/${graphData.version.id}?question=${id}`)
+              }
+            />
+          </div>
+        )}
 
         <div className="topbar__identity">
           <span>{identity?.email}</span>

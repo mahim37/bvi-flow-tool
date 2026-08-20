@@ -126,6 +126,21 @@ export function Canvas({
       cy.elements().unselect();
       if (selectedId !== null) cy.getElementById(selectedId).select();
     });
+    // Ported from break-backend's tap handler (setFocus("pin", ..., {
+    // center: true }) -- selecting a question from anywhere (sidebar,
+    // search, a diagnostic chip, canvas tap itself) pans/zooms the camera
+    // to it, so "select" always means "look at this" rather than leaving
+    // the node wherever it happened to land off-screen.
+    if (selectedId !== null) {
+      const node = cy.getElementById(selectedId);
+      if (node.nonempty()) {
+        cy.animate({
+          center: { eles: node },
+          zoom: Math.max(cy.zoom(), 0.7),
+          duration: 320,
+        });
+      }
+    }
   }, [selectedId]);
 
   useEffect(() => {

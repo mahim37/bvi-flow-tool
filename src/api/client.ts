@@ -78,6 +78,78 @@ export class ApiError extends Error {
     if (typeof email !== "string" || typeof since !== "string") return null;
     return { email, since };
   }
+
+  /**
+   * The edges still guarding an option a delete would remove.
+   *
+   * `editing.OptionGuardedError.detail_payload` puts these on the body so
+   * the refusal can name which questions to go and fix, not just how many
+   * -- one of those edges may leave a question other than the option's
+   * own (the dead-edge case a draft copy preserves).
+   */
+  get blockingEdges(): readonly BlockingEdge[] | null {
+    const raw = this.body?.["blocking_edges"];
+    if (!Array.isArray(raw)) return null;
+    return raw.flatMap((row) => {
+      if (typeof row !== "object" || row === null) return [];
+      const { edge_id, from_question_id, from_question_code, from_question_prompt } =
+        row as Record<string, unknown>;
+      if (
+        typeof edge_id !== "string" ||
+        typeof from_question_id !== "string" ||
+        typeof from_question_code !== "string" ||
+        typeof from_question_prompt !== "string"
+      ) {
+        return [];
+      }
+      return [
+        {
+          edgeId: edge_id,
+          fromQuestionId: from_question_id,
+          fromQuestionCode: from_question_code,
+          fromQuestionPrompt: from_question_prompt,
+        },
+      ];
+    });
+  }
+
+  /**
+   * The questions still filed under a section a delete would remove.
+   *
+   * `editing.SectionNotEmptyError.detail_payload` puts these on the body
+   * for the same reason `blockingEdges` does: naming them is what lets
+   * somebody go refile each one, instead of hunting the section list for
+   * a count.
+   */
+  get blockingQuestions(): readonly BlockingQuestionRef[] | null {
+    const raw = this.body?.["blocking_questions"];
+    if (!Array.isArray(raw)) return null;
+    return raw.flatMap((row) => {
+      if (typeof row !== "object" || row === null) return [];
+      const { id, code, prompt } = row as Record<string, unknown>;
+      if (
+        typeof id !== "string" ||
+        typeof code !== "string" ||
+        typeof prompt !== "string"
+      ) {
+        return [];
+      }
+      return [{ id, code, prompt }];
+    });
+  }
+}
+
+export interface BlockingEdge {
+  edgeId: string;
+  fromQuestionId: string;
+  fromQuestionCode: string;
+  fromQuestionPrompt: string;
+}
+
+export interface BlockingQuestionRef {
+  id: string;
+  code: string;
+  prompt: string;
 }
 
 function readCookie(name: string): string | null {

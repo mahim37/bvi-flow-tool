@@ -39,7 +39,6 @@ export function MapView() {
     <div className="layout">
       <Sidebar
         graph={graph}
-        editable={editable}
         selectedId={selectedQuestionId}
         onSelectQuestion={setSelectedQuestionId}
         onHighlight={setHighlightedIds}

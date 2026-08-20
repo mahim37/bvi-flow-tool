@@ -379,3 +379,24 @@ export function useReorderOptions(versionId: UUID) {
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Product spawning (phase 10).                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Invalidates the version list only, unlike every mutation above.
+ *
+ * A spawned product is a new questionnaire and a new version; it does
+ * not touch the source's graph or diff, so there is nothing for
+ * `invalidateGraph` to drop here -- just the picker, which now has one
+ * more questionnaire to show.
+ */
+export function useSpawnProduct(versionId: UUID) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, code }: { name: string; code: string }) =>
+      api.spawnProduct(versionId, name, code),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["versions"] }),
+  });
+}

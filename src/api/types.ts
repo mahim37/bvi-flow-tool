@@ -45,12 +45,27 @@ export interface Version {
    * being table-wide. */
   questionnaire: UUID;
   questionnaire_name: string;
+  /** Which version of which other product this whole questionnaire was
+   * spawned from -- the product's own lineage, not this version's. The
+   * same for every version sharing a questionnaire; served here rather
+   * than through a second call so the picker can draw the family tree. */
+  questionnaire_spawned_from_version: UUID | null;
   name: string;
   label: string;
+  /** Null for every version published before numbering existed (phase
+   * 10), so nothing here may assume it exists -- show the label or the
+   * name instead of inventing a number for it. */
+  number: number | null;
   is_active: boolean;
   is_draft: boolean;
   routing_model: RoutingModel;
   parent_version: UUID | null;
+  /** Same fact as `ChangeRequest.published_at`, served here too so a
+   * version list does not have to join out to the proposal that produced
+   * it just to answer "when did this go live". Null for a version with no
+   * proposal (seeded/imported) or one whose proposal never published. */
+  published_at: Timestamp | null;
+  published_by_email: string | null;
   /**
    * True when publishing this draft would now be refused.
    *
