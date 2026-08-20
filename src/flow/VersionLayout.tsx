@@ -46,6 +46,22 @@ function versionOptionLabel(version: VersionListItem): string {
   return `${versionLabel(version)}${state} — ${version.question_count} questions`;
 }
 
+/** The picker's only view of a spawned product's lineage (phase 10):
+ * every version in a group carries the same
+ * `questionnaire_spawned_from_version`, so the first one answers for the
+ * whole group. `versionQuestionnaireName` is keyed by version id because
+ * that is the unit `questionnaire_spawned_from_version` names -- the
+ * questionnaire itself carries no separate list to look it up in. */
+function questionnaireGroupLabel(
+  group: { name: string; versions: VersionListItem[] },
+  versionQuestionnaireName: ReadonlyMap<UUID, string>,
+): string {
+  const spawnedFrom = group.versions[0]?.questionnaire_spawned_from_version;
+  if (spawnedFrom === null || spawnedFrom === undefined) return group.name;
+  const parentName = versionQuestionnaireName.get(spawnedFrom);
+  return parentName === undefined ? group.name : `${group.name} (from ${parentName})`;
+}
+
 export function VersionLayout() {
   const { versionId } = useParams<{ versionId: string }>();
   const navigate = useNavigate();
@@ -78,6 +94,17 @@ export function VersionLayout() {
       seen.set(version.questionnaire, version.questionnaire_name);
     }
     return [...seen.entries()].sort((left, right) => left[1].localeCompare(right[1]));
+  }, [allVersions.data]);
+
+  // Keyed by version id, not questionnaire id: `questionnaire_spawned_from_version`
+  // names the specific version a product forked from, and that is the
+  // only handle this payload gives it.
+  const versionQuestionnaireName = useMemo(() => {
+    const map = new Map<UUID, string>();
+    for (const version of allVersions.data ?? []) {
+      map.set(version.id, version.questionnaire_name);
+    }
+    return map;
   }, [allVersions.data]);
 
   const grouped = useMemo(
@@ -148,7 +175,10 @@ export function VersionLayout() {
             disabled={versions.isPending}
           >
             {grouped.map(([id, group]) => (
-              <optgroup key={id} label={group.name}>
+              <optgroup
+                key={id}
+                label={questionnaireGroupLabel(group, versionQuestionnaireName)}
+              >
                 {group.versions.map((version) => (
                   <option key={version.id} value={version.id}>
                     {versionOptionLabel(version)}

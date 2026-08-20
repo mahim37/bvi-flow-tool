@@ -148,8 +148,13 @@ export function diffValue(value: string | number | boolean | null): string {
   return String(value);
 }
 
-/** A version, as the picker and every banner name it. `label` is the
- * checkpoint name somebody chose; `name` is the questionnaire's own. */
+/** A version, as the picker and every banner name it. `number` is the
+ * per-product sequence (phase 10) and leads whenever it exists, with
+ * `label` -- the checkpoint name somebody chose -- kept alongside it
+ * rather than dropped. Null for every version published before
+ * numbering existed, so those fall back to the label, or the
+ * questionnaire's own `name` when there is no label either. */
 export function versionLabel(version: Version): string {
-  return version.label || version.name;
+  if (version.number === null) return version.label || version.name;
+  return version.label ? `v${version.number} — ${version.label}` : `v${version.number}`;
 }

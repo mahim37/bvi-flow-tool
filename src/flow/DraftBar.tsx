@@ -6,12 +6,17 @@ import {
   useCreateDraft,
   useDiscardDraft,
   useReleaseLock,
+  useSpawnProduct,
   useSubmitDraft,
   useWithdrawDraft,
 } from "../api/queries";
 import { useAuth } from "../auth/useAuth";
 import { formatTimestamp, statusLabel, statusMeaning, versionLabel } from "./labels";
-import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
+import {
+  useReviewErrorHandler,
+  useWriteErrorHandler,
+  writeErrorMessage,
+} from "./useWriteError";
 
 interface DraftBarProps {
   graph: Graph;
@@ -19,8 +24,9 @@ interface DraftBarProps {
 }
 
 export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
-  const { identity, editRefused } = useAuth();
+  const { identity, editRefused, reviewRefused } = useAuth();
   const onWriteError = useWriteErrorHandler();
+  const onReviewError = useReviewErrorHandler();
   const versionId = graph.version.id;
   const changeRequest = graph.change_request;
 
@@ -30,18 +36,26 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   const [label, setLabel] = useState("");
   const [summary, setSummary] = useState("");
 
+  const spawnNameId = useId();
+  const spawnCodeId = useId();
+  const [spawning, setSpawning] = useState(false);
+  const [spawnName, setSpawnName] = useState("");
+  const [spawnCode, setSpawnCode] = useState("");
+
   const createDraft = useCreateDraft();
   const discardDraft = useDiscardDraft();
   const submitDraft = useSubmitDraft(versionId);
   const withdrawDraft = useWithdrawDraft(versionId);
   const releaseLock = useReleaseLock(versionId);
+  const spawnProduct = useSpawnProduct(versionId);
 
   const error =
     writeErrorMessage(createDraft.error) ??
     writeErrorMessage(discardDraft.error) ??
     writeErrorMessage(submitDraft.error) ??
     writeErrorMessage(withdrawDraft.error) ??
-    writeErrorMessage(releaseLock.error);
+    writeErrorMessage(releaseLock.error) ??
+    writeErrorMessage(spawnProduct.error);
 
   function startProposal(event: React.FormEvent) {
     event.preventDefault();
@@ -56,6 +70,26 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
           // Straight into the copy. Staying on the source would leave the
           // editor looking at a version its controls no longer apply to.
           onOpenVersion(created.draft_version);
+        },
+      },
+    );
+  }
+
+  function startSpawn(event: React.FormEvent) {
+    event.preventDefault();
+    spawnProduct.mutate(
+      { name: spawnName, code: spawnCode },
+      {
+        onError: onReviewError,
+        onSuccess: (created) => {
+          setSpawning(false);
+          setSpawnName("");
+          setSpawnCode("");
+          // Straight into the child, same reasoning as a fresh draft: it
+          // is a different product now, with a different id, and staying
+          // on the source would leave the editor looking at a version
+          // none of the next steps apply to.
+          onOpenVersion(created.id);
         },
       },
     );
@@ -138,6 +172,65 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
                 under -- see the staleness banner below. */}
             <span className="draftbar__note">
               A draft is a whole copy of this version. Several can be open at once.
+            </span>
+          </>
+        )}
+
+        {reviewRefused ? (
+          <p className="banner banner--warn">
+            Your account can view the flow tool but not spawn a product from it.
+          </p>
+        ) : spawning ? (
+          <form className="draftbar__form" onSubmit={startSpawn}>
+            <div className="field field--inline">
+              <label htmlFor={spawnNameId}>Name</label>
+              <input
+                id={spawnNameId}
+                value={spawnName}
+                required
+                placeholder="The new product's name"
+                onChange={(event) => setSpawnName(event.target.value)}
+              />
+            </div>
+            <div className="field field--inline">
+              <label htmlFor={spawnCodeId}>Code</label>
+              <input
+                id={spawnCodeId}
+                value={spawnCode}
+                required
+                placeholder="Stable identifier, unique across every product"
+                onChange={(event) => setSpawnCode(event.target.value)}
+              />
+            </div>
+            <button
+              className="button button--primary"
+              type="submit"
+              disabled={
+                spawnProduct.isPending ||
+                spawnName.trim() === "" ||
+                spawnCode.trim() === ""
+              }
+            >
+              {spawnProduct.isPending ? "Spawning…" : "Spawn product"}
+            </button>
+            <button
+              className="button button--quiet"
+              type="button"
+              onClick={() => setSpawning(false)}
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <>
+            <button className="button" type="button" onClick={() => setSpawning(true)}>
+              Spawn a product
+            </button>
+            {/* A product, not a draft: it goes live the moment it exists,
+                with no review round, and there is no merge back into
+                this timeline -- see `editing.spawn_product`. */}
+            <span className="draftbar__note">
+              Copies this version into a brand-new questionnaire, live immediately.
             </span>
           </>
         )}

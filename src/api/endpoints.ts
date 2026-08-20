@@ -12,6 +12,7 @@ import type {
   SectionRecord,
   StaffIdentity,
   UUID,
+  Version,
   VersionListItem,
 } from "./types";
 
@@ -344,3 +345,23 @@ export const reorderOptions = (versionId: UUID, questionId: UUID, optionIds: UUI
       body: { option_ids: optionIds },
     },
   );
+
+/* ------------------------------------------------------------------ */
+/* Product spawning (phase 10).                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Copy a published version into a brand-new product, live immediately.
+ *
+ * Returns the child's version 1 -- already live, its `questionnaire`
+ * naming the new product. No review round: what goes live is content
+ * that already passed review on its way into the source. Every refusal
+ * is a 409 -- a draft or SEQUENCE source, a `code` another questionnaire
+ * already uses, or a broken edge the copy inherited from the source's
+ * own graph -- `editing.spawn_product`'s checks, not duplicated here.
+ */
+export const spawnProduct = (versionId: UUID, name: string, code: string) =>
+  request<Version>(`${version(versionId)}/spawn/`, {
+    method: "POST",
+    body: { name, code },
+  });
