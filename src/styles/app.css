@@ -43,13 +43,7 @@
 
   color-scheme: light;
   font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--bg);
@@ -161,8 +155,8 @@ body {
 .canvas {
   min-height: 0;
   background:
-    radial-gradient(circle at 1px 1px, var(--canvas-dot) 1.5px, transparent 0) 0 0 / 26px
-      26px,
+    radial-gradient(circle at 1px 1px, var(--canvas-dot) 1.5px, transparent 0) 0 0 /
+      26px 26px,
     var(--canvas-bg);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -825,4 +819,481 @@ details[open] > summary::before {
     grid-column: 1 / -1;
     border-top: 1px solid var(--border);
   }
+}
+
+/* ---------- tabs ----------
+   The three screens on one version. Real links rather than local state,
+   so each is a URL somebody can send. */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs__tab {
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tabs__tab:hover {
+  color: var(--text);
+  background: var(--bg-2);
+}
+
+/* Colour is not the only signal: the current tab also carries a weight
+   change and a rule beneath it (spec 4.11). */
+.tabs__tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+/* ---------- a full-width screen ---------- */
+
+.page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 60px;
+}
+
+.page__header {
+  margin-bottom: 16px;
+}
+
+.page__title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+
+.page__subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  max-width: 72ch;
+}
+
+/* ---------- review ---------- */
+
+.review__status {
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 14px;
+}
+
+.review__statusline {
+  margin: 0 0 4px;
+}
+
+.review__meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.summary {
+  display: flex;
+  gap: 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.summary__count {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+  margin-right: 6px;
+}
+
+.diff {
+  display: grid;
+  gap: 18px;
+}
+
+.diff__group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+
+.diff__groupcount {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.diff__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.diff__item + .diff__item {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.diff__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Each badge carries its word as well as its colour, so "Added" and
+   "Removed" are distinguishable without seeing either. */
+.diff__badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+}
+
+.diff__badge--added {
+  background: #e8f2e8;
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.diff__badge--removed {
+  background: var(--error-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.diff__badge--changed {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--gold);
+}
+
+.diff__key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.diff__fields {
+  margin: 8px 0 0;
+  display: grid;
+  gap: 4px;
+}
+
+.diff__field {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 0.88rem;
+}
+
+.diff__field dt {
+  color: var(--text-muted);
+}
+
+.diff__field dd {
+  margin: 0;
+}
+
+.diff__before {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.diff__after {
+  font-weight: 600;
+}
+
+.review__forms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.review__form,
+.review__publish {
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.review__publish p {
+  margin: 0 0 10px;
+}
+
+.reviews {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reviews__row {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  /* The verdict is stated in words in `.reviews__decision`; this stripe
+     only repeats it. */
+  border-left-width: 4px;
+}
+
+.reviews__row + .reviews__row {
+  margin-top: 8px;
+}
+
+.reviews__row--approved {
+  border-left-color: var(--green);
+}
+
+.reviews__row--rejected {
+  border-left-color: var(--emphasis);
+}
+
+.reviews__head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.reviews__decision {
+  font-weight: 800;
+}
+
+.reviews__by {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.reviews__note {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+/* ---------- preview ---------- */
+
+.preview__progress {
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+
+.preview__progressnote {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.preview__body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.preview__current,
+.preview__path {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.preview__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.preview__prompt {
+  font-size: 1.05rem;
+  margin: 8px 0;
+}
+
+.preview__options {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.preview__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.preview__option:hover {
+  background: var(--bg-2);
+}
+
+.preview__option input {
+  width: auto;
+  margin: 0;
+}
+
+.preview__options li + li {
+  margin-top: 6px;
+}
+
+.preview__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.preview__steps {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.preview__steps li + li {
+  margin-top: 6px;
+}
+
+.preview__answer {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ---------- content editing ---------- */
+
+textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  resize: vertical;
+}
+
+textarea:hover {
+  border-color: var(--text-muted);
+}
+
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.field--check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.field--check input {
+  width: auto;
+  margin: 0;
+}
+
+.field--check label {
+  margin: 0;
+  color: var(--text);
+}
+
+.editor {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.editor__actions,
+.editor__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.editor__rowlabel {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+
+.optedits,
+.sectionedits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.optedit,
+.sectionedit {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.optedit + .optedit,
+.sectionedit + .sectionedit {
+  margin-top: 8px;
+}
+
+.optedit__fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.optedit__controls,
+.sectionedit__controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.optedit__controls .button,
+.sectionedit__controls .button {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+}
+
+.sectionedit .field--inline {
+  margin-bottom: 6px;
+}
+
+.sidebar__editor {
+  margin-bottom: 8px;
+}
+
+.panel__hint--warn {
+  color: var(--emphasis);
+  font-weight: 600;
 }

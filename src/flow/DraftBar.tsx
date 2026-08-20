@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { Link } from "react-router-dom";
 
 import type { Graph, UUID } from "../api/types";
 import {
@@ -9,7 +10,7 @@ import {
   useWithdrawDraft,
 } from "../api/queries";
 import { useAuth } from "../auth/useAuth";
-import { formatTimestamp } from "./labels";
+import { formatTimestamp, statusLabel, statusMeaning, versionLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 interface DraftBarProps {
@@ -60,14 +61,26 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
     );
   }
 
-  if (changeRequest === null) {
+  // Branches on `is_draft`, not on whether a proposal exists. A published
+  // version keeps the proposal it was published from -- that row is the
+  // history of the change, and `graph/` still serves it -- so "has a
+  // change request" stopped meaning "is editable" the moment publishing
+  // stood `is_draft` down.
+  if (!graph.version.is_draft) {
     return (
       <div className="draftbar">
         <div className="draftbar__status">
-          <strong>{graph.version.name}</strong>
+          <strong>{versionLabel(graph.version)}</strong>
           <span className="draftbar__note">
             {graph.version.is_active ? "Live version" : "Published version"} — read
             only. Edits are made on a proposal.
+            {changeRequest !== null && changeRequest.published_at !== null && (
+              <>
+                {" "}
+                Published {formatTimestamp(changeRequest.published_at)} from a proposal
+                by {changeRequest.created_by_email}.
+              </>
+            )}
           </span>
         </div>
 
@@ -111,13 +124,22 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             </button>
           </form>
         ) : (
-          <button
-            className="button button--primary"
-            type="button"
-            onClick={() => setProposing(true)}
-          >
-            Propose a change
-          </button>
+          <>
+            <button
+              className="button button--primary"
+              type="button"
+              onClick={() => setProposing(true)}
+            >
+              Propose a change
+            </button>
+            {/* Several drafts may be open against one questionnaire, so
+                this is not a one-at-a-time button. What is refused is
+                publishing a draft the live version has moved out from
+                under -- see the staleness banner below. */}
+            <span className="draftbar__note">
+              A draft is a whole copy of this version. Several can be open at once.
+            </span>
+          </>
         )}
 
         {error !== null && (
@@ -129,9 +151,27 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
     );
   }
 
+  // A draft always has a proposal -- `create_draft` makes the pair -- but
+  // the payload types it as nullable, so this keeps the rest honest.
+  if (changeRequest === null) {
+    return (
+      <div className="draftbar draftbar--draft">
+        <p className="banner banner--warn">
+          This version is a draft with no proposal attached, which should not be
+          possible. Nothing here can be edited safely.
+        </p>
+      </div>
+    );
+  }
+
   const lock = changeRequest.lock;
   const heldByMe = lock !== null && lock.email === identity?.email;
   const isOpen = changeRequest.status === "open";
+  // Withdrawing accepts both, and drops an approval rather than banking
+  // it: what comes back is an editable proposal, and an approval of an
+  // older draft is not an approval of the next one.
+  const isFrozen =
+    changeRequest.status === "submitted" || changeRequest.status === "approved";
   const busy =
     submitDraft.isPending ||
     withdrawDraft.isPending ||
@@ -142,14 +182,28 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
     <div className="draftbar draftbar--draft">
       <div className="draftbar__status">
         <strong>
-          {graph.version.label || graph.version.name} — draft
-          {isOpen ? "" : ", submitted for review"}
+          {versionLabel(graph.version)} —{" "}
+          {statusLabel(changeRequest.status).toLowerCase()}
         </strong>
         <span className="draftbar__note">
-          Proposed by {changeRequest.created_by_email}
-          {changeRequest.summary ? ` — ${changeRequest.summary}` : ""}
+          {statusMeaning(changeRequest.status)} Proposed by{" "}
+          {changeRequest.created_by_email}
+          {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
         </span>
       </div>
+
+      {graph.version.is_stale && (
+        // Named here as well as on the review screen, because this is the
+        // bar somebody edits under. `is_stale` is the server's answer,
+        // through the same function the publish refusal reads, so this
+        // cannot promise a publish the backend then declines.
+        <p className="banner banner--warn">
+          Behind the live version: something was published after this draft was copied,
+          so publishing it is refused rather than silently reinstating whatever landed
+          in between. There is no automatic rebase — draft again from the current live
+          version and re-apply.
+        </p>
+      )}
 
       {lock !== null &&
         (heldByMe ? (
@@ -182,7 +236,11 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
       )}
 
       <div className="draftbar__actions">
-        {isOpen ? (
+        <Link className="button button--quiet" to={`/versions/${versionId}/review`}>
+          {isOpen ? "Check the diff" : "Review and publish"}
+        </Link>
+
+        {isOpen && (
           <>
             <button
               className="button button--primary"
@@ -214,14 +272,18 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
               Discard draft
             </button>
           </>
-        ) : (
+        )}
+
+        {isFrozen && (
           <button
             className="button"
             type="button"
             disabled={busy || editRefused}
             onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
           >
-            Withdraw
+            {changeRequest.status === "approved"
+              ? "Withdraw (drops the approval)"
+              : "Withdraw"}
           </button>
         )}
       </div>

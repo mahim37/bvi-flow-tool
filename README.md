@@ -107,14 +107,27 @@ out here rather than shipped unverified.
 
 ## Getting access
 
-The flow tool needs `view_flow_tool`, and proposing changes additionally needs
-`edit_flow_tool`. Both are **per-user** grants: no role confers them, and
-`seed_roles` grants them to nobody, including Super Admin. Grant them in
-Django admin on the user (Users → _the user_ → Permission grants), which
-records an audited `PERMISSION_GRANTED` event.
+Three **per-user** grants, and no role confers any of them — `seed_roles`
+grants them to nobody, including Super Admin. Grant them in Django admin on
+the user (Users → _the user_ → Permission grants), which records an audited
+`PERMISSION_GRANTED` event.
+
+| Code                | What it unlocks                                 |
+| ------------------- | ----------------------------------------------- |
+| `view_flow_tool`    | The map, the diagnostics, the diff, the preview |
+| `edit_flow_tool`    | Opening a draft and every edit on it            |
+| `publish_flow_tool` | Approving, sending back, and publishing         |
+
+`publish_flow_tool` deliberately does not imply `edit_flow_tool`: a reviewer
+is not necessarily somebody who proposes changes. And **the author of a
+proposal cannot approve their own** whatever they hold, so a deployment needs
+the publish grant on **at least two accounts** before anything can ship. The
+review screen does not offer an author the approve and send-back controls at
+all, since pressing them could only ever produce a 403.
 
 An account without `view_flow_tool` gets an explanatory screen rather than a
-sign-in loop, because signing in again would never help.
+sign-in loop, because signing in again would never help. The other two are
+discovered by being refused — see "Known limitations".
 
 ## Scripts
 
@@ -128,6 +141,11 @@ sign-in loop, because signing in again would never help.
 | `npm run check`  | format check + lint + typecheck + tests     |
 
 ## What it does
+
+Three screens on one version, each a real URL: `/versions/:id` for the map,
+`/versions/:id/review` for the diff, `/versions/:id/preview` for the walk. So
+"look at this diff" is a link somebody can send, and a change on the review
+screen can jump straight to its node on the map (`?question=<id>`).
 
 - **Canvas** (spec §4.2) — Cytoscape with a dagre layout. Archived questions
   appear only while something still points at them, and there is no toggle to
@@ -143,10 +161,33 @@ sign-in loop, because signing in again would never help.
 - **Proposals** (§4.6) — open a draft from any published version, retarget,
   add, remove and reorder edges on it, then submit for review.
 - **Locking** (§4.7) — shows who is holding a draft and since when.
+- **Review and publish** (§4.8) — the **Review** tab: the diff against the
+  version this draft was copied from, grouped by kind and matched by code;
+  added/removed/changed counts; the publish check asked in advance, so a
+  reviewer learns a graph is unpublishable while reading it rather than after
+  approving it; every review round with its reviewer and reasons; then
+  approve, send back, or publish.
+- **Preview** (§4.9) — the **Preview** tab: walk any graph version as a
+  respondent would, through the runtime's own resolver. A cycle or a dangling
+  target answers 409 and is rendered as the finding it is: the crash a
+  respondent would get, found by somebody who can still fix it.
+- **Content editing** (§4.11's editing half) — on an open draft: add, edit and
+  retire questions; add, reword, reorder and delete options; add, rename,
+  reorder and delete sections; reorder the question list.
+- **History, in part** (§4.10) — a version is its own snapshot, so the Review
+  tab on a _published_ version answers "what did this release change" against
+  the one it superseded, and shows the proposal and review rounds behind it.
+- **Concurrent sandboxes** (plan §2.8) — several drafts can be open against one
+  questionnaire at once. The version picker groups by questionnaire and can be
+  filtered to one; a draft the live version has moved out from under is marked
+  **behind live** in the picker, on the draft bar and on the review screen,
+  through the server's own `is_stale`.
 
-Not built, because the backend does not have them yet: review and publish
-(§4.8), preview (§4.9), history (§4.10), and content editing (§4.11's editing
-half) — see `../bvi-backend/FLOW_TOOL_PLAN.md` §4.
+Not built, because the backend does not have it yet: snapshot **rollback** as a
+framed operation (activating an older version is still a Django-admin job), and
+side-by-side compare of two sandboxes, which needs the pairwise
+`diffing.diff(left, right)` — see `../bvi-backend/FLOW_TOOL_PLAN.md` §4.1 and
+§4.5.
 
 ## Two rules this codebase keeps
 
@@ -165,12 +206,23 @@ in text, and the canvas itself is `role="img"`: it is a `<canvas>` with no DOM
 to traverse, so the keyboard-navigable view of the same routing is the sidebar
 and the detail panel rather than a fake accessibility tree that would go stale.
 
-## Known limitation
+## Known limitations
 
-There is no `GET /api/staff/auth/session/`. The backend exposes permission
+Both are backend gaps rather than choices made here, and both are small.
+
+**There is no `GET /api/staff/auth/session/`.** The backend exposes permission
 codes to no client, and staff login is the only response that names the user,
 so this app remembers the login response in `localStorage` and discovers that
-an account is view-only by having a write refused. A small session endpoint
-returning `{email, name, role, permission_codes}` would remove both
-workarounds. Until then a stale remembered identity self-corrects: the first
-call made with a dead cookie answers 401 and the app returns to sign-in.
+an account lacks `edit_flow_tool` or `publish_flow_tool` by having a write
+refused. A session endpoint returning `{email, name, role, permission_codes}`
+would remove that guesswork — and would let the controls be hidden up front
+rather than after the first refusal. Until then a stale remembered identity
+self-corrects: the first call made with a dead cookie answers 401 and the app
+returns to sign-in.
+
+**`show_raw_answer_to_advisor` is writable but not readable.**
+`FlowToolQuestionSerializer` does not serve it, so an existing question's value
+cannot be read back. It is therefore offered on the _add question_ form, where
+there is no prior value to misreport, and deliberately left off the edit form:
+a checkbox that started from a guess would silently overwrite whatever was
+really set. Adding the field to that serializer is the whole fix.

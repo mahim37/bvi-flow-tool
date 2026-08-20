@@ -38,11 +38,13 @@ function writeStoredIdentity(identity: StaffIdentity | null): void {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [identity, setIdentity] = useState<StaffIdentity | null>(readStoredIdentity);
   const [editRefused, setEditRefused] = useState(false);
+  const [reviewRefused, setReviewRefused] = useState(false);
   const queryClient = useQueryClient();
 
   const forget = useCallback(() => {
     setIdentity(null);
     setEditRefused(false);
+    setReviewRefused(false);
     writeStoredIdentity(null);
     // Cached graphs belong to the account that fetched them. Leaving them
     // would show the next person a map they may have no permission to see,
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeStoredIdentity(next);
     setIdentity(next);
     setEditRefused(false);
+    setReviewRefused(false);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -84,9 +87,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // and not a statement about the account at all.
   const noteEditRefused = useCallback(() => setEditRefused(true), []);
 
+  // Separate from the above because `edit_flow_tool` and
+  // `publish_flow_tool` are separate grants: an account may hold either,
+  // both or neither, and a reviewer deliberately does not need the edit
+  // code. One flag for both would have a refused edit hide the review
+  // controls of somebody entitled to use them.
+  const noteReviewRefused = useCallback(() => setReviewRefused(true), []);
+
   const value = useMemo<AuthState>(
-    () => ({ identity, editRefused, signIn, signOut, noteApiError, noteEditRefused }),
-    [identity, editRefused, signIn, signOut, noteApiError, noteEditRefused],
+    () => ({
+      identity,
+      editRefused,
+      reviewRefused,
+      signIn,
+      signOut,
+      noteApiError,
+      noteEditRefused,
+      noteReviewRefused,
+    }),
+    [
+      identity,
+      editRefused,
+      reviewRefused,
+      signIn,
+      signOut,
+      noteApiError,
+      noteEditRefused,
+      noteReviewRefused,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
