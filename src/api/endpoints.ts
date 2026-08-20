@@ -1,11 +1,17 @@
 import { request } from "./client";
 import type {
+  ActivityEvent,
+  ActivityEventType,
   AnswerType,
   ChangeRequest,
+  ChangeRequestStatus,
+  ComparePayload,
   Edge,
   Graph,
+  Paginated,
   PreviewAnswer,
   PreviewState,
+  Proposal,
   QuestionOption,
   QuestionRecord,
   ReviewPayload,
@@ -32,6 +38,24 @@ export const login = (email: string, password: string) =>
   });
 
 export const logout = () => request<void>(`${STAFF_AUTH}/logout/`, { method: "POST" });
+
+/**
+ * Who is signed in, and what they may do.
+ *
+ * The call that replaced this app's two workarounds: identity is asked for
+ * rather than remembered in `localStorage`, and edit access is read off
+ * `permission_codes` rather than discovered by having a write refused --
+ * which was visible in the UI as a viewer being offered buttons that then
+ * errored.
+ *
+ * A refusal here is a meaningful answer rather than a failure: it is how
+ * this app learns there is no usable session. Note that it is a **403, not
+ * a 401** -- DRF downgrades `NotAuthenticated` when no authenticator
+ * implements `authenticate_header`, and `StaffSessionAuthentication` does
+ * not -- so the bootstrap treats both as "not signed in".
+ */
+export const fetchSession = (signal?: AbortSignal) =>
+  request<StaffIdentity>(`${STAFF_AUTH}/session/`, signal ? { signal } : {});
 
 /**
  * Every version, unpaginated, grouped by questionnaire.
@@ -365,3 +389,120 @@ export const spawnProduct = (versionId: UUID, name: string, code: string) =>
     method: "POST",
     body: { name, code },
   });
+/* Compare (phase 9).                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Two versions, side by side.
+ *
+ * Reads as "what does `versionId` say that `baseId` does not", which is
+ * the same sentence the review screen asks about a draft and its parent --
+ * and it is the same server function with the base named instead of
+ * derived. The base is a query parameter rather than a second path
+ * segment because the pair is unordered as a resource: there is no object
+ * at `versions/a/compare/b/` that `versions/b/compare/a/` is not also
+ * addressing.
+ *
+ * Answers 409 if either side is a sequence-routed version, for the same
+ * reason `graph/` does: there are no edges to compare.
+ */
+export const fetchCompare = (versionId: UUID, baseId: UUID, signal?: AbortSignal) =>
+  request<ComparePayload>(
+    `${version(versionId)}/compare/?base=${encodeURIComponent(baseId)}`,
+    signal ? { signal } : {},
+  );
+
+/* ------------------------------------------------------------------ */
+/* History and snapshots (phase 5).                                    */
+/*                                                                     */
+/* Both lists sit at the top level rather than under a version, which   */
+/* is the whole point of the trail's plain-UUID columns: a proposal     */
+/* outlives its draft and the trail outlives the version it describes,  */
+/* so addressing either through a version would make the interesting    */
+/* rows -- the discarded ones -- unreachable.                           */
+/* ------------------------------------------------------------------ */
+
+function query(params: Record<string, string | number | null | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined || value === "") continue;
+    search.set(key, String(value));
+  }
+  const rendered = search.toString();
+  return rendered === "" ? "" : `?${rendered}`;
+}
+
+export interface ProposalFilters {
+  questionnaire?: UUID | null;
+  status?: ChangeRequestStatus | null;
+  page?: number;
+}
+
+/** Every proposal ever opened, newest first, including the published
+ * ones: a `ChangeRequest` outlives the editing it was opened for, and the
+ * row is the history of that change with every review round attached. */
+export const listProposals = (filters: ProposalFilters = {}, signal?: AbortSignal) =>
+  request<Paginated<Proposal>>(
+    `${FLOW_TOOL}/proposals/${query({
+      questionnaire: filters.questionnaire,
+      status: filters.status,
+      page: filters.page,
+    })}`,
+    signal ? { signal } : {},
+  );
+
+export interface HistoryFilters {
+  questionnaire?: UUID | null;
+  /** Narrows to one version, including one that has since been discarded
+   * -- the column is a plain UUID, so this is a legitimate query about a
+   * deleted thing rather than a 404. */
+  version?: UUID | null;
+  change_request?: UUID | null;
+  event_type?: ActivityEventType | null;
+  /** An email address, matched exactly, as the server does. */
+  actor?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
+/**
+ * The trail: what happened, by whom, and when.
+ *
+ * The same `audit.QuestionnaireActivityEvent` rows the compliance log
+ * serves, read through the flow tool's own permission rather than
+ * `view_audit_log`. Two surfaces over one table, deliberately -- a
+ * history screen that computed its own answer from `ChangeRequest`
+ * timestamps would eventually disagree with the audit export, and a
+ * compliance review is the worst place to find that out.
+ */
+export const listHistory = (filters: HistoryFilters = {}, signal?: AbortSignal) =>
+  request<Paginated<ActivityEvent>>(
+    `${FLOW_TOOL}/history/${query({
+      questionnaire: filters.questionnaire,
+      version: filters.version,
+      change_request: filters.change_request,
+      event_type: filters.event_type,
+      actor: filters.actor,
+      page: filters.page,
+      page_size: filters.page_size,
+    })}`,
+    signal ? { signal } : {},
+  );
+
+/**
+ * Put an earlier version back in front of respondents.
+ *
+ * A separate verb from `publish/` rather than a second method on it,
+ * because the two take different things: `publish/` names a draft and
+ * needs an approval, this names a published version and needs none. What
+ * it activates has already been through a review, because it was live
+ * before -- and requiring a fresh one to *undo* a change would make the
+ * tool slowest exactly when speed matters, which is the minute after a bad
+ * publish.
+ *
+ * Refuses a draft (that is what `publish/` is for, and it is where the
+ * review gate lives) and the version already live, both with 409. It takes
+ * effect immediately: nothing downstream asks again.
+ */
+export const activateVersion = (versionId: UUID) =>
+  request<Version>(`${version(versionId)}/activate/`, { method: "POST" });

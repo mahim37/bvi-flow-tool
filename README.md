@@ -18,7 +18,7 @@ Then:
 
 ```sh
 npm install
-npm run dev          # http://localhost:3100
+npm run dev
 ```
 
 `vite.config.ts` proxies `/api` to `http://localhost:8000`. Override with
