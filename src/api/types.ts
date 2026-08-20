@@ -62,6 +62,18 @@ export interface Version {
    * between. Always false for anything that is not a draft.
    */
   is_stale: boolean;
+  /**
+   * When this version went live, and who pressed the button.
+   *
+   * Both live on the `ChangeRequest` rather than on the version --
+   * publishing is something that happened to a proposal -- and the server
+   * joins them through the reverse one-to-one so no client has to. Null
+   * for a seeded or imported version, which has no proposal and never had
+   * one: those appeared rather than being published, and the release list
+   * says so instead of inventing a date.
+   */
+  published_at: Timestamp | null;
+  published_by_email: string | null;
   created: Timestamp;
   modified: Timestamp;
 }
@@ -191,6 +203,16 @@ export interface ChangeRequest {
   status: ChangeRequestStatus;
   submitted_at: Timestamp | null;
   published_at: Timestamp | null;
+  /**
+   * Who published it -- a third name beside the author and the reviewer,
+   * and all three can differ.
+   *
+   * A column rather than a row of its own, unlike `reviews`: reviewing
+   * repeats -- reject, edit, resubmit, review again -- and publishing does
+   * not, because `published` is terminal.
+   */
+  published_by: UUID | null;
+  published_by_email: string | null;
   /** Null when unheld *or* when the held lock has gone idle -- the server
    * decides which, through `editing.lock_holder`, so the banner and the
    * next write agree about whether somebody is really in there. */
@@ -225,10 +247,34 @@ export interface Graph {
   diagnostics: GraphDiagnostics;
 }
 
+/**
+ * The three per-user grants this tool is gated on.
+ *
+ * Deliberately independent of any role: `seed_roles` subtracts the set
+ * from every role grant, so an account can be a full administrator
+ * everywhere else and still hold none of these. They are read from
+ * `GET staff/auth/session/`, which computes them through `granted_codes`
+ * -- the same function every server-side check reads.
+ */
+export const VIEW_FLOW_TOOL = "view_flow_tool";
+export const EDIT_FLOW_TOOL = "edit_flow_tool";
+export const PUBLISH_FLOW_TOOL = "publish_flow_tool";
+
+/**
+ * Who is signed in, and what the server will let them do.
+ *
+ * `permission_codes` is a **rendering hint and never a gate**: every view
+ * on the server still checks, and this app reads the list only to decide
+ * whether to draw a control. Serving it from `granted_codes` is what stops
+ * the hint and the answer from drifting -- but a grant revoked mid-session
+ * is still discovered by a refusal, which is why the write paths refetch
+ * this on a 403.
+ */
 export interface StaffIdentity {
   email: string;
   name: string;
   role: string | null;
+  permission_codes: string[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -294,6 +340,18 @@ export interface ReviewPayload {
   /** The version this draft was copied from. Null on a draft with no
    * parent, which is the first version of a new questionnaire. */
   base_version: Version | null;
+  /**
+   * What is live now, served only when it is *not* what this draft was
+   * copied from.
+   *
+   * `version.is_stale` says whether publishing would be refused; this says
+   * against what, which is the version `compare/` has to be opened with.
+   * A reviewer who clears a stale proposal and finds out at publish has
+   * spent the one trip through a second person the workflow is built
+   * around, so it rides along with the diff for the same reason
+   * `publish_blocker` does.
+   */
+  stale_against: Version | null;
   change_request: ChangeRequest | null;
   diff: VersionDiff;
   summary: DiffCounts;
@@ -334,4 +392,128 @@ export interface PreviewState {
   /** The reachability denominator -- questions reachable from the entry
    * point, not every question in the version. */
   total_count: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Compare (phase 9): any two versions, side by side.                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The answer to "what does this version say that that one does not".
+ *
+ * The same shape the review screen already renders, because it is the same
+ * function on the server: `diffing.compare` with the base named explicitly
+ * instead of derived from `parent_version`. It carries no
+ * `publish_blocker` and no change request -- comparing is a question about
+ * two versions, not about a proposal, and either side may be a published
+ * version with no proposal at all.
+ *
+ * The two versions need not share a questionnaire: matching is by code
+ * throughout, so comparing one product against another is a meaningful
+ * question, and it is the one somebody standing a second product up asks.
+ */
+export interface ComparePayload {
+  version: Version;
+  base_version: Version;
+  diff: VersionDiff;
+  summary: DiffCounts;
+}
+
+/* ------------------------------------------------------------------ */
+/* History and snapshots (phase 5).                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One page of a list the server paginates.
+ *
+ * `proposals/` and `history/` are paginated where `versions/` is not, and
+ * for the opposite reason: versions are created by publishing and number
+ * in the tens, while an activity row is written by every single edit.
+ */
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+/**
+ * Every kind of line the trail can hold. Mirrors
+ * `audit.QuestionnaireActivityEventType`.
+ *
+ * Two groups, and the split is the point. The first eight are a proposal's
+ * lifecycle, and two of them -- `published` and `rolled_back` -- are the
+ * only entries in the whole table that change what a respondent is asked.
+ * The remaining fifteen are the edits inside a proposal: they exist
+ * because a proposal has one author and more than one person can edit it,
+ * since the lock hands over once idle and a rejected proposal reopens for
+ * anybody holding the edit code.
+ */
+export type ActivityEventType =
+  | "draft_opened"
+  | "draft_discarded"
+  | "submitted"
+  | "withdrawn"
+  | "approved"
+  | "rejected"
+  | "published"
+  | "rolled_back"
+  | "section_added"
+  | "section_changed"
+  | "section_removed"
+  | "question_added"
+  | "question_changed"
+  | "question_archived"
+  | "questions_reordered"
+  | "option_added"
+  | "option_changed"
+  | "option_removed"
+  | "options_reordered"
+  | "edge_added"
+  | "edge_changed"
+  | "edge_removed"
+  | "edges_reordered";
+
+/**
+ * One line of the trail: who did what, to which version, when.
+ *
+ * `version_id` and `change_request_id` are plain UUIDs with no object
+ * behind them, deliberately: both point into the draft world, which is
+ * hard-deleted, so a foreign key would either block discarding a draft or
+ * delete the history of the proposal somebody threw away -- which is the
+ * proposal whose history is most worth having. `version_name` is
+ * snapshotted beside the id so a discarded version still has a name here.
+ *
+ * `detail` is one rendered line in the same codes the diff screen uses
+ * ("q1 (yes) -> q9 (was q1 (yes) -> q2)"), so the trail and a review
+ * name the same arrow the same way. Empty for an event whose type already
+ * says everything.
+ */
+export interface ActivityEvent {
+  id: UUID;
+  questionnaire: UUID;
+  version_id: UUID;
+  version_name: string;
+  change_request_id: UUID | null;
+  actor_user: UUID;
+  actor_email: string;
+  event_type: ActivityEventType;
+  detail: string;
+  changes: Record<string, unknown>;
+  occurred_at: Timestamp;
+}
+
+/**
+ * A proposal in the list of every proposal ever opened.
+ *
+ * Carries its draft version inline, unlike the payload the write verbs
+ * echo back: this list is read on its own, with no map beside it, so a row
+ * naming its version by id alone would need a call per row to be readable.
+ *
+ * Discarded proposals are absent, because they were deleted. What survives
+ * one is the `draft_discarded` line in the trail, which is exactly why
+ * that trail holds no foreign keys into this table.
+ */
+export interface Proposal extends ChangeRequest {
+  version: Version;
 }
