@@ -80,6 +80,12 @@ export function Canvas({
     return () => {
       cy.destroy();
       cyRef.current = null;
+      // A destroyed cy's elements go with it, so the next instance (React
+      // 18 StrictMode's dev double-mount, or a real remount) starts with no
+      // layout run yet -- without this reset, the elements-sync effect sees
+      // the old signature, thinks the new (empty) instance is already laid
+      // out, and skips dagre entirely, leaving every node stacked at (0,0).
+      signatureRef.current = "";
     };
   }, []);
 
