@@ -11,6 +11,7 @@ import type { Graph, Question, QuestionOption, Edge } from "../api/types";
  */
 
 export const VERSION_ID = "11111111-1111-4111-8111-111111111111";
+export const QUESTIONNAIRE_ID = "22222222-2222-4222-8222-222222222222";
 export const Q1 = "aaaaaaaa-0000-4000-8000-000000000001";
 export const Q2 = "aaaaaaaa-0000-4000-8000-000000000002";
 export const Q3_ARCHIVED = "aaaaaaaa-0000-4000-8000-000000000003";
@@ -66,12 +67,15 @@ export function makeGraph(overrides: Partial<Graph> = {}): Graph {
   const graph: Graph = {
     version: {
       id: VERSION_ID,
+      questionnaire: QUESTIONNAIRE_ID,
+      questionnaire_name: "Risk profiling",
       name: "Risk profiling v3",
       label: "",
       is_active: true,
       is_draft: false,
       routing_model: "graph",
       parent_version: null,
+      is_stale: false,
       created: "2026-08-01T09:00:00Z",
       modified: "2026-08-01T09:00:00Z",
     },

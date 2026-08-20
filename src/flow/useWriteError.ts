@@ -38,3 +38,25 @@ export function writeErrorMessage(error: unknown): string | null {
   }
   return "Could not reach the server.";
 }
+
+/**
+ * The same, for approve, reject and publish.
+ *
+ * A separate handler rather than a flag on the one above, because the
+ * refusal it records is about a different grant. It is only ever wired to
+ * a control the author is not shown -- `editing.approve` refuses a
+ * self-review with a 403 of its own, and mistaking that for a missing
+ * grant would tell somebody their account lacks a permission it holds.
+ */
+export function useReviewErrorHandler(): (error: unknown) => void {
+  const { noteApiError, noteReviewRefused } = useAuth();
+  return useCallback(
+    (error: unknown) => {
+      noteApiError(error);
+      if (error instanceof ApiError && error.isForbidden && !error.isCsrfFailure) {
+        noteReviewRefused();
+      }
+    },
+    [noteApiError, noteReviewRefused],
+  );
+}
