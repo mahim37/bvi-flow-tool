@@ -178,10 +178,12 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             <span className="draftbar__divider" aria-hidden="true" />
 
             <div className="draftbar__status">
-              <span
-                className={`draftbar__dot draftbar__dot--${graph.version.is_active ? "live" : "muted"}`}
-              />
-              <strong>{versionLabel(graph.version)}</strong>
+              <div className="draftbar__status-name">
+                <span
+                  className={`draftbar__dot draftbar__dot--${graph.version.is_active ? "live" : "muted"}`}
+                />
+                <strong>{versionLabel(graph.version)}</strong>
+              </div>
               <span className="draftbar__note">
                 {graph.version.is_active ? "Live version" : "Published version"} — read
                 only. Edits are made on a proposal.
@@ -392,11 +394,13 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
           <span className="draftbar__divider" aria-hidden="true" />
 
           <div className="draftbar__status">
-            <span className="draftbar__dot draftbar__dot--draft" />
-            <strong>
-              {versionLabel(graph.version)} —{" "}
-              {statusLabel(changeRequest.status).toLowerCase()}
-            </strong>
+            <div className="draftbar__status-name">
+              <span className="draftbar__dot draftbar__dot--draft" />
+              <strong>
+                {versionLabel(graph.version)} —{" "}
+                {statusLabel(changeRequest.status).toLowerCase()}
+              </strong>
+            </div>
             <span className="draftbar__note">
               {statusMeaning(changeRequest.status)} Proposed by{" "}
               {changeRequest.created_by_email}

@@ -1240,8 +1240,11 @@ details[open] > summary > .chevron {
 }
 
 /* Tabs and the version's own status on the left, its actions pushed to
- * the right -- one row when there's room, wrapping to two when there
- * isn't, with banners/forms/errors as full-width children below it. */
+ * the right -- one row whenever there's room. The note (the longest,
+ * least predictable text in here -- it can carry a publish timestamp and
+ * an email address) is what absorbs a narrow window, truncating with an
+ * ellipsis rather than wrapping or forcing the row wider; `flex-wrap`
+ * stays only as a last-resort safety net for a genuinely tiny viewport. */
 .draftbar__row {
   display: flex;
   flex-wrap: wrap;
@@ -1253,8 +1256,8 @@ details[open] > summary > .chevron {
 .draftbar__left {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 16px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1265,22 +1268,42 @@ details[open] > summary > .chevron {
 .draftbar__divider {
   align-self: stretch;
   width: 1px;
+  flex-shrink: 0;
   background: var(--border-strong);
 }
 
 .draftbar__right {
   display: flex;
   flex-wrap: wrap;
+  flex-shrink: 0;
   align-items: stretch;
   gap: 8px;
 }
 
+/* Name (with its dot) on one line, the longer explanation stacked under
+ * it and truncated -- the one thing in this row allowed to shrink below
+ * its own content's width, so it's the one that gives when space is
+ * tight rather than the tabs or the actions. */
 .draftbar__status {
   display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.draftbar__status-name {
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
+}
+
+.draftbar__status-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.92rem;
 }
 
 /* Live/draft/superseded, as a colour separate from the text beside it --
@@ -1306,8 +1329,16 @@ details[open] > summary > .chevron {
 }
 
 .draftbar__note {
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
+  /* Can carry a publish timestamp and an email address on top of its own
+     sentence -- the least predictable-length text in this row, so it's
+     the one that gives (an ellipsis) rather than wrapping or pushing the
+     row's actions onto a second line. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 /* Self-describing buttons: the explanation lives inside the button it
