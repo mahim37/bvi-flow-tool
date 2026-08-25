@@ -8,6 +8,7 @@ import {
   useReorderEdges,
   useUpdateEdge,
 } from "../api/queries";
+import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { optionLabel, targetLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
@@ -42,6 +43,14 @@ export function EdgeEditor({
   const questionsById = useMemo(
     () => new Map(graph.questions.map((item) => [item.id, item])),
     [graph.questions],
+  );
+
+  // Same per-section colour the canvas and the detail panel's own badges
+  // use (`graphElements.ts`), so a destination chip's dot matches the
+  // section colour everywhere else in the app.
+  const sectionColors = useMemo(
+    () => sectionColorMap(graph.sections),
+    [graph.sections],
   );
 
   const edges = useMemo(
@@ -128,8 +137,8 @@ export function EdgeEditor({
 
   return (
     <section className="panel__section" aria-labelledby="edges-heading">
-      <h3 id="edges-heading" className="panel__heading">
-        Outgoing edges
+      <h3 id="edges-heading" className="d-sub">
+        Outgoing edges <span className="count">{edges.length}</span>
       </h3>
       <p className="panel__hint">
         Tried in this order. The first whose guard matches the answer wins; if none
@@ -141,24 +150,46 @@ export function EdgeEditor({
           No edges leave this question, so answering it always ends the flow.
         </p>
       ) : (
-        <ol className="edges">
+        // A flat, priority-ordered list -- not grouped by guard the way the
+        // detail panel's Options card list is -- on purpose: a per-option
+        // edge and the question-level "Any answer" edge can both match the
+        // same real answer, and this order is what decides which one wins.
+        // Grouping by guard (break's own "Answers & where they lead" card
+        // layout) would hide that cross-guard relationship rather than show
+        // it, so only the visual language (card, destination chip) is
+        // ported here, not the grouping.
+        <ol className="opt-list">
           {edges.map((edge, index) => {
             const isDead = deadEdges.has(edge.id);
             const isBroken = brokenEdges.has(edge.id);
+            const targetQuestion =
+              edge.to_question !== null ? questionsById.get(edge.to_question) : undefined;
+            const targetColor =
+              targetQuestion?.section != null
+                ? (sectionColors.get(targetQuestion.section) ?? NO_SECTION_COLOR)
+                : NO_SECTION_COLOR;
             return (
-              <li key={edge.id} className="edges__row">
-                <span className="edges__priority" aria-hidden="true">
-                  {index + 1}
-                </span>
-                <div className="edges__body">
-                  <div className="edges__rule">
-                    <span className="edges__guard">
-                      {optionLabel(question, edge.from_option)}
-                    </span>
-                    <span aria-hidden="true"> → </span>
-                    <span className="sr-only">goes to</span>
-                    {edge.to_question !== null &&
-                    questionsById.has(edge.to_question) ? (
+              <li key={edge.id} className="opt">
+                <div className="opt-label">
+                  <span className="edges__priority" aria-hidden="true">
+                    {index + 1}
+                  </span>{" "}
+                  <span>{optionLabel(question, edge.from_option)}</span>
+                </div>
+
+                <div
+                  className={
+                    edge.to_question === null ? "opt-dest terminal-dest" : "opt-dest"
+                  }
+                >
+                  <span className="arrow" aria-hidden="true">
+                    {edge.to_question === null ? "⏹" : "↘"}
+                  </span>
+                  {edge.to_question !== null && (
+                    <span className="dest-sw" style={{ background: targetColor }} />
+                  )}
+                  <span className="dest-txt">
+                    {edge.to_question !== null && questionsById.has(edge.to_question) ? (
                       <button
                         type="button"
                         className="link"
@@ -167,80 +198,78 @@ export function EdgeEditor({
                         {targetLabel(edge, questionsById)}
                       </button>
                     ) : (
-                      <span className="edges__target">
-                        {targetLabel(edge, questionsById)}
-                      </span>
+                      targetLabel(edge, questionsById)
                     )}
-                  </div>
-
-                  {(isDead || isBroken) && (
-                    <p className="edges__fault">
-                      {isBroken
-                        ? "Broken: the target is archived or belongs to another version, so serving this answer raises rather than routing."
-                        : "Dead: this question does not offer that option, so the guard can never match."}
-                    </p>
-                  )}
-
-                  {editable && (
-                    <div className="edges__controls">
-                      <label className="sr-only" htmlFor={`target-${edge.id}`}>
-                        Target for {optionLabel(question, edge.from_option)}
-                      </label>
-                      <select
-                        id={`target-${edge.id}`}
-                        value={edge.to_question ?? END_OF_FLOW}
-                        disabled={pending}
-                        onChange={(event) =>
-                          updateEdge.mutate(
-                            {
-                              edgeId: edge.id,
-                              changes: {
-                                to_question:
-                                  event.target.value === END_OF_FLOW
-                                    ? null
-                                    : event.target.value,
-                              },
-                            },
-                            { onError: onWriteError },
-                          )
-                        }
-                      >
-                        <option value={END_OF_FLOW}>End of flow</option>
-                        {targets.map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>
-                            {candidate.code}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="button button--quiet"
-                        disabled={pending || index === 0}
-                        onClick={() => move(edge, -1)}
-                      >
-                        Move up
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--quiet"
-                        disabled={pending || index === edges.length - 1}
-                        onClick={() => move(edge, 1)}
-                      >
-                        Move down
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--danger"
-                        disabled={pending}
-                        onClick={() =>
-                          removeEdge.mutate(edge.id, { onError: onWriteError })
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  )}
+                  </span>
                 </div>
+
+                {(isDead || isBroken) && (
+                  <p className="edges__fault">
+                    {isBroken
+                      ? "Broken: the target is archived or belongs to another version, so serving this answer raises rather than routing."
+                      : "Dead: this question does not offer that option, so the guard can never match."}
+                  </p>
+                )}
+
+                {editable && (
+                  <div className="opt-edit-row">
+                    <label className="sr-only" htmlFor={`target-${edge.id}`}>
+                      Target for {optionLabel(question, edge.from_option)}
+                    </label>
+                    <select
+                      id={`target-${edge.id}`}
+                      value={edge.to_question ?? END_OF_FLOW}
+                      disabled={pending}
+                      onChange={(event) =>
+                        updateEdge.mutate(
+                          {
+                            edgeId: edge.id,
+                            changes: {
+                              to_question:
+                                event.target.value === END_OF_FLOW
+                                  ? null
+                                  : event.target.value,
+                            },
+                          },
+                          { onError: onWriteError },
+                        )
+                      }
+                    >
+                      <option value={END_OF_FLOW}>End of flow</option>
+                      {targets.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.code}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="opt-edit-btn"
+                      disabled={pending || index === 0}
+                      onClick={() => move(edge, -1)}
+                    >
+                      Move up
+                    </button>
+                    <button
+                      type="button"
+                      className="opt-edit-btn"
+                      disabled={pending || index === edges.length - 1}
+                      onClick={() => move(edge, 1)}
+                    >
+                      Move down
+                    </button>
+                    <button
+                      type="button"
+                      className="opt-edit-btn danger"
+                      disabled={pending}
+                      onClick={() =>
+                        removeEdge.mutate(edge.id, { onError: onWriteError })
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}

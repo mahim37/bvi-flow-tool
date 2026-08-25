@@ -40,7 +40,12 @@ function trunc(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
-function sectionColorMap(sections: readonly Section[]): Map<UUID, string> {
+/** Exported so the detail panel's section badge (`DetailPanel.tsx`) can
+ * show the same color the canvas draws that section's node borders in --
+ * one source of truth for "which color is this section," keyed by id
+ * rather than the sidebar legend's separate nth-child palette, which has
+ * no per-question lookup to reuse here. */
+export function sectionColorMap(sections: readonly Section[]): Map<UUID, string> {
   const ordered = [...sections].sort((a, b) => a.display_order - b.display_order);
   return new Map(
     ordered.map((section, index) => [
@@ -53,7 +58,7 @@ function sectionColorMap(sections: readonly Section[]): Map<UUID, string> {
 /** Break's fallback for a question with no section — kept as the same
  * grey rather than reusing a palette color, so "unfiled" never reads as
  * "assigned to a section that happens to look like this." */
-const NO_SECTION_COLOR = "#6b6355";
+export const NO_SECTION_COLOR = "#6b6355";
 
 /**
  * One shared terminal node, not one per question that can stop.

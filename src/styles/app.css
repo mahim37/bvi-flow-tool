@@ -231,6 +231,23 @@ body {
   overflow: hidden;
 }
 
+/* Ported from break-backend's `.detail`/`.detail.open` (styles.css
+ * ~L660-673), same collapse-to-0 treatment as the sidebar above -- the
+ * panel is a closed drawer whenever nothing is selected, matching
+ * break's slide-in-on-select behaviour instead of a permanently visible
+ * column with an empty-state message. */
+.layout--panel-closed {
+  grid-template-columns: 300px minmax(0, 1fr) 0;
+}
+
+.layout--sidebar-collapsed.layout--panel-closed {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+
+.layout--panel-closed .panel {
+  overflow: hidden;
+}
+
 .canvas {
   position: relative;
   min-height: 0;
@@ -752,25 +769,27 @@ details[open] > summary > .chevron {
  * .detail (~L660-669), which also carries no fill of its own beyond the
  * page's. */
 .panel {
+  position: relative;
+  min-width: 0;
   overflow-y: auto;
   padding: 20px;
   background: var(--bg);
 }
 
+/* Ported from break-backend's #detailClose (styles.css ~L674-679). */
+.panel__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+}
+
 .panel__header {
-  margin: 0;
+  margin: 16px 0 0;
 }
 
-.panel__title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-}
-
-.panel__prompt {
+.panel__prompt-edit {
   margin: 6px 0 0;
-  color: var(--text-muted);
 }
 
 .panel__section {
@@ -800,51 +819,164 @@ details[open] > summary > .chevron {
   margin: 0 0 8px;
 }
 
-.meta {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 16px 0 0;
-}
-
-.meta dt {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-}
-
-.meta dd {
-  margin: 3px 0 0;
-  font-size: 0.92rem;
-  font-weight: 600;
-}
-
-.badges {
+/* ---------- flags, meta, question id/text ----------
+ * Ported from break-backend's `.d-flags`/`.flag`/`.d-meta`/`.d-id`/
+ * `.d-question` (styles.css ~L684-776) -- coloured by what each flag
+ * means rather than one flat pill style, and the question id/text swap
+ * emphasis from this app's old title-first layout: break leads with a
+ * small muted id, then the actual question text prominently, which is
+ * what somebody reading a random question card actually wants first. */
+.d-flags {
   display: flex;
+  gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.flag {
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid;
+}
+
+.flag--entry {
+  color: var(--green);
+  border-color: rgba(87, 211, 140, 0.4);
+  background: rgba(87, 211, 140, 0.1);
+}
+
+.flag--term {
+  color: var(--danger);
+  border-color: rgba(240, 114, 107, 0.4);
+  background: rgba(240, 114, 107, 0.1);
+}
+
+.flag--branch {
+  color: var(--gold);
+  border-color: rgba(242, 193, 78, 0.4);
+  background: rgba(242, 193, 78, 0.1);
+}
+
+.flag--unreach {
+  color: var(--emphasis);
+  border-color: rgba(240, 148, 77, 0.4);
+  background: rgba(240, 148, 77, 0.1);
+}
+
+/* This app's own addition -- break has no "nothing to report" flag --
+ * styled like break's own neutral `.flag.deleted` rather than inventing
+ * a new colour for it. */
+.flag--neutral {
+  color: var(--text-muted);
+  border-color: var(--border-strong);
+  background: var(--bg);
+}
+
+.d-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.d-section-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 20px;
+}
+
+.d-section-badge .sw {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.d-id {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.d-type {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.d-question {
+  font-size: 16.5px;
+  line-height: 1.4;
+  font-weight: 550;
+  margin: 6px 0 0;
+}
+
+/* ---------- section sub-headings with a count bubble ----------
+ * Ported from break-backend's `.d-sub`/`.d-sub .count` (styles.css
+ * ~L778-795). */
+.d-sub {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-muted);
+  font-weight: 650;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.d-sub .count {
+  background: var(--bg);
+  border-radius: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+/* ---------- answer/edge cards ----------
+ * Ported from break-backend's `.opt-list`/`.opt`/`.opt-label`/`.opt-dest`
+ * (styles.css ~L797-891) -- a raised card per row instead of a flat list
+ * with a border-bottom, and a destination "chip" (arrow + section-colour
+ * dot + truncated target) instead of plain inline text. Used for both
+ * this panel's Options list and `EdgeEditor`'s edge list, which keep
+ * break's card look without adopting its per-answer grouping -- see the
+ * comment in `EdgeEditor.tsx` on why the edge list stays flat and
+ * priority-ordered. */
+.opt-list {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   gap: 7px;
 }
 
-.badge {
-  border: 1px solid var(--border-strong);
-  background: var(--bg);
-  border-radius: 999px;
-  padding: 3px 12px;
-  font-size: 0.8rem;
-  font-weight: 600;
+.opt {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
 }
 
-.options {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.options li {
-  padding: 7px 2px;
-  border-bottom: 1px solid var(--border);
+.opt-label {
+  font-size: 13px;
+  line-height: 1.35;
+  margin-bottom: 7px;
 }
 
 .options__code {
@@ -861,64 +993,149 @@ details[open] > summary > .chevron {
   color: var(--danger);
 }
 
-.edges {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  counter-reset: edge;
+.opt-dest {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-radius: 7px;
+  padding: 5px 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  max-width: 100%;
 }
 
-.edges__row {
-  display: flex;
-  gap: 10px;
-  padding: 10px 2px;
-  border-bottom: 1px solid var(--border);
+.opt-dest .arrow {
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
-.edges__rule {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px;
+.opt-dest .dest-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.edges__target {
-  font-weight: 600;
+.opt-dest .dest-txt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.opt-dest.terminal-dest {
+  color: var(--danger);
+  border-color: rgba(240, 114, 107, 0.3);
+}
+
+/* This app's own priority-order badge (break has no equivalent -- see
+ * `EdgeEditor.tsx`), tucked into `.opt-label` rather than a separate
+ * numbered-list column. */
 .edges__priority {
-  flex: 0 0 22px;
-  height: 22px;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
   background: var(--bg);
   border: 1px solid var(--border-strong);
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 18px;
   color: var(--text-muted);
 }
 
-.edges__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.edges__guard {
-  font-weight: 700;
-}
-
-.edges__controls {
+.opt-edit-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
   align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 6px;
 }
 
-.edges__controls select {
+.opt-edit-row select {
   width: auto;
   min-width: 120px;
+}
+
+/* Ported from break-backend's `.opt-edit-btn` (styles.css ~L1747-1771). */
+.opt-edit-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.opt-edit-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.opt-edit-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.opt-edit-btn.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.opt-edit-btn.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.opt-edit-btn.danger:hover {
+  background: var(--danger);
+  color: var(--bg);
+}
+
+.d-edit-btn {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.danger-zone {
+  margin-bottom: 22px;
+}
+
+/* ---------- inline content-edit form ----------
+ * Ported from break-backend's `.content-edit-form` (styles.css
+ * ~L1780-1828) -- used for the prompt's edit-in-place form
+ * (`DetailPanel.tsx`'s `PromptEditor`). */
+.content-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.content-edit-form label {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.content-edit-form textarea {
+  min-height: 54px;
+  font-size: 12.5px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 10px;
 }
 
 .edges__add {
@@ -929,19 +1146,50 @@ details[open] > summary > .chevron {
   background: var(--bg);
 }
 
-.incoming {
+/* ---------- "Reached from" cards ----------
+ * Ported from break-backend's `.in-list`/`.in-row` (styles.css
+ * ~L797-921). */
+.in-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 }
 
-.incoming li {
-  padding: 5px 0;
+.in-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: border-color 0.14s;
 }
 
-.incoming__guard {
+.in-row:hover {
+  border-color: var(--accent-2);
+}
+
+.in-row .in-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.in-row .in-q {
+  color: var(--text);
+  font-weight: 550;
+}
+
+.in-row .in-via {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 11.5px;
 }
 
 /* ---------- draft bar ---------- */

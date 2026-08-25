@@ -36,8 +36,21 @@ export function MapView() {
     );
   }, [graph.questions, selectedQuestionId]);
 
+  // Ported from break-backend's `.detail`/`.detail.open` (styles.css
+  // ~L660-673) -- the panel is a closed drawer whenever nothing is
+  // selected, sharing the same grid-column-collapse technique as the
+  // sidebar toggle above rather than break's flex+margin-right, since
+  // `.layout` is a grid here.
+  const layoutClassName = [
+    "layout",
+    sidebarCollapsed && "layout--sidebar-collapsed",
+    selectedQuestionId === null && "layout--panel-closed",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className={sidebarCollapsed ? "layout layout--sidebar-collapsed" : "layout"}>
+    <div className={layoutClassName}>
       <Sidebar
         graph={graph}
         selectedId={selectedQuestionId}
@@ -67,6 +80,7 @@ export function MapView() {
         editable={editable}
         onSelectQuestion={setSelectedQuestionId}
         onPreviewFrom={() => navigate(`/versions/${versionId}/preview`)}
+        onClose={() => setSelectedQuestionId(null)}
       />
     </div>
   );

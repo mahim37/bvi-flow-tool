@@ -44,7 +44,7 @@ describe("a live question", () => {
       />,
     );
 
-    const section = screen.getByRole("region", { name: "Outgoing edges" });
+    const section = screen.getByRole("region", { name: /^Outgoing edges/ });
     const guards = within(section)
       .getAllByRole("listitem")
       .map((row) => within(row).getByText(/^(Yes|No|Any answer)$/).textContent);
