@@ -213,11 +213,12 @@ export function DetailPanel({
 
       {/* Ported from break-backend's `.d-meta` (openDetail, ~L1343-1348):
           a coloured section badge (same dot-plus-tint look as the
-          diagnostics badge) followed by small muted chips. "Required" has
-          no break equivalent -- it is this app's own field -- so it gets
-          the same `.d-type` chip treatment rather than a new style, and
-          only appears when true so an optional question's row does not
-          carry a chip saying so. */}
+          diagnostics badge) followed by small muted chips. Requiredness
+          has no break equivalent -- it is this app's own field -- so it
+          gets the same `.d-type` chip treatment rather than a new style.
+          Shown as "Optional" only when true, not "Required" when true:
+          every question is required right now, so a chip that fires on
+          the common case would just be noise on every card. */}
       <div className="d-meta">
         <span
           className="d-section-badge"
@@ -227,7 +228,7 @@ export function DetailPanel({
           {section ? section.name : "No section"}
         </span>
         <span className="d-type">{answerTypeLabel(question.answer_type)}</span>
-        {question.is_required && <span className="d-type">Required</span>}
+        {!question.is_required && <span className="d-type">Optional</span>}
       </div>
 
       <header className="panel__header">
