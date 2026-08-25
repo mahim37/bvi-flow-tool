@@ -28,10 +28,10 @@ describe("a live question", () => {
     expect(screen.getByText("Can end the flow")).toBeInTheDocument();
   });
 
-  it("lists outgoing edges in the order they are tried, not as served", () => {
-    // Priority order is the routing semantics -- first matching guard
-    // wins -- so the list is sorted by it rather than by whatever order
-    // the payload happened to arrive in.
+  it("groups each answer's edge under that answer, regardless of edge order", () => {
+    // Options drive the card order now, not edge priority -- so reversing
+    // the edges array should change nothing about which card a guard's
+    // destination shows up under.
     const graph = makeGraph();
     const question = graph.questions.find((item) => item.id === Q1);
     if (question === undefined) throw new Error("no such question in the fixture");
@@ -44,10 +44,10 @@ describe("a live question", () => {
       />,
     );
 
-    const section = screen.getByRole("region", { name: /^Outgoing edges/ });
+    const section = screen.getByRole("region", { name: /^Options/ });
     const guards = within(section)
       .getAllByRole("listitem")
-      .map((row) => within(row).getByText(/^(Yes|No|Any answer)$/).textContent);
+      .map((row) => within(row).getByText(/^(Yes|No)$/).textContent);
 
     expect(guards).toEqual(["Yes", "No"]);
   });

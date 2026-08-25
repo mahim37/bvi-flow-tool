@@ -2,9 +2,8 @@ import { useMemo } from "react";
 
 import { useArchiveQuestion } from "../api/queries";
 import type { Edge, Graph, Question, UUID } from "../api/types";
-import { EdgeEditor } from "./EdgeEditor";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
-import { OptionEditor } from "./OptionEditor";
+import { Options } from "./Options";
 import { QuestionEditor } from "./QuestionEditor";
 import { answerTypeLabel, formatTimestamp, optionLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
@@ -162,7 +161,6 @@ export function DetailPanel({
 
   const audit = question.diagnostics;
   const section = graph.sections.find((item) => item.id === question.section);
-  const uncovered = new Set(audit?.uncovered_option_ids ?? []);
   const live = question.archived_at === null;
   const sectionColor = section
     ? (sectionColors.get(section.id) ?? NO_SECTION_COLOR)
@@ -241,43 +239,16 @@ export function DetailPanel({
         )}
       </header>
 
-      {question.options.length > 0 && (
-        <section className="panel__section" aria-labelledby="options-heading">
-          <SubHeading id="options-heading" count={question.options.length}>
-            Options
-          </SubHeading>
-          <ul className="opt-list">
-            {question.options.map((option) => (
-              <li key={option.id} className="opt">
-                <div className="opt-label">
-                  {option.label} <code className="options__code">{option.code}</code>
-                </div>
-                {uncovered.has(option.id) && (
-                  <span className="options__fault">
-                    No edge covers this answer, so choosing it ends the flow.
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Archived questions get no editor at all. There is no un-archive
-          verb -- spec 4.2 gives the canvas nothing that resurrects one --
-          and every content verb refuses them, so the controls would be a
-          guaranteed refusal. Discarding the draft is how an archival made
-          by mistake is undone. */}
-      {editable && live && (
-        <OptionEditor
-          graph={graph}
-          question={question}
-          editable={editable}
-          onSelectQuestion={onSelectQuestion}
-        />
-      )}
-
-      <EdgeEditor
+      {/* One section for a question's whole answer set: what each answer
+          is called, and (nested inside the same card) where it leads --
+          combining what used to be a read-only Options list, a separate
+          "Edit options" form, and `EdgeEditor`'s own "Outgoing edges"
+          list. Archived questions get no editing controls at all -- spec
+          4.2 gives the canvas nothing that resurrects one, and every
+          content verb refuses them -- but the read-only cards (`editable`
+          gates only the controls inside `Options`, not the section
+          itself) still show what routing existed. */}
+      <Options
         graph={graph}
         question={question}
         editable={editable && live}

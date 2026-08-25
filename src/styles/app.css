@@ -979,6 +979,25 @@ details[open] > summary > .chevron {
   margin-bottom: 7px;
 }
 
+/* One or more edges nested inside an `.opt` card, under the option (or
+ * "Any answer") they're guarded by -- `Options.tsx`'s merge of what used
+ * to be a separate "Outgoing edges" list. A dashed rule separates the
+ * edges from the option's own label/fields above, and again between
+ * edges when an option carries more than one. */
+.opt-edges {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edge-row + .edge-row {
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
 .options__code {
   margin-left: 8px;
   font-size: 0.75rem;
@@ -1027,23 +1046,6 @@ details[open] > summary > .chevron {
 .opt-dest.terminal-dest {
   color: var(--danger);
   border-color: rgba(240, 114, 107, 0.3);
-}
-
-/* This app's own priority-order badge (break has no equivalent -- see
- * `EdgeEditor.tsx`), tucked into `.opt-label` rather than a separate
- * numbered-list column. */
-.edges__priority {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--bg);
-  border: 1px solid var(--border-strong);
-  text-align: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  line-height: 18px;
-  color: var(--text-muted);
 }
 
 .opt-edit-row {
@@ -1136,14 +1138,6 @@ details[open] > summary > .chevron {
   display: flex;
   gap: 7px;
   margin-top: 10px;
-}
-
-.edges__add {
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--bg);
 }
 
 /* ---------- "Reached from" cards ----------
@@ -1908,7 +1902,6 @@ textarea:focus-visible {
   padding: 0;
 }
 
-.optedit,
 .sectionedit {
   padding: 10px;
   border: 1px solid var(--border);
@@ -1916,15 +1909,18 @@ textarea:focus-visible {
   background: var(--bg);
 }
 
-.optedit + .optedit,
 .sectionedit + .sectionedit {
   margin-top: 8px;
 }
 
+/* `.opt` (the answer card, styles ~L1013 or so) is the outer wrapper now
+ * -- these two are just the label/code fields and Save/Move/Delete row
+ * inside it, unchanged from when `.optedit` was that wrapper. */
 .optedit__fields {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  margin-bottom: 7px;
 }
 
 .optedit__controls,
@@ -1935,7 +1931,6 @@ textarea:focus-visible {
   margin-top: 8px;
 }
 
-.optedit__controls .button,
 .sectionedit__controls .button {
   padding: 5px 12px;
   font-size: 0.82rem;
