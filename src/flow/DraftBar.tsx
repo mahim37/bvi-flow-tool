@@ -362,6 +362,16 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
 
   const lock = changeRequest.lock;
   const heldByMe = lock !== null && lock.email === identity?.email;
+  // `editing.discard_draft`/`editing.withdraw` are author-only on the
+  // server (`_require_author`) -- not a permission grant, so offering the
+  // button to anyone else would be a control that always 403s. Checked
+  // here rather than left to the write-error handler because that 403
+  // would otherwise be indistinguishable from "this account lacks
+  // edit_flow_tool" and would wrongly hide every edit control for the
+  // rest of the session (see `useWriteErrorHandler`) -- the same reason
+  // ReviewView keeps its own `isAuthor` check for approve/reject instead
+  // of relying on the refusal.
+  const isAuthor = changeRequest.created_by_email === identity?.email;
   const isOpen = changeRequest.status === "open";
   // Withdrawing accepts both, and drops an approval rather than banking
   // it: what comes back is an editable proposal, and an approval of an
@@ -401,40 +411,47 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
           </Link>
 
           {isOpen && (
-            <>
-              <button
-                className="button button--primary"
-                type="button"
-                disabled={busy || editRefused}
-                onClick={() => submitDraft.mutate(undefined, { onError: onWriteError })}
-              >
-                Submit for review
-              </button>
-              <button
-                className="button button--danger"
-                type="button"
-                disabled={busy || editRefused}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      "Discard this draft? The proposal and every edit in it are deleted.",
-                    )
-                  ) {
-                    return;
-                  }
-                  discardDraft.mutate(versionId, {
-                    onError: onWriteError,
-                    onSuccess: () =>
-                      onOpenVersion(graph.version.parent_version ?? versionId),
-                  });
-                }}
-              >
-                Discard draft
-              </button>
-            </>
+            <button
+              className="button button--primary"
+              type="button"
+              disabled={busy || editRefused}
+              onClick={() => submitDraft.mutate(undefined, { onError: onWriteError })}
+            >
+              Submit for review
+            </button>
+          )}
+
+          {/* Discard and Withdraw are author-only on the server -- see
+              `isAuthor`'s comment above -- so neither is offered to
+              anyone else. `isOpen`/`isFrozen` between them cover every
+              status this bar reaches (never both at once), so exactly
+              one control or the explanatory note below renders. */}
+          {isOpen && isAuthor && (
+            <button
+              className="button button--danger"
+              type="button"
+              disabled={busy || editRefused}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    "Discard this draft? The proposal and every edit in it are deleted.",
+                  )
+                ) {
+                  return;
+                }
+                discardDraft.mutate(versionId, {
+                  onError: onWriteError,
+                  onSuccess: () =>
+                    onOpenVersion(graph.version.parent_version ?? versionId),
+                });
+              }}
+            >
+              Discard draft
+            </button>
           )}
 
           {isFrozen &&
+            isAuthor &&
             (changeRequest.status === "approved" ? (
               // The parenthetical used to be part of the button's own
               // label, which was the longest thing on this row -- moved
@@ -462,6 +479,13 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
                 Withdraw
               </button>
             ))}
+
+          {!isAuthor && (
+            <p className="banner banner--info">
+              Only {changeRequest.created_by_email} can discard or withdraw this
+              proposal.
+            </p>
+          )}
         </div>
       </div>
 
