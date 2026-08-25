@@ -117,7 +117,14 @@ export function ReviewView() {
   const isAuthor =
     changeRequest !== null && changeRequest.created_by_email === identity?.email;
 
-  const canDecide = status === "submitted";
+  const canApprove = status === "submitted";
+  // Reject reaches an approved proposal too, not just a submitted one --
+  // it is a reviewer's own way to reverse an approval they've changed
+  // their mind about, mirroring `editing.reject`'s widened guard on the
+  // server. `withdraw` is the other route back to open, but that one is
+  // author-only, so without this a reviewer had no way to undo their own
+  // decision at all.
+  const canReject = status === "submitted" || status === "approved";
   const canPublish = status === "approved";
 
   const items: Record<DiffKind, ItemDiff[]> = {
@@ -250,7 +257,7 @@ export function ReviewView() {
             </p>
           )}
 
-          {canDecide && isAuthor && (
+          {canApprove && isAuthor && (
             <p className="banner banner--warn">
               This is your own proposal, so you cannot approve or send it back. Somebody
               else has to read it — that independent check is the whole point of the
@@ -258,41 +265,53 @@ export function ReviewView() {
             </p>
           )}
 
-          {canDecide && !isAuthor && (
+          {/* status === "approved" here -- canApprove is false, so the
+              banner above didn't fire, but canReject still applies. */}
+          {canReject && !canApprove && isAuthor && (
+            <p className="banner banner--warn">
+              This is your own proposal, so you cannot send it back either, even now
+              that it is approved. Withdrawing it is yours to do instead, from the map --
+              that also drops the approval.
+            </p>
+          )}
+
+          {canReject && !isAuthor && (
             <div className="review__forms">
-              <form
-                className="review__form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  approve.mutate(approveNote, {
-                    onError: onReviewError,
-                    onSuccess: () => setApproveNote(""),
-                  });
-                }}
-              >
-                <div className="field">
-                  <label htmlFor={approveNoteId}>Note (optional)</label>
-                  <textarea
-                    id={approveNoteId}
-                    rows={2}
-                    value={approveNote}
-                    placeholder="Anything worth saying alongside an approval"
-                    disabled={approve.isPending || reviewRefused}
-                    onChange={(event) => setApproveNote(event.target.value)}
-                  />
-                </div>
-                <button
-                  className="button button--primary"
-                  type="submit"
-                  disabled={approve.isPending || reviewRefused}
+              {canApprove && (
+                <form
+                  className="review__form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    approve.mutate(approveNote, {
+                      onError: onReviewError,
+                      onSuccess: () => setApproveNote(""),
+                    });
+                  }}
                 >
-                  {approve.isPending ? "Approving…" : "Approve"}
-                </button>
-                <p className="panel__hint">
-                  Approving freezes the draft as it stands. What gets published is what
-                  you read.
-                </p>
-              </form>
+                  <div className="field">
+                    <label htmlFor={approveNoteId}>Note (optional)</label>
+                    <textarea
+                      id={approveNoteId}
+                      rows={2}
+                      value={approveNote}
+                      placeholder="Anything worth saying alongside an approval"
+                      disabled={approve.isPending || reviewRefused}
+                      onChange={(event) => setApproveNote(event.target.value)}
+                    />
+                  </div>
+                  <button
+                    className="button button--primary"
+                    type="submit"
+                    disabled={approve.isPending || reviewRefused}
+                  >
+                    {approve.isPending ? "Approving…" : "Approve"}
+                  </button>
+                  <p className="panel__hint">
+                    Approving freezes the draft as it stands. What gets published is
+                    what you read.
+                  </p>
+                </form>
+              )}
 
               <form
                 className="review__form"
@@ -323,7 +342,11 @@ export function ReviewView() {
                     reject.isPending || reviewRefused || rejectNote.trim() === ""
                   }
                 >
-                  {reject.isPending ? "Sending back…" : "Send back"}
+                  {reject.isPending
+                    ? "Sending back…"
+                    : canApprove
+                      ? "Send back"
+                      : "Undo the approval"}
                 </button>
                 {/* A rejection with nothing to say makes the author guess,
                     which is why the note is required here and on the
@@ -331,7 +354,10 @@ export function ReviewView() {
                     proposal to open, and your reasons are kept with it. */}
                 <p className="panel__hint">
                   This returns the proposal to open so its author can work on it again.
-                  Your note is kept with it and cannot be overwritten by a resubmission.
+                  {!canApprove &&
+                    " It also withdraws the approval you're reversing."}{" "}
+                  Your note is kept with it and cannot be overwritten by a
+                  resubmission.
                 </p>
               </form>
             </div>
