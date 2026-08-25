@@ -1228,8 +1228,8 @@ details[open] > summary > .chevron {
 .draftbar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 20px;
+  gap: 8px;
+  padding: 8px 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -1308,8 +1308,9 @@ details[open] > summary > .chevron {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: 8px 18px;
+  justify-content: center;
+  gap: 1px;
+  padding: 5px 16px;
   border-radius: var(--radius-lg);
   min-width: 200px;
   text-align: left;
@@ -1318,13 +1319,13 @@ details[open] > summary > .chevron {
 
 .draftbar__cta-title {
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
 .draftbar__cta-desc {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.2;
   color: var(--text-muted);
 }
 
