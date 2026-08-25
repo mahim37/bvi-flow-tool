@@ -175,6 +175,7 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
         <div className="draftbar__row">
           <div className="draftbar__left">
             <VersionTabs versionId={versionId} isDraft={false} />
+            <span className="draftbar__divider" aria-hidden="true" />
 
             <div className="draftbar__status">
               <span
@@ -378,6 +379,7 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
       <div className="draftbar__row">
         <div className="draftbar__left">
           <VersionTabs versionId={versionId} isDraft={true} />
+          <span className="draftbar__divider" aria-hidden="true" />
 
           <div className="draftbar__status">
             <span className="draftbar__dot draftbar__dot--draft" />

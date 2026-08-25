@@ -1258,6 +1258,16 @@ details[open] > summary > .chevron {
   min-width: 0;
 }
 
+/* Between the tabs and the version name -- `align-self: stretch` matches
+ * whatever height the row ends up (the tabs pill, the CTA buttons, or the
+ * status text, whichever is tallest) rather than a fixed height that
+ * would drift out of sync with any of them. */
+.draftbar__divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--border-strong);
+}
+
 .draftbar__right {
   display: flex;
   flex-wrap: wrap;
@@ -1602,13 +1612,13 @@ details[open] > summary > .chevron {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
-  padding: 2px;
+  padding: 3px;
   background: var(--bg-2);
   border-radius: 999px;
 }
 
 .tabs__tab {
-  padding: 5px 14px;
+  padding: 8px 16px;
   border-radius: 999px;
   font-weight: 700;
   font-size: 0.85rem;
