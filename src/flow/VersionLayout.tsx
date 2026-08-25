@@ -1,5 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useGraph, useVersions } from "../api/queries";
@@ -79,7 +85,8 @@ export function VersionLayout() {
   // open right now belongs to, so the picker and the version list always
   // agree on one product. Seeing a different product's versions takes an
   // explicit pick, never an "All questionnaires" fallback.
-  const effectiveQuestionnaireId = questionnaireId ?? graphData?.version.questionnaire ?? null;
+  const effectiveQuestionnaireId =
+    questionnaireId ?? graphData?.version.questionnaire ?? null;
 
   const versions = useVersions(effectiveQuestionnaireId);
 
@@ -279,25 +286,41 @@ export function VersionLayout() {
         <p className="banner banner--info">Loading the map…</p>
       )}
 
-      {graph.isError && (
-        <p className="banner banner--error" role="alert">
-          {graph.error instanceof ApiError && graph.error.isConflict
-            ? // A sequence-routed version has no edges at all, so there is
-              // nothing to draw. The API refuses rather than serving an
-              // empty map, and repeating its reasoning here is more use
-              // than a bare "409".
-              graph.error.message
-            : graph.error instanceof Error
-              ? graph.error.message
-              : "Could not load this version."}
-        </p>
-      )}
+      {graph.isError &&
+        (graph.error instanceof ApiError && graph.error.isNotFound ? (
+          // The one case where a URL that worked a moment ago stops
+          // working without anybody mistyping anything: a draft is a hard
+          // delete (`editing.discard_draft`), so a tab left open on it, a
+          // stale bookmark, or a link sent before somebody discarded it
+          // all land here. The raw "No QuestionnaireVersion matches the
+          // given query." is accurate but offers nowhere to go next --
+          // this does, the same way `StaleDraftError`'s banner names an
+          // actual version rather than just saying "stale."
+          <p className="banner banner--error" role="alert">
+            This version no longer exists — most likely a draft that has since been
+            discarded. <Link to="/">Go to the latest version</Link>.
+          </p>
+        ) : (
+          <p className="banner banner--error" role="alert">
+            {graph.error instanceof ApiError && graph.error.isConflict
+              ? // A sequence-routed version has no edges at all, so there is
+                // nothing to draw. The API refuses rather than serving an
+                // empty map, and repeating its reasoning here is more use
+                // than a bare "409".
+                graph.error.message
+              : graph.error instanceof Error
+                ? graph.error.message
+                : "Could not load this version."}
+          </p>
+        ))}
 
       {graph.data !== undefined && (
         <>
           <DraftBar
             graph={graph.data}
-            onOpenVersion={(next) => navigate(`/versions/${next}`)}
+            onOpenVersion={(next) =>
+              navigate(next === null ? "/" : `/versions/${next}`)
+            }
           />
           <Outlet
             context={

@@ -151,9 +151,24 @@ export function useDiscardDraft() {
     onSuccess: (_result, versionId) => {
       // Removed rather than invalidated: the version it keyed on no longer
       // exists, so refetching it would only produce a 404 to render.
+      //
+      // Not returned/awaited, unlike every other mutation's cache work
+      // here: the caller's own `onSuccess` navigates away from this
+      // version next (`DraftBar`'s `onOpenVersion`), and this hook's
+      // `onSuccess` runs *before* that one -- TanStack Query awaits
+      // whatever a hook-level `onSuccess` returns before moving on to the
+      // one passed to `mutate()`. Returning the `invalidateQueries` promise
+      // would hold navigation hostage to a versions-list network round
+      // trip, during which `VersionLayout`/`ReviewView` are still
+      // subscribed to the two queries just removed above and would refetch
+      // them -- a real request for a version that no longer exists,
+      // rendering exactly the 404 this was meant to avoid. Firing it
+      // without awaiting lets the navigation happen essentially
+      // immediately, so nothing is left observing the removed queries by
+      // the time that refetch would have landed.
       client.removeQueries({ queryKey: graphKey(versionId) });
       client.removeQueries({ queryKey: reviewKey(versionId) });
-      return client.invalidateQueries({ queryKey: ["versions"] });
+      void client.invalidateQueries({ queryKey: ["versions"] });
     },
   });
 }

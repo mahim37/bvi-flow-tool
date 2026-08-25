@@ -13,6 +13,7 @@ import {
   useWithdrawDraft,
 } from "../api/queries";
 import { useAuth } from "../auth/useAuth";
+import { ConfirmAction } from "./ConfirmAction";
 import { EditorDropdown } from "./EditorDropdown";
 import { formatTimestamp, statusLabel, statusMeaning, versionLabel } from "./labels";
 import {
@@ -23,7 +24,11 @@ import {
 
 interface DraftBarProps {
   graph: Graph;
-  onOpenVersion: (versionId: UUID) => void;
+  /** Null means "nowhere in particular" -- the version landing screen,
+   * which picks a sensible default. Only `discard` ever passes it: every
+   * other caller (propose, spawn) always has a real id, the thing it just
+   * created. */
+  onOpenVersion: (versionId: UUID | null) => void;
 }
 
 /** Map/Review/Preview -- folded into this bar (VersionLayout no longer
@@ -159,17 +164,6 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
     );
   }
 
-  function activateThisVersion() {
-    if (
-      !window.confirm(
-        `Activate ${versionLabel(graph.version)}? It goes live immediately, replacing whatever is live now, with no new review round.`,
-      )
-    ) {
-      return;
-    }
-    activate.mutate(undefined, { onError: onReviewError });
-  }
-
   // Branches on `is_draft`, not on whether a proposal exists. A published
   // version keeps the proposal it was published from -- that row is the
   // history of the change, and `graph/` still serves it -- so "has a
@@ -220,13 +214,25 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
                   Your account can view this version but not activate it.
                 </p>
               ) : (
-                <Cta
-                  primary
-                  title={activate.isPending ? "Activating…" : "Activate this version"}
-                  description="Puts this exact version back in front of respondents. No new review needed."
-                  disabled={activate.isPending}
-                  onClick={activateThisVersion}
-                />
+                <ConfirmAction
+                  message={`Activate ${versionLabel(graph.version)}? It goes live immediately, replacing whatever is live now, with no new review round.`}
+                  confirmLabel="Activate"
+                  onConfirm={() =>
+                    activate.mutate(undefined, { onError: onReviewError })
+                  }
+                >
+                  {(open) => (
+                    <Cta
+                      primary
+                      title={
+                        activate.isPending ? "Activating…" : "Activate this version"
+                      }
+                      description="Puts this exact version back in front of respondents. No new review needed."
+                      disabled={activate.isPending}
+                      onClick={open}
+                    />
+                  )}
+                </ConfirmAction>
               ))}
 
             {editRefused ? (
@@ -537,27 +543,34 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
               status this bar reaches (never both at once), so exactly
               one control or the explanatory note below renders. */}
           {isOpen && isAuthor && (
-            <button
-              className="button button--danger"
-              type="button"
-              disabled={busy || editRefused}
-              onClick={() => {
-                if (
-                  !window.confirm(
-                    "Discard this draft? The proposal and every edit in it are deleted.",
-                  )
-                ) {
-                  return;
-                }
+            <ConfirmAction
+              message="Discard this draft? The proposal and every edit in it are deleted."
+              confirmLabel="Discard draft"
+              danger
+              onConfirm={() =>
+                // `parent_version` is null only when this draft was itself
+                // drafted from another (now-discarded) draft -- an edge
+                // case worth not crashing on, not a version to fall back
+                // to: `versionId` is the one that just stopped existing.
+                // `onOpenVersion(null)` sends the author somewhere that
+                // still does.
                 discardDraft.mutate(versionId, {
                   onError: onWriteError,
-                  onSuccess: () =>
-                    onOpenVersion(graph.version.parent_version ?? versionId),
-                });
-              }}
+                  onSuccess: () => onOpenVersion(graph.version.parent_version),
+                })
+              }
             >
-              Discard draft
-            </button>
+              {(open) => (
+                <button
+                  className="button button--danger"
+                  type="button"
+                  disabled={busy || editRefused}
+                  onClick={open}
+                >
+                  Discard draft
+                </button>
+              )}
+            </ConfirmAction>
           )}
 
           {isFrozen &&

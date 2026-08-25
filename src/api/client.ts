@@ -92,6 +92,22 @@ export class ApiError extends Error {
   }
 
   /**
+   * The version this request named no longer exists.
+   *
+   * The one case where a URL that was valid a moment ago stops being so
+   * without anybody typing anything wrong: a draft is a hard delete
+   * (`editing.discard_draft`), so a tab left open on it, a bookmark, or a
+   * link shared before somebody discarded it all 404 here rather than
+   * finding stale data. Distinguished from a generic 404 elsewhere in the
+   * app (there isn't one -- every other lookup here is keyed off ids this
+   * app itself just fetched) so the caller can offer "go to a version
+   * that still exists" instead of repeating the server's own wording.
+   */
+  get isNotFound(): boolean {
+    return this.status === 404;
+  }
+
+  /**
    * Who is holding the draft, when the refusal was a held lock.
    *
    * `editing.DraftLockedError.detail_payload` puts these on the body so a
