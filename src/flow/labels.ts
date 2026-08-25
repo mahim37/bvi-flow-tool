@@ -10,6 +10,7 @@ import type {
   UUID,
   Version,
 } from "../api/types";
+import { trunc } from "./graphElements";
 
 const ANSWER_TYPE_LABELS: Record<AnswerType, string> = {
   single_choice: "Single choice",
@@ -23,7 +24,10 @@ export function answerTypeLabel(type: AnswerType): string {
 }
 
 /** Where an edge goes, in words. `to_question === null` is not missing
- * data -- it is the flow ending -- so it gets a name rather than a dash. */
+ * data -- it is the flow ending -- so it gets a name rather than a dash.
+ * The code alone ("Q2") means little without opening that question --
+ * the truncated prompt alongside it is what actually says where a route
+ * leads, same idea as the canvas's own node labels (`graphElements.ts`). */
 export function targetLabel(
   edge: Edge,
   questionsById: ReadonlyMap<UUID, Question>,
@@ -31,7 +35,8 @@ export function targetLabel(
   if (edge.to_question === null) return "End of flow";
   const target = questionsById.get(edge.to_question);
   if (target === undefined) return "Unknown question";
-  return target.archived_at === null ? target.code : `${target.code} (archived)`;
+  const name = `${target.code} · ${trunc(target.prompt, 40)}`;
+  return target.archived_at === null ? name : `${name} (archived)`;
 }
 
 export function optionLabel(

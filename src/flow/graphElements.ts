@@ -36,7 +36,10 @@ const TYPE_GLYPH: Record<AnswerType, string> = {
   free_text: "✎",
 };
 
-function trunc(text: string, max: number): string {
+/** Exported so `labels.ts`'s `targetLabel` can truncate a target's prompt
+ * the same way the canvas itself does, rather than a second, possibly
+ * different cutoff. */
+export function trunc(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
