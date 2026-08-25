@@ -536,8 +536,15 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
           flex sibling of it -- boxed banners are what every other "why a
           control isn't offered" fact in this bar already renders as, and
           giving this one the same full-width treatment is what actually
-          lets the row above stay on one line. */}
-      {!isAuthor && (
+          lets the row above stay on one line.
+
+          Only shown once frozen (`!isOpen`): while open, Discard being
+          author-only is a minor aside -- Submit for review and every
+          content edit are still wide open to a non-author editor, so
+          there's plenty else to do and nothing missing worth explaining.
+          Once frozen, Withdraw is the one thing left that Publish isn't,
+          so its absence is worth a word. */}
+      {!isAuthor && !isOpen && (
         <p className="banner banner--info">
           Only {changeRequest.created_by_email} can discard or withdraw this proposal.
         </p>
