@@ -1345,6 +1345,11 @@ details[open] > summary > .chevron {
  * belongs to (a title line plus a smaller description line), rather than
  * beside it as a separate element -- so nothing can wrap away from the
  * control it describes on a narrow row. */
+/* Capped rather than left to size to its longest description on one
+ * line -- three of these can share a row (a superseded version offers
+ * Activate alongside Propose/Spawn), and a couple of the descriptions
+ * are full sentences. Wrapping the description onto two lines trades
+ * width for height, which is what actually lets three fit. */
 .draftbar__cta {
   display: flex;
   flex-direction: column;
@@ -1353,6 +1358,7 @@ details[open] > summary > .chevron {
   gap: 1px;
   padding: 5px 16px;
   border-radius: var(--radius-lg);
+  max-width: 210px;
   text-align: left;
   white-space: normal;
 }
