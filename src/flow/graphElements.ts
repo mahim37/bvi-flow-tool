@@ -117,7 +117,7 @@ export interface EdgeData {
   id: string;
   source: string;
   target: string;
-  /** The guard, in words: an option's label, or "any answer" for the
+  /** The guard, in words: an option's label, or "anything else" for the
    * question-level edge. Both are real routing behaviour, so neither is
    * left blank. */
   guard: string;
@@ -148,7 +148,7 @@ function badgeKindFor(
 }
 
 export function guardLabel(edge: Edge, question: Question | undefined): string {
-  if (edge.from_option === null) return "any answer";
+  if (edge.from_option === null) return "anything else";
   const option = question?.options.find(
     (candidate) => candidate.id === edge.from_option,
   );

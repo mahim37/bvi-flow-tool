@@ -129,7 +129,7 @@ describe("edges", () => {
   it("names the guard, including the question-level one", () => {
     const built = edges();
 
-    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("any answer");
+    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("anything else");
     expect(built.get(E_NO_TO_END)?.guard).toBe("No");
   });
 

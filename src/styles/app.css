@@ -980,7 +980,7 @@ details[open] > summary > .chevron {
 }
 
 /* One or more edges nested inside an `.opt` card, under the option (or
- * "Any answer") they're guarded by -- `Options.tsx`'s merge of what used
+ * "Anything else") they're guarded by -- `Options.tsx`'s merge of what used
  * to be a separate "Outgoing edges" list. A dashed rule separates the
  * edges from the option's own label/fields above, and again between
  * edges when an option carries more than one. */

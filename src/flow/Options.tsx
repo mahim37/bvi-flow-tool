@@ -187,9 +187,9 @@ function EdgeRow({
 }
 
 /** A collapsed reveal for a block of routes that has no label/code of its
- * own to edit ("Any answer", "Can't be used") -- just an Edit/Done toggle
- * around the same live-acting `EdgeRow` controls `OptionCard` gates
- * behind its own Edit. */
+ * own to edit ("Anything else", "Can't be used") -- just an Edit/Done
+ * toggle around the same live-acting `EdgeRow` controls `OptionCard`
+ * gates behind its own Edit. */
 function EdgeGroupCard({
   heading,
   note,
@@ -560,10 +560,10 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
     [graph.edges, question.id],
   );
 
-  // Edges grouped by the option that guards them, "any answer" (question-
-  // level edges, and every edge on a type that offers no per-option
-  // guard) under its own bucket. A specific option's guard and the
-  // question-level fallback can both match the same real answer, so
+  // Edges grouped by the option that guards them, "anything else"
+  // (question-level edges, and every edge on a type that offers no
+  // per-option guard) under its own bucket. A specific option's guard and
+  // the question-level fallback can both match the same real answer, so
   // `edges` stays priority-sorted within each bucket -- which one fires
   // first inside a bucket is still real, even though the grouping itself
   // is presentational.
@@ -585,8 +585,8 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
   // key `edgesByGuard` can hold that never matches an id in `options`.
   // Grouping strictly by this question's own options would make those
   // edges vanish from the panel instead of just failing to route, so
-  // anything left over after every real option and "any answer" gets its
-  // card is swept into one more, rather than silently dropped.
+  // anything left over after every real option and "anything else" gets
+  // its card is swept into one more, rather than silently dropped.
   const optionIds = useMemo(() => new Set(options.map((option) => option.id)), [options]);
   const deadGuardEdges = useMemo(
     () =>
@@ -833,7 +833,7 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
                   disabled={pending}
                   onChange={(event) => setNewGuard(event.target.value)}
                 >
-                  <option value={ANY_ANSWER}>Any answer</option>
+                  <option value={ANY_ANSWER}>Anything else</option>
                   {takesOptions &&
                     question.options.map((option) => (
                       <option key={option.id} value={option.id}>

@@ -54,7 +54,12 @@ export function optionLabel(
   question: Question | undefined,
   optionId: UUID | null,
 ): string {
-  if (optionId === null) return "Any answer";
+  // "Any answer" reads as a technical routing term (a wildcard guard) --
+  // "Anything else" says the same thing (the question-level fallback,
+  // `from_option === null`) in words a non-technical reader parses
+  // without translating first, and still reads naturally lowercased
+  // inline ("when anything else").
+  if (optionId === null) return "Anything else";
   const option = question?.options.find((candidate) => candidate.id === optionId);
   return option ? option.label : "Unknown option";
 }
