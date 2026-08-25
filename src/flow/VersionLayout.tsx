@@ -68,13 +68,26 @@ export function VersionLayout() {
   const { identity, signOut, noteApiError } = useAuth();
 
   // The filter lives in the URL rather than in state, so a link to a
-  // narrowed picker survives a reload and can be shared. Empty means every
-  // questionnaire, which is what the server does with the parameter absent.
+  // narrowed picker survives a reload and can be shared.
   const [searchParams, setSearchParams] = useSearchParams();
   const questionnaireId = searchParams.get("questionnaire");
 
-  const versions = useVersions(questionnaireId);
   const graph = useGraph(versionId ?? null);
+  // A plain local rather than repeated `graph.data` reads: TypeScript
+  // narrows a `const` across the closures below, which it will not do for
+  // a query object's property, re-evaluated on every access. Computed
+  // here (rather than where it used to sit, further down) because the
+  // questionnaire filter below needs it too.
+  const graphData = graph.data;
+
+  // No explicit `?questionnaire=` is not "show every product merged
+  // together" -- it defaults to whichever product the version actually
+  // open right now belongs to, so the picker and the version list always
+  // agree on one product. Seeing a different product's versions takes an
+  // explicit pick, never an "All questionnaires" fallback.
+  const effectiveQuestionnaireId = questionnaireId ?? graphData?.version.questionnaire ?? null;
+
+  const versions = useVersions(effectiveQuestionnaireId);
 
   useEffect(() => {
     if (versions.error) noteApiError(versions.error);
@@ -112,11 +125,6 @@ export function VersionLayout() {
     [versions.data],
   );
 
-  // A plain local rather than repeated `graph.data` reads: TypeScript
-  // narrows a `const` across the closures below (the `onAdded`/
-  // `onSelectQuestion` callbacks), which it will not do for a query
-  // object's property, re-evaluated on every access.
-  const graphData = graph.data;
   const editable =
     graphData !== undefined &&
     graphData.version.is_draft &&
@@ -208,17 +216,19 @@ export function VersionLayout() {
           </div>
         )}
 
-        {questionnaires.length > 1 && (
+        {/* No "All questionnaires" option -- every render of this select
+            has a real product selected (`effectiveQuestionnaireId`), so
+            there's nothing to render until that resolves (a beat, while
+            the graph for the version in the URL is still loading). */}
+        {questionnaires.length > 1 && effectiveQuestionnaireId !== null && (
           <label className="topbar__picker">
             <span className="sr-only">Questionnaire</span>
             <select
-              value={questionnaireId ?? ""}
-              onChange={(event) => {
-                const next = event.target.value;
-                setSearchParams(next === "" ? {} : { questionnaire: next });
-              }}
+              value={effectiveQuestionnaireId}
+              onChange={(event) =>
+                setSearchParams({ questionnaire: event.target.value })
+              }
             >
-              <option value="">All questionnaires</option>
               {questionnaires.map(([id, name]) => (
                 <option key={id} value={id}>
                   {name}
