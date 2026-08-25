@@ -373,6 +373,24 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   // older draft is not an approval of the next one.
   const isFrozen =
     changeRequest.status === "submitted" || changeRequest.status === "approved";
+  // Mirrors `ReviewView`'s own `isNamedReviewer`/`canApprove`/`canReject`/
+  // `canPublish` -- not re-deriving a routing decision (spec 1.3 is about
+  // the graph, not this), just the same client-side echo of who may act
+  // that this file already keeps for Discard/Withdraw. `editing.approve`/
+  // `editing.reject` refuse anyone but the two named reviewers while
+  // submitted; `editing.publish` has no such check once approved -- any
+  // publish_flow_tool holder, including the author, may press it. Without
+  // this, the button below reads "Review and publish" for someone who can
+  // do neither, which is the same misleading-primary-button shape this
+  // app already avoids elsewhere.
+  const isNamedReviewer =
+    identity !== null &&
+    (changeRequest.reviewer_1_email === identity.email ||
+      changeRequest.reviewer_2_email === identity.email);
+  const canActOnReview =
+    !reviewRefused &&
+    (changeRequest.status === "approved" ||
+      (changeRequest.status === "submitted" && !isAuthor && isNamedReviewer));
   const busy =
     submitDraft.isPending ||
     withdrawDraft.isPending ||
@@ -403,15 +421,17 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
         </div>
 
         <div className="draftbar__right">
-          {/* Quiet while there's a more primary action beside it
-              (Submit for review); once frozen, checking the diff before
-              publishing is the primary thing left to do here, so it earns
-              the same visual weight Submit/Publish get elsewhere. */}
+          {/* Quiet while there's a more primary action beside it (Submit
+              for review) or while this signed-in account cannot actually
+              approve, reject or publish this proposal -- everyone with
+              view access may still open it to read the diff, but only
+              `canActOnReview` earns the same visual weight Submit/Publish
+              get elsewhere and the wording that promises an action. */}
           <Link
-            className={`button ${isOpen ? "button--quiet" : "button--primary"}`}
+            className={`button ${isOpen || !canActOnReview ? "button--quiet" : "button--primary"}`}
             to={`/versions/${versionId}/review`}
           >
-            {isOpen ? "Check the diff" : "Review and publish"}
+            {isOpen || !canActOnReview ? "Check the diff" : "Review and publish"}
           </Link>
 
           {isOpen && (
