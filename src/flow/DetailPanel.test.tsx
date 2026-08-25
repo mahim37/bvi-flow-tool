@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { DetailPanel } from "./DetailPanel";
@@ -60,16 +61,18 @@ describe("a live question", () => {
     expect(screen.getByText("End of flow")).toBeInTheDocument();
   });
 
-  it("explains a dead edge in terms of the guard, not the target", () => {
+  it("explains a dead edge in terms of the answer, not the target", () => {
     panelFor(Q2);
 
-    expect(screen.getByText(/does not offer that option/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/not one of this question's options anymore/),
+    ).toBeInTheDocument();
   });
 
-  it("explains a broken edge as something the resolver raises on", () => {
+  it("explains a broken edge as something that would fail, not just look odd", () => {
     panelFor(Q2);
 
-    expect(screen.getByText(/raises rather than routing/)).toBeInTheDocument();
+    expect(screen.getByText(/fail instead of continuing/)).toBeInTheDocument();
   });
 });
 
@@ -89,24 +92,54 @@ describe("edit controls", () => {
   it("are absent on a published version", () => {
     panelFor(Q1, false);
 
-    expect(screen.queryByRole("button", { name: "Add edge" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "+ Add a route" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
   });
 
-  it("appear once the version is an open draft", () => {
+  it("appear, collapsed, once the version is an open draft", async () => {
+    const user = userEvent.setup();
     panelFor(Q1, true);
 
-    expect(screen.getByRole("button", { name: "Add edge" })).toBeInTheDocument();
+    // Closed by default -- opening it is what reveals the actual form.
+    const toggle = screen.getByRole("button", { name: "+ Add a route" });
+    expect(screen.queryByRole("button", { name: "Add route" })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
+    expect(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
   });
 
-  it("offer no per-option guard on a question whose answers select nothing", () => {
+  it("keep an answer's rename/reorder/delete controls collapsed until Edit is clicked", async () => {
+    const user = userEvent.setup();
+    panelFor(Q1, true);
+    const section = screen.getByRole("region", { name: /^Options/ });
+
+    expect(within(section).queryByLabelText("Label")).not.toBeInTheDocument();
+    expect(
+      within(section).queryByRole("button", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(section).getAllByRole("button", { name: "Edit" })[0] as HTMLElement);
+
+    expect(within(section).getByLabelText("Label")).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("offer no per-option guard on a question whose answers select nothing", async () => {
     // A scale answer never selects an option, so a per-option edge on it
     // is dead the moment it is saved. The server refuses it too; this just
     // stops the UI from offering it.
+    const user = userEvent.setup();
     panelFor(Q2, true);
+
+    await user.click(screen.getByRole("button", { name: "+ Add a route" }));
     const guard = screen.getByLabelText("When the answer is");
 
     expect(within(guard).getAllByRole("option")).toHaveLength(1);
-    expect(screen.getByText(/do not select options/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/this question has no separate answer options/),
+    ).toBeInTheDocument();
   });
 });

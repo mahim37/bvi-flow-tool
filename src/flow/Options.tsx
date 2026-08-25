@@ -28,7 +28,7 @@ interface OptionsProps {
   onSelectQuestion: (id: UUID) => void;
 }
 
-/** Read-only data every edge row needs, bundled so it isn't six separate
+/** Read-only data every route row needs, bundled so it isn't six separate
  * props on every card. Computed once per render in `Options`, not per
  * card. */
 interface EdgeContext {
@@ -39,17 +39,16 @@ interface EdgeContext {
   brokenEdges: ReadonlySet<UUID>;
 }
 
-/** One edge's destination chip + (when editable) its retarget/move/remove
- * controls -- what `EdgeEditor.tsx` used to render as a flat, standalone
- * list, now nested inside the option card whose answer it routes. Own
- * hook instances (same pattern `OptionRow` below already used for options)
- * rather than mutation callbacks threaded down from the parent -- only
- * `onMoveEdge` has to come from the parent, since a move needs the whole
- * question's edge order, not just this one edge. */
+/** One route's destination chip + (when `editable` and the card it lives
+ * in is open for editing) its retarget/move/remove controls. The select
+ * and buttons here act immediately -- there is no draft/Save step for a
+ * route the way there is for an option's label/code -- so showing or
+ * hiding this block is purely about not cluttering the read view, not
+ * about protecting unsaved work. */
 function EdgeRow({
   versionId,
   edge,
-  guardLabel,
+  selectLabel,
   allEdges,
   ctx,
   editable,
@@ -59,10 +58,10 @@ function EdgeRow({
 }: {
   versionId: UUID;
   edge: Edge;
-  /** The option's label, or "Any answer" -- names which answer this
-   * control retargets, since the row itself carries no visible label of
-   * its own (that lives once, on the card it's nested in). */
-  guardLabel: string;
+  /** Full accessible name for the retarget select, e.g. `Where "Yes"
+   * leads` -- the row itself carries no visible label of its own (that
+   * lives once, on the card it's nested in). */
+  selectLabel: string;
   allEdges: Edge[];
   ctx: EdgeContext;
   editable: boolean;
@@ -112,18 +111,23 @@ function EdgeRow({
         </span>
       </div>
 
-      {(isDead || isBroken) && (
+      {isBroken && (
         <p className="edges__fault">
-          {isBroken
-            ? "Broken: the target is archived or belongs to another version, so serving this answer raises rather than routing."
-            : "Dead: this question does not offer that option, so the guard can never match."}
+          This route leads to a question that has been archived or removed, so it would
+          fail instead of continuing.
+        </p>
+      )}
+      {isDead && (
+        <p className="edges__fault">
+          This route is tied to an answer that is not one of this question's options
+          anymore, so it can never happen.
         </p>
       )}
 
       {editable && (
         <div className="opt-edit-row">
           <select
-            aria-label={`Target for ${guardLabel}`}
+            aria-label={selectLabel}
             value={edge.to_question ?? END_OF_FLOW}
             disabled={pending}
             onChange={(event) =>
@@ -182,6 +186,72 @@ function EdgeRow({
   );
 }
 
+/** A collapsed reveal for a block of routes that has no label/code of its
+ * own to edit ("Any answer", "Can't be used") -- just an Edit/Done toggle
+ * around the same live-acting `EdgeRow` controls `OptionCard` gates
+ * behind its own Edit. */
+function EdgeGroupCard({
+  heading,
+  note,
+  versionId,
+  edges,
+  allEdges,
+  ctx,
+  selectLabel,
+  editable,
+  disabled,
+  onMoveEdge,
+  onSelectQuestion,
+}: {
+  heading: string;
+  note?: string;
+  versionId: UUID;
+  edges: Edge[];
+  allEdges: Edge[];
+  ctx: EdgeContext;
+  selectLabel: string;
+  editable: boolean;
+  disabled: boolean;
+  onMoveEdge: (edge: Edge, direction: -1 | 1) => void;
+  onSelectQuestion: (id: UUID) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <li className="opt">
+      <div className="opt-label">
+        <span>{heading}</span>
+        {editable && (
+          <button
+            type="button"
+            className="opt-edit-btn d-edit-btn"
+            onClick={() => setEditing((value) => !value)}
+          >
+            {editing ? "Done" : "Edit"}
+          </button>
+        )}
+      </div>
+      {note !== undefined && <p className="options__fault">{note}</p>}
+      <div className="opt-edges">
+        {edges.map((edge) => (
+          <EdgeRow
+            key={edge.id}
+            versionId={versionId}
+            edge={edge}
+            selectLabel={selectLabel}
+            allEdges={allEdges}
+            ctx={ctx}
+            editable={editable && editing}
+            disabled={disabled}
+            onMoveEdge={onMoveEdge}
+            onSelectQuestion={onSelectQuestion}
+          />
+        ))}
+      </div>
+    </li>
+  );
+}
+
 interface OptionCardProps {
   versionId: UUID;
   option: QuestionOption;
@@ -201,10 +271,12 @@ interface OptionCardProps {
 
 /** One answer, one card: what it's called, what leads from it, and (when
  * editable) every control for both -- label/code, reorder, delete, and
- * per-edge retarget/reorder/remove. Combines what were three separate
- * places (a read-only Options list, a separate "Edit options" form, and
- * `EdgeEditor`'s own "Outgoing edges" list) into the one place somebody
- * actually thinks about an answer: together with where it goes. */
+ * per-route retarget/reorder/remove -- collapsed behind one "Edit" until
+ * asked for, matching `QuestionEditor`'s own text-edit toggle rather than
+ * showing every control on every card at once. Combines what were three
+ * separate places (a read-only Options list, a separate "Edit options"
+ * form, and `EdgeEditor`'s own "Outgoing edges" list) into the one place
+ * somebody actually thinks about an answer: together with where it goes. */
 function OptionCard({
   versionId,
   option,
@@ -227,6 +299,7 @@ function OptionCard({
 
   const labelId = useId();
   const codeId = useId();
+  const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(option.label);
   const [code, setCode] = useState(option.code);
 
@@ -240,9 +313,15 @@ function OptionCard({
   const blockingEdges =
     removeOption.error instanceof ApiError ? removeOption.error.blockingEdges : null;
 
+  function cancel() {
+    setLabel(option.label);
+    setCode(option.code);
+    setEditing(false);
+  }
+
   return (
     <li className="opt">
-      {editable ? (
+      {editing ? (
         <div className="optedit__fields">
           <div className="field field--inline">
             <label htmlFor={labelId}>Label</label>
@@ -266,80 +345,99 @@ function OptionCard({
       ) : (
         <div className="opt-label">
           <span>{option.label}</span> <code className="options__code">{option.code}</code>
+          {editable && (
+            <button
+              type="button"
+              className="opt-edit-btn d-edit-btn"
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </button>
+          )}
         </div>
       )}
 
       {isUncovered && (
         <p className="options__fault">
-          No edge covers this answer, so choosing it ends the flow.
+          No route covers this answer yet, so choosing it ends the flow.
         </p>
       )}
 
-      {editable && (
-        <div className="optedit__controls">
-          <button
-            className="opt-edit-btn active"
-            type="button"
-            disabled={pending || !dirty}
-            onClick={() =>
-              updateOption.mutate(
-                {
-                  optionId: option.id,
-                  // Only what moved: an absent key stays absent from
-                  // `validated_data`, and the code of an inherited option is
-                  // refused outright, so sending an unchanged one would turn
-                  // a label edit into a refusal.
-                  changes: {
-                    ...(label !== option.label ? { label } : {}),
-                    ...(code !== option.code ? { code } : {}),
+      {editing && (
+        <>
+          <div className="optedit__controls">
+            <button
+              className="opt-edit-btn active"
+              type="button"
+              disabled={pending || !dirty}
+              onClick={() =>
+                updateOption.mutate(
+                  {
+                    optionId: option.id,
+                    // Only what moved: an absent key stays absent from
+                    // `validated_data`, and the code of an inherited option is
+                    // refused outright, so sending an unchanged one would turn
+                    // a label edit into a refusal.
+                    changes: {
+                      ...(label !== option.label ? { label } : {}),
+                      ...(code !== option.code ? { code } : {}),
+                    },
                   },
-                },
-                { onError: onWriteError },
-              )
-            }
-          >
-            Save
-          </button>
-          <button
-            className="opt-edit-btn"
-            type="button"
-            disabled={pending || !canMoveUp}
-            onClick={() => onMoveOption(-1)}
-          >
-            Move up
-          </button>
-          <button
-            className="opt-edit-btn"
-            type="button"
-            disabled={pending || !canMoveDown}
-            onClick={() => onMoveOption(1)}
-          >
-            Move down
-          </button>
-          <button
-            className="opt-edit-btn danger"
-            type="button"
-            disabled={pending || isGuard}
-            title={
-              isGuard
-                ? "An edge is guarded by this option. Deleting it would silently un-route whatever that answer led to, so remove the edge first."
-                : undefined
-            }
-            onClick={() => removeOption.mutate(option.id, { onError: onWriteError })}
-          >
-            Delete
-          </button>
-        </div>
-      )}
+                  { onError: onWriteError, onSuccess: () => setEditing(false) },
+                )
+              }
+            >
+              Save
+            </button>
+            <button
+              className="opt-edit-btn"
+              type="button"
+              disabled={pending || !canMoveUp}
+              onClick={() => onMoveOption(-1)}
+            >
+              Move up
+            </button>
+            <button
+              className="opt-edit-btn"
+              type="button"
+              disabled={pending || !canMoveDown}
+              onClick={() => onMoveOption(1)}
+            >
+              Move down
+            </button>
+            <button
+              className="opt-edit-btn danger"
+              type="button"
+              disabled={pending || isGuard}
+              title={
+                isGuard
+                  ? "A route still uses this answer. Deleting it would break that route without warning, so remove the route first."
+                  : undefined
+              }
+              onClick={() => removeOption.mutate(option.id, { onError: onWriteError })}
+            >
+              Delete
+            </button>
+            <button
+              className="opt-edit-btn"
+              type="button"
+              disabled={pending}
+              onClick={cancel}
+            >
+              Cancel
+            </button>
+          </div>
 
-      {isGuard && editable && (
-        // Refused rather than cascaded, and the edge may leave another
-        // question entirely -- the dead-edge case the draft copy
-        // deliberately preserves.
-        <p className="panel__hint">
-          An edge is guarded by this option, so deleting it is refused. Remove that edge
-          first.
-        </p>
+          {isGuard && (
+            // Refused rather than cascaded, and the edge may leave another
+            // question entirely -- the dead-edge case the draft copy
+            // deliberately preserves.
+            <p className="panel__hint">
+              A route still uses this answer, so it can't be deleted yet. Remove that
+              route first.
+            </p>
+          )}
+        </>
       )}
 
       {error !== null && (
@@ -365,10 +463,10 @@ function OptionCard({
               key={edge.id}
               versionId={versionId}
               edge={edge}
-              guardLabel={option.label}
+              selectLabel={`Where "${option.label}" leads`}
               allEdges={allEdges}
               ctx={ctx}
-              editable={editable}
+              editable={editable && editing}
               disabled={disabled}
               onMoveEdge={onMoveEdge}
               onSelectQuestion={onSelectQuestion}
@@ -390,11 +488,13 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
 
   const optionCodeId = useId();
   const optionLabelId = useId();
+  const [addingOption, setAddingOption] = useState(false);
   const [newOptionCode, setNewOptionCode] = useState("");
   const [newOptionLabel, setNewOptionLabel] = useState("");
 
   const addGuardId = useId();
   const addTargetId = useId();
+  const [addingEdge, setAddingEdge] = useState(false);
   const [newGuard, setNewGuard] = useState<string>(ANY_ANSWER);
   const [newTarget, setNewTarget] = useState<string>(END_OF_FLOW);
 
@@ -554,6 +654,7 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
         onSuccess: () => {
           setNewGuard(ANY_ANSWER);
           setNewTarget(END_OF_FLOW);
+          setAddingEdge(false);
         },
       },
     );
@@ -570,15 +671,15 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
         Options <span className="count">{cardCount}</span>
       </h3>
       <p className="panel__hint">
-        Each answer's edges are tried in this order; the first whose guard matches wins.
-        If none match, the flow ends.
+        Where each answer leads. If more than one route could apply, the first one
+        listed wins; otherwise the flow ends there.
       </p>
 
       {options.length === 0 && anyAnswerEdges.length === 0 && deadGuardEdges.length === 0 ? (
         <p className="empty">
           {takesOptions
-            ? "This question offers no options."
-            : "No edges leave this question, so answering it always ends the flow."}
+            ? "This question has no answers yet."
+            : "Nothing leads anywhere yet, so answering this question ends the flow."}
         </p>
       ) : (
         <ul className="opt-list">
@@ -603,167 +704,190 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
           ))}
 
           {anyAnswerEdges.length > 0 && (
-            <li className="opt">
-              <div className="opt-label">{optionLabel(question, null)}</div>
-              <div className="opt-edges">
-                {anyAnswerEdges.map((edge) => (
-                  <EdgeRow
-                    key={edge.id}
-                    versionId={versionId}
-                    edge={edge}
-                    guardLabel={optionLabel(question, null)}
-                    allEdges={edges}
-                    ctx={ctx}
-                    editable={editable}
-                    disabled={pending}
-                    onMoveEdge={moveEdge}
-                    onSelectQuestion={onSelectQuestion}
-                  />
-                ))}
-              </div>
-            </li>
+            <EdgeGroupCard
+              heading={optionLabel(question, null)}
+              versionId={versionId}
+              edges={anyAnswerEdges}
+              allEdges={edges}
+              ctx={ctx}
+              selectLabel={`Where "${optionLabel(question, null)}" leads`}
+              editable={editable}
+              disabled={pending}
+              onMoveEdge={moveEdge}
+              onSelectQuestion={onSelectQuestion}
+            />
           )}
 
           {deadGuardEdges.length > 0 && (
-            <li className="opt">
-              <div className="opt-label">Dead edges</div>
-              <p className="options__fault">
-                Guarded by an option this question does not offer, so the guard can
-                never match.
-              </p>
-              <div className="opt-edges">
-                {deadGuardEdges.map((edge) => (
-                  <EdgeRow
-                    key={edge.id}
-                    versionId={versionId}
-                    edge={edge}
-                    guardLabel="a dead edge"
-                    allEdges={edges}
-                    ctx={ctx}
-                    editable={editable}
-                    disabled={pending}
-                    onMoveEdge={moveEdge}
-                    onSelectQuestion={onSelectQuestion}
-                  />
-                ))}
-              </div>
-            </li>
+            <EdgeGroupCard
+              heading="Can't be used"
+              note="Tied to an answer this question doesn't have anymore, so these can never happen -- only removed."
+              versionId={versionId}
+              edges={deadGuardEdges}
+              allEdges={edges}
+              ctx={ctx}
+              selectLabel="Where this route leads"
+              editable={editable}
+              disabled={pending}
+              onMoveEdge={moveEdge}
+              onSelectQuestion={onSelectQuestion}
+            />
           )}
         </ul>
       )}
 
       {editable && (
-        <>
+        <div className="options-add">
           {takesOptions ? (
-            <form
-              className="editor"
-              onSubmit={(event) => {
-                event.preventDefault();
-                addOption.mutate(
-                  { question: question.id, code: newOptionCode, label: newOptionLabel },
-                  {
-                    onError: onWriteError,
-                    onSuccess: () => {
-                      setNewOptionCode("");
-                      setNewOptionLabel("");
+            addingOption ? (
+              <form
+                className="editor"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addOption.mutate(
+                    { question: question.id, code: newOptionCode, label: newOptionLabel },
+                    {
+                      onError: onWriteError,
+                      onSuccess: () => {
+                        setNewOptionCode("");
+                        setNewOptionLabel("");
+                        setAddingOption(false);
+                      },
                     },
-                  },
-                );
-              }}
-            >
-              <h4 className="panel__subheading">Add an option</h4>
-              <div className="field field--inline">
-                <label htmlFor={optionLabelId}>Label</label>
-                <input
-                  id={optionLabelId}
-                  value={newOptionLabel}
-                  required
-                  placeholder="What a respondent reads"
-                  disabled={pending}
-                  onChange={(event) => setNewOptionLabel(event.target.value)}
-                />
-              </div>
-              <div className="field field--inline">
-                <label htmlFor={optionCodeId}>Code</label>
-                <input
-                  id={optionCodeId}
-                  value={newOptionCode}
-                  required
-                  placeholder="Stable identifier"
-                  disabled={pending}
-                  onChange={(event) => setNewOptionCode(event.target.value)}
-                />
-              </div>
-              <button
-                className="button button--primary"
-                type="submit"
-                disabled={pending || newOptionCode.trim() === "" || newOptionLabel.trim() === ""}
+                  );
+                }}
               >
-                {addOption.isPending ? "Adding…" : "Add option"}
+                <div className="field field--inline">
+                  <label htmlFor={optionLabelId}>Label</label>
+                  <input
+                    id={optionLabelId}
+                    value={newOptionLabel}
+                    required
+                    placeholder="What a respondent reads"
+                    disabled={pending}
+                    onChange={(event) => setNewOptionLabel(event.target.value)}
+                  />
+                </div>
+                <div className="field field--inline">
+                  <label htmlFor={optionCodeId}>Code</label>
+                  <input
+                    id={optionCodeId}
+                    value={newOptionCode}
+                    required
+                    placeholder="Stable identifier"
+                    disabled={pending}
+                    onChange={(event) => setNewOptionCode(event.target.value)}
+                  />
+                </div>
+                <div className="editor__actions">
+                  <button
+                    className="button button--primary"
+                    type="submit"
+                    disabled={
+                      pending || newOptionCode.trim() === "" || newOptionLabel.trim() === ""
+                    }
+                  >
+                    {addOption.isPending ? "Adding…" : "Add option"}
+                  </button>
+                  <button
+                    className="button button--quiet"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => setAddingOption(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {/* Appended, never inserted: a unique constraint on
+                    (question, display_order) makes an insertion a renumbering,
+                    which is what the up/down controls above do. */}
+                <p className="panel__hint">
+                  Added last. A new answer with no route yet just ends the flow if
+                  picked -- that's fine, and it's not refused, because answers are added
+                  before the routes that lead from them.
+                </p>
+              </form>
+            ) : (
+              <button
+                className="button button--quiet"
+                type="button"
+                onClick={() => setAddingOption(true)}
+              >
+                + Add an answer
               </button>
-              {/* Appended, never inserted: a unique constraint on
-                  (question, display_order) makes an insertion a renumbering,
-                  which is what the up/down controls above do. */}
-              <p className="panel__hint">
-                Added last. A new option with no edge covering it is an answer that ends the
-                flow — the map reports that, and it is not refused, because options are
-                added before the edges that route them.
-              </p>
-            </form>
+            )
           ) : (
             <p className="panel__hint">
-              Answers to a {question.answer_type.replace("_", " ")} question select no
-              option, so adding one is refused: the row would be inert, and the only thing
-              it could become is a dead edge.
+              This question's answers don't use separate options -- like a written
+              response or a number -- so there's nothing to add here.
             </p>
           )}
 
-          <form className="editor" onSubmit={submitNewEdge}>
-            <h4 className="panel__subheading">Add an edge</h4>
-            <div className="field field--inline">
-              <label htmlFor={addGuardId}>When the answer is</label>
-              <select
-                id={addGuardId}
-                value={newGuard}
-                disabled={pending}
-                onChange={(event) => setNewGuard(event.target.value)}
-              >
-                <option value={ANY_ANSWER}>Any answer</option>
-                {takesOptions &&
-                  question.options.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
+          {addingEdge ? (
+            <form className="editor" onSubmit={submitNewEdge}>
+              <div className="field field--inline">
+                <label htmlFor={addGuardId}>When the answer is</label>
+                <select
+                  id={addGuardId}
+                  value={newGuard}
+                  disabled={pending}
+                  onChange={(event) => setNewGuard(event.target.value)}
+                >
+                  <option value={ANY_ANSWER}>Any answer</option>
+                  {takesOptions &&
+                    question.options.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="field field--inline">
+                <label htmlFor={addTargetId}>Go to</label>
+                <select
+                  id={addTargetId}
+                  value={newTarget}
+                  disabled={pending}
+                  onChange={(event) => setNewTarget(event.target.value)}
+                >
+                  <option value={END_OF_FLOW}>End of flow</option>
+                  {targets.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.code}
                     </option>
                   ))}
-              </select>
-            </div>
-            <div className="field field--inline">
-              <label htmlFor={addTargetId}>Go to</label>
-              <select
-                id={addTargetId}
-                value={newTarget}
-                disabled={pending}
-                onChange={(event) => setNewTarget(event.target.value)}
-              >
-                <option value={END_OF_FLOW}>End of flow</option>
-                {targets.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.code}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {!takesOptions && (
-              <p className="panel__hint">
-                Answers to a {question.answer_type.replace("_", " ")} question do not
-                select options, so only a question-level edge can fire here.
-              </p>
-            )}
-            <button className="button button--primary" type="submit" disabled={pending}>
-              Add edge
+                </select>
+              </div>
+              {!takesOptions && (
+                <p className="panel__hint">
+                  Since this question has no separate answer options, this route applies
+                  no matter what's answered.
+                </p>
+              )}
+              <div className="editor__actions">
+                <button className="button button--primary" type="submit" disabled={pending}>
+                  Add route
+                </button>
+                <button
+                  className="button button--quiet"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setAddingEdge(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              className="button button--quiet"
+              type="button"
+              onClick={() => setAddingEdge(true)}
+            >
+              + Add a route
             </button>
-          </form>
-        </>
+          )}
+        </div>
       )}
 
       {error !== null && (

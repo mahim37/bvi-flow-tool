@@ -998,6 +998,23 @@ details[open] > summary > .chevron {
   border-top: 1px dashed var(--border);
 }
 
+/* The two "+ Add..." toggles/forms at the bottom of Options -- a flex
+ * column so a collapsed toggle button and an open form get the same
+ * gap, rather than relying on `.editor`'s own margin (which still
+ * applies inside a full-width panel, just not for the button state). */
+.options-add {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.options-add .editor {
+  width: 100%;
+  margin-top: 0;
+}
+
 .options__code {
   margin-left: 8px;
   font-size: 0.75rem;
