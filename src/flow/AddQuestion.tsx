@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 
 import { useAddQuestion } from "../api/queries";
 import type { AnswerType, Graph, UUID } from "../api/types";
+import { EditorDropdown } from "./EditorDropdown";
 import { answerTypeLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
@@ -48,7 +49,6 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
   const [section, setSection] = useState<string>(NO_SECTION);
   const [isRequired, setIsRequired] = useState(true);
   const [showRaw, setShowRaw] = useState(false);
-  const [open, setOpen] = useState(false);
 
   const sections = [...graph.sections].sort(
     (left, right) => left.display_order - right.display_order,
@@ -56,14 +56,8 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
   const error = writeErrorMessage(addQuestion.error);
 
   return (
-    <details
-      className="editor-dropdown"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>Add a question</summary>
-
-      <div className="editor-panel">
+    <EditorDropdown trigger="Add a question">
+      <>
         <form
           className="editor"
           onSubmit={(event) => {
@@ -195,7 +189,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
             {error}
           </p>
         )}
-      </div>
-    </details>
+      </>
+    </EditorDropdown>
   );
 }

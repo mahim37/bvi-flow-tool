@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import { useAddSection, useRemoveSection, useUpdateSection } from "../api/queries";
 import type { Graph, Section, UUID } from "../api/types";
 import { BlockingList } from "./BlockingList";
+import { EditorDropdown } from "./EditorDropdown";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 interface SectionRowProps {
@@ -175,7 +176,6 @@ export function SectionEditor({
   const nameId = useId();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [open, setOpen] = useState(false);
 
   const sections = [...graph.sections].sort(
     (left, right) => left.display_order - right.display_order,
@@ -183,14 +183,8 @@ export function SectionEditor({
   const error = writeErrorMessage(addSection.error);
 
   return (
-    <details
-      className="editor-dropdown"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>Edit sections</summary>
-
-      <div className="editor-panel">
+    <EditorDropdown trigger="Edit sections">
+      <>
         <ul className="sectionedits">
           {sections.map((section) => (
             <SectionRow
@@ -256,7 +250,7 @@ export function SectionEditor({
             {error}
           </p>
         )}
-      </div>
-    </details>
+      </>
+    </EditorDropdown>
   );
 }
