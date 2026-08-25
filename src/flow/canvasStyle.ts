@@ -171,9 +171,14 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "font-size": 11,
       "font-weight": 600,
       color: "#4a473f",
-      "text-background-color": "#faf5ec",
-      "text-background-opacity": 0.9,
-      "text-background-padding": "2px",
+      // Solid white, rounded, rather than the cream canvas colour at
+      // partial opacity: a label sitting on top of several crossing
+      // edges and the dotted canvas background needs real contrast, not
+      // a tint the same family as what's behind it.
+      "text-background-color": "#ffffff",
+      "text-background-opacity": 1,
+      "text-background-shape": "roundrectangle",
+      "text-background-padding": "3px",
       "text-rotation": "autorotate",
     },
   },
