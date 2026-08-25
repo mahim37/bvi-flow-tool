@@ -13,12 +13,9 @@ interface DetailPanelProps {
   question: Question | null;
   editable: boolean;
   onSelectQuestion: (id: UUID) => void;
-  /** Optional so the panel can be rendered outside the router. The map
-   * passes a navigation; nothing else needs one. */
-  onPreviewFrom?: (() => void) | undefined;
-  /** Optional for the same reason -- clears the map's selection, which is
-   * what closes the drawer (there is no separate "closed" state to track).
-   * Absent wherever there is nothing to select out of, same as above. */
+  /** Optional so the panel can be rendered outside the router. Clears the
+   * map's selection, which is what closes the drawer (there is no
+   * separate "closed" state to track). */
   onClose?: (() => void) | undefined;
 }
 
@@ -113,7 +110,6 @@ export function DetailPanel({
   question,
   editable,
   onSelectQuestion,
-  onPreviewFrom,
   onClose,
 }: DetailPanelProps) {
   const questionsById = useMemo(
@@ -255,25 +251,6 @@ export function DetailPanel({
         editable={editable && live}
         onSelectQuestion={onSelectQuestion}
       />
-
-      {onPreviewFrom !== undefined && live && (
-        <section className="panel__section" aria-labelledby="walk-heading">
-          <h3 id="walk-heading" className="panel__heading">
-            Walk it
-          </h3>
-          <button className="button" type="button" onClick={onPreviewFrom}>
-            Open the preview
-          </button>
-          {/* The preview replays from the entry point every time, so it
-              cannot be dropped straight onto this question: the route that
-              reaches it is part of what is being checked. */}
-          <p className="panel__hint">
-            The preview walks from the entry point, through the same resolver a
-            respondent goes through. There is no way to start halfway — the route that
-            reaches a question is part of what a preview is for.
-          </p>
-        </section>
-      )}
 
       <section className="panel__section" aria-labelledby="incoming-heading">
         <SubHeading id="incoming-heading" count={incomingBySource.size}>

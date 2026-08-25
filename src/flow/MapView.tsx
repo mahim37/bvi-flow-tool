@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import type { UUID } from "../api/types";
 import { Canvas } from "./Canvas";
@@ -11,7 +11,6 @@ import { buildElements, isSyntheticNode } from "./graphElements";
 export function MapView() {
   const { graph, editable } = useVersionContext();
   const { versionId } = useParams<{ versionId: string }>();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [selectedQuestionId, setSelectedQuestionId] = useState<UUID | null>(null);
@@ -79,7 +78,6 @@ export function MapView() {
         question={selectedQuestion}
         editable={editable}
         onSelectQuestion={setSelectedQuestionId}
-        onPreviewFrom={() => navigate(`/versions/${versionId}/preview`)}
         onClose={() => setSelectedQuestionId(null)}
       />
     </div>
