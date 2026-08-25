@@ -27,10 +27,36 @@ export class ApiError extends Error {
     this.body = body;
   }
 
-  /** No session, or one the server rejected. The caller's job is to send
-   * the user back to the sign-in screen, never to retry. */
+  /**
+   * No session, or one the server rejected. The caller's job is to send
+   * the user back to the sign-in screen, never to retry.
+   *
+   * A plain `status === 401` is not enough here: `StaffSessionAuthentication`
+   * (`bvi-backend`'s `users/authentication.py`) never sets a
+   * `WWW-Authenticate` header -- there is no challenge a browser session
+   * could answer -- so DRF downgrades every `NotAuthenticated`/
+   * `AuthenticationFailed` it raises from 401 to 403, indistinguishable by
+   * status code alone from a genuine "signed in, but lacks the grant"
+   * refusal. Matched by message instead, the same way `isCsrfFailure`
+   * already tells a stale token apart from a real permission refusal:
+   * `resolve_staff_session` (`bvi-backend`'s `users/services.py`) raises
+   * exactly these four strings, and DRF's own `NotAuthenticated` default
+   * covers a request with no cookie at all. A genuine permission refusal
+   * answers a fixed, different message ("You do not have permission to
+   * perform this action.") that none of these match.
+   */
   get isUnauthenticated(): boolean {
-    return this.status === 401;
+    if (this.status === 401) return true;
+    if (this.status !== 403) return false;
+    const detail = this.body?.["detail"];
+    return (
+      typeof detail === "string" &&
+      (detail === "Authentication credentials were not provided." ||
+        detail === "Session not found." ||
+        detail === "Session has been revoked." ||
+        detail === "User is not active." ||
+        detail === "Session has expired.")
+    );
   }
 
   /** Authenticated, but not allowed. Distinguished from the above because

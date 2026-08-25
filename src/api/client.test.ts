@@ -261,6 +261,36 @@ describe("errors", () => {
     expect(denied.isForbidden).toBe(true);
   });
 
+  it("tells a dead session apart from a permission refusal, both 403", async () => {
+    // `StaffSessionAuthentication` sets no `WWW-Authenticate` header, so
+    // DRF downgrades every auth failure -- no cookie, an expired session,
+    // a revoked one -- from 401 to 403, same status as "signed in but
+    // lacks the grant". Telling them apart by message is what sends a
+    // dead session back to sign-in instead of "ask an admin for access".
+    for (const detail of [
+      "Authentication credentials were not provided.",
+      "Session not found.",
+      "Session has been revoked.",
+      "User is not active.",
+      "Session has expired.",
+    ]) {
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce(respond(403, { detail }, false));
+      const caught = (await request("/api/x/").catch((error: unknown) => error)) as ApiError;
+      expect(caught.isUnauthenticated).toBe(true);
+    }
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      respond(
+        403,
+        { detail: "You do not have permission to perform this action." },
+        false,
+      ),
+    );
+    const denied = (await request("/api/x/").catch((error: unknown) => error)) as ApiError;
+    expect(denied.isUnauthenticated).toBe(false);
+    expect(denied.isForbidden).toBe(true);
+  });
+
   it("still produces a message when the body is not JSON", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue({
       ok: false,

@@ -16,7 +16,12 @@ export function useWriteErrorHandler(): (error: unknown) => void {
   return useCallback(
     (error: unknown) => {
       noteApiError(error);
-      if (error instanceof ApiError && error.isForbidden && !error.isCsrfFailure) {
+      if (
+        error instanceof ApiError &&
+        error.isForbidden &&
+        !error.isCsrfFailure &&
+        !error.isUnauthenticated
+      ) {
         noteEditRefused();
       }
     },
@@ -53,7 +58,12 @@ export function useReviewErrorHandler(): (error: unknown) => void {
   return useCallback(
     (error: unknown) => {
       noteApiError(error);
-      if (error instanceof ApiError && error.isForbidden && !error.isCsrfFailure) {
+      if (
+        error instanceof ApiError &&
+        error.isForbidden &&
+        !error.isCsrfFailure &&
+        !error.isUnauthenticated
+      ) {
         noteReviewRefused();
       }
     },
