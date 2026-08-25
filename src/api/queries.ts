@@ -267,6 +267,25 @@ export function usePublishDraft(versionId: UUID) {
   });
 }
 
+/**
+ * Rollback, same invalidation shape as publishing above.
+ *
+ * It is the other call that changes what a respondent is asked -- this
+ * version's `is_active` flips true and whatever was live flips false, so
+ * every other open sandbox's `is_stale` has to be re-read too, not just
+ * this one's graph.
+ */
+export function useActivateVersion(versionId: UUID) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.activateVersion(versionId),
+    onSuccess: async () => {
+      await invalidateGraph(client, versionId);
+      await client.invalidateQueries({ queryKey: ["graph"] });
+    },
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Preview (phase 6).                                                  */
 /* ------------------------------------------------------------------ */

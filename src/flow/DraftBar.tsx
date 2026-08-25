@@ -3,6 +3,7 @@ import { Link, NavLink } from "react-router-dom";
 
 import type { Graph, UUID } from "../api/types";
 import {
+  useActivateVersion,
   useCreateDraft,
   useDiscardDraft,
   useReleaseLock,
@@ -72,6 +73,7 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   const withdrawDraft = useWithdrawDraft(versionId);
   const releaseLock = useReleaseLock(versionId);
   const spawnProduct = useSpawnProduct(versionId);
+  const activate = useActivateVersion(versionId);
 
   const error =
     writeErrorMessage(createDraft.error) ??
@@ -79,7 +81,8 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
     writeErrorMessage(submitDraft.error) ??
     writeErrorMessage(withdrawDraft.error) ??
     writeErrorMessage(releaseLock.error) ??
-    writeErrorMessage(spawnProduct.error);
+    writeErrorMessage(spawnProduct.error) ??
+    writeErrorMessage(activate.error);
 
   function startProposal(event: React.FormEvent) {
     event.preventDefault();
@@ -143,6 +146,45 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             )}
           </span>
         </div>
+
+        {/* Rollback (spec 4.10) -- only offered on a version that was live
+            before and has since been replaced. It already went through a
+            review on the way in, so this is the one route to `is_active`
+            that skips a fresh one: the recovery path for a bad publish has
+            to be a button, not a second round trip through review while a
+            respondent is being served something wrong. Gated on the same
+            publish grant as Publish/Spawn below, not the edit one -- see
+            `FlowToolActivateView`'s docstring. */}
+        {!graph.version.is_active &&
+          (reviewRefused ? (
+            <p className="banner banner--warn">
+              Your account can view this version but not activate it.
+            </p>
+          ) : (
+            <span className="draftbar__pair">
+              <button
+                className="button button--primary"
+                type="button"
+                disabled={activate.isPending}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `Activate ${versionLabel(graph.version)}? It goes live immediately, replacing whatever is live now, with no new review round.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  activate.mutate(undefined, { onError: onReviewError });
+                }}
+              >
+                {activate.isPending ? "Activating…" : "Activate this version"}
+              </button>
+              <span className="draftbar__note">
+                Puts this exact version back in front of respondents. No new review --
+                it already went through one before it was replaced.
+              </span>
+            </span>
+          ))}
 
         {editRefused ? (
           <p className="banner banner--warn">
