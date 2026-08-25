@@ -410,7 +410,14 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
         </div>
 
         <div className="draftbar__right">
-          <Link className="button button--quiet" to={`/versions/${versionId}/review`}>
+          {/* Quiet while there's a more primary action beside it
+              (Submit for review); once frozen, checking the diff before
+              publishing is the primary thing left to do here, so it earns
+              the same visual weight Submit/Publish get elsewhere. */}
+          <Link
+            className={`button ${isOpen ? "button--quiet" : "button--primary"}`}
+            to={`/versions/${versionId}/review`}
+          >
             {isOpen ? "Check the diff" : "Review and publish"}
           </Link>
 
@@ -484,12 +491,6 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
               </button>
             ))}
 
-          {!isAuthor && (
-            <p className="banner banner--info">
-              Only {changeRequest.created_by_email} can discard or withdraw this
-              proposal.
-            </p>
-          )}
         </div>
       </div>
 
@@ -529,6 +530,18 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             edits will be refused until they release it or it goes idle.
           </p>
         ))}
+
+      {/* Moved out of .draftbar__right (which is otherwise just the one
+          Review/Check-the-diff link in this state) rather than left as a
+          flex sibling of it -- boxed banners are what every other "why a
+          control isn't offered" fact in this bar already renders as, and
+          giving this one the same full-width treatment is what actually
+          lets the row above stay on one line. */}
+      {!isAuthor && (
+        <p className="banner banner--info">
+          Only {changeRequest.created_by_email} can discard or withdraw this proposal.
+        </p>
+      )}
 
       {editRefused && (
         <p className="banner banner--warn">
