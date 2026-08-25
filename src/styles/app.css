@@ -1343,6 +1343,13 @@ details[open] > summary > .chevron {
   color: rgba(255, 255, 255, 0.72);
 }
 
+/* The hover inversion above (white background, dark title) would leave
+   this translucent-white if left alone -- unreadable the moment the
+   background it was tuned against turns white too. */
+.draftbar__cta.button--primary:hover:not(:disabled) .draftbar__cta-desc {
+  color: var(--text-muted);
+}
+
 .draftbar__form {
   display: flex;
   flex-wrap: wrap;
@@ -1385,6 +1392,7 @@ details[open] > summary > .chevron {
   transition:
     background-color 0.12s ease,
     border-color 0.12s ease,
+    color 0.12s ease,
     filter 0.12s ease;
 }
 
@@ -1405,12 +1413,13 @@ details[open] > summary > .chevron {
   box-shadow: var(--shadow-sm);
 }
 
+/* Inverted rather than just brightened: white background, dark text and
+   the same dark border it already had -- a clearer "about to act on this"
+   signal than a subtle brightness shift on a button already this dark. */
 .button--primary:hover:not(:disabled) {
-  /* `.button:hover` resets background to the page's cream -- without
-     restating it here, a primary button's white text would sit on that
-     same near-white background the instant it's hovered. */
-  background: var(--accent);
-  filter: brightness(1.08);
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .button--danger {
