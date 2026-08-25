@@ -1802,10 +1802,14 @@ details[open] > summary > .chevron {
  * the real end-user questionnaire rather than this tool's own admin
  * chrome, so what an author sees here is what a respondent would
  * actually be shown, logo included. `--bg` already is break's literal
- * stage colour (`#faf5ec`), so the card needs no new colour of its own. */
+ * stage colour (`#faf5ec`), so the card needs no new colour of its own.
+ * No fixed min-height, unlike break's own 620px -- that's sized for a
+ * modal dialog that has to look the same regardless of content; this card
+ * sits in normal page flow next to "the route so far" and should hug
+ * whatever it's actually showing, not leave a slab of empty stage below a
+ * short question (a free-text/scale one, or one with few options). */
 .preview__current {
   position: relative;
-  min-height: 420px;
   padding: 56px 40px 20px;
   background: var(--bg);
   border: 1px solid var(--border);
