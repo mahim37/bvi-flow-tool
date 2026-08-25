@@ -1322,7 +1322,6 @@ details[open] > summary > .chevron {
   gap: 1px;
   padding: 5px 16px;
   border-radius: var(--radius-lg);
-  min-width: 200px;
   text-align: left;
   white-space: normal;
 }

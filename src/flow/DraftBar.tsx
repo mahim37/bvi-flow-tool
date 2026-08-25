@@ -434,18 +434,34 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             </>
           )}
 
-          {isFrozen && (
-            <button
-              className="button"
-              type="button"
-              disabled={busy || editRefused}
-              onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
-            >
-              {changeRequest.status === "approved"
-                ? "Withdraw (drops the approval)"
-                : "Withdraw"}
-            </button>
-          )}
+          {isFrozen &&
+            (changeRequest.status === "approved" ? (
+              // The parenthetical used to be part of the button's own
+              // label, which was the longest thing on this row -- moved
+              // into the description line instead, same self-describing
+              // shape as Propose/Spawn/Activate, so "Withdraw" itself
+              // stays one short word and the row has a chance to fit on
+              // one line.
+              <Cta
+                title="Withdraw"
+                description="Also drops the current approval."
+                disabled={busy || editRefused}
+                onClick={() =>
+                  withdrawDraft.mutate(undefined, { onError: onWriteError })
+                }
+              />
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={busy || editRefused}
+                onClick={() =>
+                  withdrawDraft.mutate(undefined, { onError: onWriteError })
+                }
+              >
+                Withdraw
+              </button>
+            ))}
         </div>
       </div>
 
