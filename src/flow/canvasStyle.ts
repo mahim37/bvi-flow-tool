@@ -165,7 +165,13 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "target-arrow-shape": "triangle",
       "arrow-scale": 0.95,
       "curve-style": "bezier",
-      opacity: 0.6,
+      // Split from the old single `opacity: 0.6`: that dimmed the label
+      // and its background right along with the line, capping how
+      // opaque a white pill could ever look regardless of
+      // text-background-opacity. `line-opacity` fades just the line;
+      // `opacity` stays at 1 so the label renders at full strength.
+      opacity: 1,
+      "line-opacity": 0.6,
       label: "data(guard)",
       "font-family": FONT,
       "font-size": 11,
