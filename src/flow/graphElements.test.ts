@@ -126,10 +126,13 @@ describe("edges", () => {
     expect(edges().get(E_Q4_TO_MISSING)?.target).toBe(missingNodeId(FOREIGN_QUESTION));
   });
 
-  it("names the guard, including the question-level one", () => {
+  it("names an option's own guard but leaves the question-level one blank", () => {
+    // Every *specific* option gets a label; the one left unlabelled at a
+    // node already reads as "whatever wasn't one of those" without
+    // spelling out "anything else" on the canvas itself.
     const built = edges();
 
-    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("anything else");
+    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("");
     expect(built.get(E_NO_TO_END)?.guard).toBe("No");
   });
 

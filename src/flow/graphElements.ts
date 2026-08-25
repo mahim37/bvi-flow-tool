@@ -259,13 +259,20 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       id: edge.id,
       source: edge.from_question,
       target,
-      // Truncated hard: this text runs diagonally along the edge itself
+      // Blank for the question-level fallback rather than the literal
+      // "anything else" -- every *specific* option gets a label, so the
+      // one edge left unlabelled at a node already reads as "whatever
+      // wasn't one of those" without spelling it out. Truncated hard for
+      // everything else: this text runs diagonally along the edge itself
       // (`canvasStyle.ts`'s `text-rotation: autorotate`), not wrapped in a
       // box like a node's own label -- a long guard reads as tangled
       // sideways text the moment more than one edge converges on a node.
       // The full guard is never lost, just not here: it's what `Options`
       // already shows in full in the detail panel.
-      guard: trunc(guardLabel(edge, questionsById.get(edge.from_question)), 20),
+      guard:
+        edge.from_option === null
+          ? ""
+          : trunc(guardLabel(edge, questionsById.get(edge.from_question)), 20),
       priority: edge.priority,
       isDead: deadEdges.has(edge.id),
       isBroken: brokenEdges.has(edge.id),
