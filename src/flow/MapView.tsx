@@ -16,6 +16,7 @@ export function MapView() {
 
   const [selectedQuestionId, setSelectedQuestionId] = useState<UUID | null>(null);
   const [highlightedIds, setHighlightedIds] = useState<readonly string[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // `?question=` is how the review screen points at a node. In the URL
   // rather than in a handler, so "show me this change on the map" is a
@@ -36,7 +37,7 @@ export function MapView() {
   }, [graph.questions, selectedQuestionId]);
 
   return (
-    <div className="layout">
+    <div className={sidebarCollapsed ? "layout layout--sidebar-collapsed" : "layout"}>
       <Sidebar
         graph={graph}
         selectedId={selectedQuestionId}
@@ -57,6 +58,8 @@ export function MapView() {
           const edge = graph.edges.find((candidate) => candidate.id === edgeId);
           if (edge) setSelectedQuestionId(edge.from_question);
         }}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((collapsed) => !collapsed)}
       />
       <DetailPanel
         graph={graph}

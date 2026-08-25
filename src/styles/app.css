@@ -214,6 +214,21 @@ body {
   grid-template-columns: 300px minmax(0, 1fr) 380px;
   flex: 1;
   min-height: 0;
+  transition: grid-template-columns 0.25s ease;
+}
+
+/* Ported from break-backend's #app.sidebar-collapsed (~L190-192), adapted
+ * from its flex+margin-left approach to this app's grid: the sidebar's
+ * own track collapses to 0 instead. `min-width: 0` overrides the grid
+ * default (`auto`, i.e. the content's own min size) that would otherwise
+ * keep the column from shrinking past it. */
+.layout--sidebar-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) 380px;
+}
+
+.layout--sidebar-collapsed .sidebar {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .canvas {
@@ -244,6 +259,13 @@ body {
   flex-direction: column;
   gap: 6px;
   z-index: 6;
+}
+
+.canvas-controls--top-left {
+  right: auto;
+  bottom: auto;
+  left: 16px;
+  top: 16px;
 }
 
 .icon-btn {
@@ -1161,6 +1183,49 @@ details[open] > summary > .chevron {
   .panel {
     grid-column: 1 / -1;
     border-top: 1px solid var(--border);
+  }
+}
+
+/* ---------- Desktop-only gate ----------
+   Ported from break-backend's own gate (question_graph_editor/styles.css
+   ~L972-1008), same breakpoint and values: below it the sidebar+detail
+   panel alone don't leave the canvas usable room, so block outright
+   rather than let the grid above squish further. */
+.desktop-required {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .app-shell {
+    display: none;
+  }
+
+  .desktop-required {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    padding: 32px;
+    z-index: 100;
+  }
+
+  .desktop-required-card {
+    max-width: 380px;
+    text-align: center;
+  }
+
+  .desktop-required-card h2 {
+    margin: 0 0 10px;
+    font-size: 20px;
+  }
+
+  .desktop-required-card p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.5;
   }
 }
 

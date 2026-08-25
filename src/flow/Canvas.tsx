@@ -25,6 +25,8 @@ interface CanvasProps {
   highlightedIds: readonly string[];
   onSelectNode: (id: string | null) => void;
   onSelectEdge: (id: string) => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
 /** The id set, in a form that is cheap to compare. A change here means
@@ -44,6 +46,8 @@ export function Canvas({
   highlightedIds,
   onSelectNode,
   onSelectEdge,
+  sidebarCollapsed,
+  onToggleSidebar,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -90,7 +94,17 @@ export function Canvas({
       cy.elements().removeClass("faded hl");
     });
 
+    // Keeps cytoscape's own notion of its size in sync with the container's
+    // actual box -- the sidebar-collapse toggle animates `.layout`'s grid
+    // columns rather than firing a `resize` event, and cytoscape only
+    // recomputes on the latter. A `ResizeObserver` catches that (and a
+    // plain window resize) without this component needing to know why its
+    // container changed size.
+    const resizeObserver = new ResizeObserver(() => cy.resize());
+    resizeObserver.observe(containerRef.current);
+
     return () => {
+      resizeObserver.disconnect();
       cy.destroy();
       cyRef.current = null;
       // A destroyed cy's elements go with it, so the next instance (React
@@ -204,6 +218,30 @@ export function Canvas({
           "for a keyboard-navigable view of the same routing."
         }
       />
+
+      {/* Ported from break-backend's #sidebarToggle (index.html ~L174-188,
+          same hamburger path) -- there it lives in the topbar, but this
+          app's topbar is shared across Map/Review/Preview while the
+          sidebar only exists here, so the button sits with the rest of
+          the canvas's own chrome instead. */}
+      <div className="canvas-controls canvas-controls--top-left">
+        <button
+          type="button"
+          className="icon-btn"
+          title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          onClick={onToggleSidebar}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              d="M3 6h18M3 12h18M3 18h18"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
 
       <div className="canvas-controls">
         <button

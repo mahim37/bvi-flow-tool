@@ -49,14 +49,35 @@ function Shell() {
 
 export function App() {
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AuthProvider>
-            <Shell />
-          </AuthProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <>
+      {/* Ported from break-backend's #desktopRequired (index.html ~L12-18):
+          the sidebar (300px) + detail panel (380px) alone need more room
+          than a phone or small tablet has before the canvas gets any space
+          to be useful, so below a real desktop/laptop width this replaces
+          the app outright rather than letting the layout squish into
+          something unusable. Pure CSS (`.app-shell` hidden by the same
+          media query that shows this) -- no JS breakpoint state to keep in
+          sync. */}
+      <div className="desktop-required">
+        <div className="desktop-required-card">
+          <h2>Desktop required</h2>
+          <p>
+            The flow tool needs a larger screen to use safely — please switch to a
+            desktop or laptop to continue.
+          </p>
+        </div>
+      </div>
+      <div className="app-shell">
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <AuthProvider>
+                <Shell />
+              </AuthProvider>
+            </BrowserRouter>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </div>
+    </>
   );
 }
