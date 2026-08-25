@@ -1193,6 +1193,16 @@ details[open] > summary > .chevron {
   flex-shrink: 0;
 }
 
+/* The code alone used to be short enough to never need this; now that
+ * the source's prompt rides along too (`labels.ts`'s `sourceLabel`), the
+ * flex item needs an explicit min-width so long text wraps inside the
+ * card instead of overflowing it (a flex item's default min-width is its
+ * content's own, unwrapped size). */
+.in-row__body {
+  min-width: 0;
+  flex: 1;
+}
+
 .in-row .in-q {
   color: var(--text);
   font-weight: 550;

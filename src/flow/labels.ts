@@ -23,11 +23,17 @@ export function answerTypeLabel(type: AnswerType): string {
   return ANSWER_TYPE_LABELS[type];
 }
 
+/** "{code} · {prompt, truncated}" -- the code alone ("Q2") means little
+ * without opening that question, so anywhere a question is named away
+ * from its own card (a route's destination, an incoming source) gets the
+ * prompt alongside it too, same idea as the canvas's own node labels
+ * (`graphElements.ts`). */
+function questionRefLabel(question: Question): string {
+  return `${question.code} · ${trunc(question.prompt, 40)}`;
+}
+
 /** Where an edge goes, in words. `to_question === null` is not missing
- * data -- it is the flow ending -- so it gets a name rather than a dash.
- * The code alone ("Q2") means little without opening that question --
- * the truncated prompt alongside it is what actually says where a route
- * leads, same idea as the canvas's own node labels (`graphElements.ts`). */
+ * data -- it is the flow ending -- so it gets a name rather than a dash. */
 export function targetLabel(
   edge: Edge,
   questionsById: ReadonlyMap<UUID, Question>,
@@ -35,8 +41,13 @@ export function targetLabel(
   if (edge.to_question === null) return "End of flow";
   const target = questionsById.get(edge.to_question);
   if (target === undefined) return "Unknown question";
-  const name = `${target.code} · ${trunc(target.prompt, 40)}`;
+  const name = questionRefLabel(target);
   return target.archived_at === null ? name : `${name} (archived)`;
+}
+
+/** The question a "Reached from" row points at. */
+export function sourceLabel(question: Question | undefined): string {
+  return question === undefined ? "Unknown question" : questionRefLabel(question);
 }
 
 export function optionLabel(

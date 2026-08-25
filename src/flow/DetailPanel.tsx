@@ -5,7 +5,7 @@ import type { Edge, Graph, Question, UUID } from "../api/types";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { Options } from "./Options";
 import { QuestionEditor } from "./QuestionEditor";
-import { answerTypeLabel, formatTimestamp, optionLabel } from "./labels";
+import { answerTypeLabel, formatTimestamp, optionLabel, sourceLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 interface DetailPanelProps {
@@ -298,13 +298,13 @@ export function DetailPanel({
               return (
                 <li key={fromId} className="in-row">
                   <span className="in-sw" style={{ background: swatch }} />
-                  <span>
+                  <span className="in-row__body">
                     <button
                       type="button"
                       className="link in-q"
                       onClick={() => onSelectQuestion(fromId)}
                     >
-                      {source ? source.code : "Unknown question"}
+                      {sourceLabel(source)}
                     </button>
                     <br />
                     <span className="in-via">
