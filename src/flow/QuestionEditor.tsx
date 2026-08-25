@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 
-import { useReorderQuestions, useUpdateQuestion } from "../api/queries";
+import { useUpdateQuestion } from "../api/queries";
 import type { AnswerType, Graph, Question } from "../api/types";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { QuestionChanges } from "../api/endpoints";
@@ -51,7 +51,6 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const updateQuestion = useUpdateQuestion(versionId);
-  const reorderQuestions = useReorderQuestions(versionId);
 
   const promptId = useId();
   const codeId = useId();
@@ -74,21 +73,8 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
     [graph.sections],
   );
 
-  // The whole live ordering, because that is what the reorder verb takes:
-  // a single-row `display_order` write is a swap against a unique
-  // constraint, and a client orchestrating one trips it partway.
-  const live = useMemo(
-    () =>
-      graph.questions
-        .filter((candidate) => candidate.archived_at === null)
-        .sort((left, right) => left.display_order - right.display_order),
-    [graph.questions],
-  );
-  const index = live.findIndex((candidate) => candidate.id === question.id);
-
-  const pending = updateQuestion.isPending || reorderQuestions.isPending;
-  const error =
-    writeErrorMessage(updateQuestion.error) ?? writeErrorMessage(reorderQuestions.error);
+  const pending = updateQuestion.isPending;
+  const error = writeErrorMessage(updateQuestion.error);
 
   /** Only the keys that moved. `FlowToolQuestionUpdateSerializer` has no
    * defaults and the view is partial, so an absent key means "leave this
@@ -112,18 +98,6 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
 
   const changes = changed();
   const dirty = Object.keys(changes).length > 0;
-
-  function move(direction: -1 | 1) {
-    const swapWith = index + direction;
-    if (index < 0 || swapWith < 0 || swapWith >= live.length) return;
-    const ordered = live.map((item) => item.id);
-    const here = ordered[index];
-    const there = ordered[swapWith];
-    if (here === undefined || there === undefined) return;
-    ordered[index] = there;
-    ordered[swapWith] = here;
-    reorderQuestions.mutate(ordered, { onError: onWriteError });
-  }
 
   const losingGuards =
     CHOICE_ANSWER_TYPES.has(question.answer_type) &&
@@ -271,35 +245,6 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
           </button>
         </p>
       )}
-
-      <div className="editor__row">
-        <span className="editor__rowlabel">
-          Position {index + 1} of {live.length}
-        </span>
-        <button
-          className="button button--quiet"
-          type="button"
-          disabled={pending || index <= 0}
-          onClick={() => move(-1)}
-        >
-          Move earlier
-        </button>
-        <button
-          className="button button--quiet"
-          type="button"
-          disabled={pending || index < 0 || index >= live.length - 1}
-          onClick={() => move(1)}
-        >
-          Move later
-        </button>
-      </div>
-      {/* Order is presentational under graph routing, with one exception
-          worth knowing before pressing those buttons. */}
-      <p className="panel__hint">
-        Order is presentational here — routing is by edge, not by position. The one
-        exception: the earliest live question is the entry point, so moving something
-        into first place changes where a session starts.
-      </p>
 
       {error !== null && (
         <p className="banner banner--error" role="alert">
