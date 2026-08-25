@@ -48,6 +48,37 @@ function VersionTabs({ versionId, isDraft }: { versionId: UUID; isDraft: boolean
   );
 }
 
+/** A button that carries its own explanation, title and description
+ * stacked inside the one element, rather than a plain button beside a
+ * separate note span -- so on a narrow row the description can never wrap
+ * away from the button it belongs to and land somewhere else looking
+ * orphaned. */
+function Cta({
+  primary = false,
+  title,
+  description,
+  disabled,
+  onClick,
+}: {
+  primary?: boolean;
+  title: string;
+  description: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`button draftbar__cta${primary ? " button--primary" : ""}`}
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="draftbar__cta-title">{title}</span>
+      <span className="draftbar__cta-desc">{description}</span>
+    </button>
+  );
+}
+
 export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   const { identity, editRefused, reviewRefused } = useAuth();
   const onWriteError = useWriteErrorHandler();
@@ -122,6 +153,17 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
     );
   }
 
+  function activateThisVersion() {
+    if (
+      !window.confirm(
+        `Activate ${versionLabel(graph.version)}? It goes live immediately, replacing whatever is live now, with no new review round.`,
+      )
+    ) {
+      return;
+    }
+    activate.mutate(undefined, { onError: onReviewError });
+  }
+
   // Branches on `is_draft`, not on whether a proposal exists. A published
   // version keeps the proposal it was published from -- that row is the
   // history of the change, and `graph/` still serves it -- so "has a
@@ -130,67 +172,86 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   if (!graph.version.is_draft) {
     return (
       <div className="draftbar">
-        <VersionTabs versionId={versionId} isDraft={false} />
+        <div className="draftbar__row">
+          <div className="draftbar__left">
+            <VersionTabs versionId={versionId} isDraft={false} />
 
-        <div className="draftbar__status">
-          <strong>{versionLabel(graph.version)}</strong>
-          <span className="draftbar__note">
-            {graph.version.is_active ? "Live version" : "Published version"} — read
-            only. Edits are made on a proposal.
-            {changeRequest !== null && changeRequest.published_at !== null && (
-              <>
-                {" "}
-                Published {formatTimestamp(changeRequest.published_at)} from a proposal
-                by {changeRequest.created_by_email}.
-              </>
+            <div className="draftbar__status">
+              <span
+                className={`draftbar__dot draftbar__dot--${graph.version.is_active ? "live" : "muted"}`}
+              />
+              <strong>{versionLabel(graph.version)}</strong>
+              <span className="draftbar__note">
+                {graph.version.is_active ? "Live version" : "Published version"} — read
+                only. Edits are made on a proposal.
+                {changeRequest !== null && changeRequest.published_at !== null && (
+                  <>
+                    {" "}
+                    Published {formatTimestamp(changeRequest.published_at)} from a
+                    proposal by {changeRequest.created_by_email}.
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+
+          <div className="draftbar__right">
+            {/* Rollback (spec 4.10) -- only offered on a version that was
+                live before and has since been replaced. It already went
+                through a review on the way in, so this is the one route to
+                `is_active` that skips a fresh one: the recovery path for a
+                bad publish has to be a button, not a second round trip
+                through review while a respondent is being served something
+                wrong. Gated on the same publish grant as Propose/Spawn
+                below, not the edit one -- see `FlowToolActivateView`'s
+                docstring. */}
+            {!graph.version.is_active &&
+              (reviewRefused ? (
+                <p className="banner banner--warn">
+                  Your account can view this version but not activate it.
+                </p>
+              ) : (
+                <Cta
+                  primary
+                  title={activate.isPending ? "Activating…" : "Activate this version"}
+                  description="Puts this exact version back in front of respondents. No new review needed."
+                  disabled={activate.isPending}
+                  onClick={activateThisVersion}
+                />
+              ))}
+
+            {editRefused ? (
+              <p className="banner banner--warn">
+                Your account can view the flow tool but not propose changes.
+              </p>
+            ) : (
+              !proposing && (
+                <Cta
+                  primary
+                  title="Propose a change"
+                  description="A draft is a whole copy of this version. Several can be open at once."
+                  onClick={() => setProposing(true)}
+                />
+              )
             )}
-          </span>
+
+            {reviewRefused ? (
+              <p className="banner banner--warn">
+                Your account can view the flow tool but not spawn a product from it.
+              </p>
+            ) : (
+              !spawning && (
+                <Cta
+                  title="Spawn a product"
+                  description="Copies this version into a brand-new questionnaire, live immediately."
+                  onClick={() => setSpawning(true)}
+                />
+              )
+            )}
+          </div>
         </div>
 
-        {/* Rollback (spec 4.10) -- only offered on a version that was live
-            before and has since been replaced. It already went through a
-            review on the way in, so this is the one route to `is_active`
-            that skips a fresh one: the recovery path for a bad publish has
-            to be a button, not a second round trip through review while a
-            respondent is being served something wrong. Gated on the same
-            publish grant as Publish/Spawn below, not the edit one -- see
-            `FlowToolActivateView`'s docstring. */}
-        {!graph.version.is_active &&
-          (reviewRefused ? (
-            <p className="banner banner--warn">
-              Your account can view this version but not activate it.
-            </p>
-          ) : (
-            <span className="draftbar__pair">
-              <button
-                className="button button--primary"
-                type="button"
-                disabled={activate.isPending}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      `Activate ${versionLabel(graph.version)}? It goes live immediately, replacing whatever is live now, with no new review round.`,
-                    )
-                  ) {
-                    return;
-                  }
-                  activate.mutate(undefined, { onError: onReviewError });
-                }}
-              >
-                {activate.isPending ? "Activating…" : "Activate this version"}
-              </button>
-              <span className="draftbar__note">
-                Puts this exact version back in front of respondents. No new review --
-                it already went through one before it was replaced.
-              </span>
-            </span>
-          ))}
-
-        {editRefused ? (
-          <p className="banner banner--warn">
-            Your account can view the flow tool but not propose changes.
-          </p>
-        ) : proposing ? (
+        {proposing && (
           <form className="draftbar__form" onSubmit={startProposal}>
             <div className="field field--inline">
               <label htmlFor={labelId}>Name</label>
@@ -225,35 +286,9 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
               Cancel
             </button>
           </form>
-        ) : (
-          // Paired in one flex item rather than left as two siblings: with
-          // the tabs and the spawn button+note also competing for this row,
-          // a plain sibling note would wrap onto its own line separately
-          // from the button it explains, landing at the far left looking
-          // orphaned rather than staying under the button it describes.
-          <span className="draftbar__pair">
-            <button
-              className="button button--primary"
-              type="button"
-              onClick={() => setProposing(true)}
-            >
-              Propose a change
-            </button>
-            {/* Several drafts may be open against one questionnaire, so
-                this is not a one-at-a-time button. What is refused is
-                publishing a draft the live version has moved out from
-                under -- see the staleness banner below. */}
-            <span className="draftbar__note">
-              A draft is a whole copy of this version. Several can be open at once.
-            </span>
-          </span>
         )}
 
-        {reviewRefused ? (
-          <p className="banner banner--warn">
-            Your account can view the flow tool but not spawn a product from it.
-          </p>
-        ) : spawning ? (
+        {spawning && (
           <form className="draftbar__form" onSubmit={startSpawn}>
             <div className="field field--inline">
               <label htmlFor={spawnNameId}>Name</label>
@@ -294,18 +329,6 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
               Cancel
             </button>
           </form>
-        ) : (
-          <span className="draftbar__pair">
-            <button className="button" type="button" onClick={() => setSpawning(true)}>
-              Spawn a product
-            </button>
-            {/* A product, not a draft: it goes live the moment it exists,
-                with no review round, and there is no merge back into
-                this timeline -- see `editing.spawn_product`. */}
-            <span className="draftbar__note">
-              Copies this version into a brand-new questionnaire, live immediately.
-            </span>
-          </span>
         )}
 
         {error !== null && (
@@ -322,7 +345,11 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   if (changeRequest === null) {
     return (
       <div className="draftbar draftbar--draft">
-        <VersionTabs versionId={versionId} isDraft={true} />
+        <div className="draftbar__row">
+          <div className="draftbar__left">
+            <VersionTabs versionId={versionId} isDraft={true} />
+          </div>
+        </div>
 
         <p className="banner banner--warn">
           This version is a draft with no proposal attached, which should not be
@@ -348,18 +375,76 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
 
   return (
     <div className="draftbar draftbar--draft">
-      <VersionTabs versionId={versionId} isDraft={true} />
+      <div className="draftbar__row">
+        <div className="draftbar__left">
+          <VersionTabs versionId={versionId} isDraft={true} />
 
-      <div className="draftbar__status">
-        <strong>
-          {versionLabel(graph.version)} —{" "}
-          {statusLabel(changeRequest.status).toLowerCase()}
-        </strong>
-        <span className="draftbar__note">
-          {statusMeaning(changeRequest.status)} Proposed by{" "}
-          {changeRequest.created_by_email}
-          {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
-        </span>
+          <div className="draftbar__status">
+            <span className="draftbar__dot draftbar__dot--draft" />
+            <strong>
+              {versionLabel(graph.version)} —{" "}
+              {statusLabel(changeRequest.status).toLowerCase()}
+            </strong>
+            <span className="draftbar__note">
+              {statusMeaning(changeRequest.status)} Proposed by{" "}
+              {changeRequest.created_by_email}
+              {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
+            </span>
+          </div>
+        </div>
+
+        <div className="draftbar__right">
+          <Link className="button button--quiet" to={`/versions/${versionId}/review`}>
+            {isOpen ? "Check the diff" : "Review and publish"}
+          </Link>
+
+          {isOpen && (
+            <>
+              <button
+                className="button button--primary"
+                type="button"
+                disabled={busy || editRefused}
+                onClick={() => submitDraft.mutate(undefined, { onError: onWriteError })}
+              >
+                Submit for review
+              </button>
+              <button
+                className="button button--danger"
+                type="button"
+                disabled={busy || editRefused}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      "Discard this draft? The proposal and every edit in it are deleted.",
+                    )
+                  ) {
+                    return;
+                  }
+                  discardDraft.mutate(versionId, {
+                    onError: onWriteError,
+                    onSuccess: () =>
+                      onOpenVersion(graph.version.parent_version ?? versionId),
+                  });
+                }}
+              >
+                Discard draft
+              </button>
+            </>
+          )}
+
+          {isFrozen && (
+            <button
+              className="button"
+              type="button"
+              disabled={busy || editRefused}
+              onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
+            >
+              {changeRequest.status === "approved"
+                ? "Withdraw (drops the approval)"
+                : "Withdraw"}
+            </button>
+          )}
+        </div>
       </div>
 
       {graph.version.is_stale && (
@@ -404,59 +489,6 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
           Your account can view this proposal but not change it.
         </p>
       )}
-
-      <div className="draftbar__actions">
-        <Link className="button button--quiet" to={`/versions/${versionId}/review`}>
-          {isOpen ? "Check the diff" : "Review and publish"}
-        </Link>
-
-        {isOpen && (
-          <>
-            <button
-              className="button button--primary"
-              type="button"
-              disabled={busy || editRefused}
-              onClick={() => submitDraft.mutate(undefined, { onError: onWriteError })}
-            >
-              Submit for review
-            </button>
-            <button
-              className="button button--danger"
-              type="button"
-              disabled={busy || editRefused}
-              onClick={() => {
-                if (
-                  !window.confirm(
-                    "Discard this draft? The proposal and every edit in it are deleted.",
-                  )
-                ) {
-                  return;
-                }
-                discardDraft.mutate(versionId, {
-                  onError: onWriteError,
-                  onSuccess: () =>
-                    onOpenVersion(graph.version.parent_version ?? versionId),
-                });
-              }}
-            >
-              Discard draft
-            </button>
-          </>
-        )}
-
-        {isFrozen && (
-          <button
-            className="button"
-            type="button"
-            disabled={busy || editRefused}
-            onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
-          >
-            {changeRequest.status === "approved"
-              ? "Withdraw (drops the approval)"
-              : "Withdraw"}
-          </button>
-        )}
-      </div>
 
       {error !== null && (
         <p className="banner banner--error" role="alert">

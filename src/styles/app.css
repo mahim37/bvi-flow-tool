@@ -1227,10 +1227,9 @@ details[open] > summary > .chevron {
 
 .draftbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -1240,10 +1239,60 @@ details[open] > summary > .chevron {
   border-bottom: 2px solid var(--accent);
 }
 
+/* Tabs and the version's own status on the left, its actions pushed to
+ * the right -- one row when there's room, wrapping to two when there
+ * isn't, with banners/forms/errors as full-width children below it. */
+.draftbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draftbar__left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-width: 0;
+}
+
+.draftbar__right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
 .draftbar__status {
   display: flex;
-  flex-direction: column;
-  min-width: 240px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Live/draft/superseded, as a colour separate from the text beside it --
+ * the version name and note already carry the words, so this is a glance-
+ * able accent rather than the only way to tell the states apart. */
+.draftbar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.draftbar__dot--live {
+  background: var(--green);
+}
+
+.draftbar__dot--draft {
+  background: var(--gold);
+}
+
+.draftbar__dot--muted {
+  background: var(--text-muted);
 }
 
 .draftbar__note {
@@ -1251,20 +1300,39 @@ details[open] > summary > .chevron {
   color: var(--text-muted);
 }
 
-/* A button and the note explaining it, kept as one flex item -- this row
- * already has the tabs and the version status competing for width, so a
- * note left as a plain sibling wraps onto its own line independently of
- * its button, landing at the far left looking orphaned instead of staying
- * under the button it describes. */
-.draftbar__pair {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+/* Self-describing buttons: the explanation lives inside the button it
+ * belongs to (a title line plus a smaller description line), rather than
+ * beside it as a separate element -- so nothing can wrap away from the
+ * control it describes on a narrow row. */
+.draftbar__cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 18px;
+  border-radius: var(--radius-lg);
+  min-width: 200px;
+  text-align: left;
+  white-space: normal;
 }
 
-.draftbar__form,
-.draftbar__actions {
+.draftbar__cta-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.draftbar__cta-desc {
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.draftbar__cta.button--primary .draftbar__cta-desc {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.draftbar__form {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -1524,36 +1592,39 @@ details[open] > summary > .chevron {
    The three screens on one version. Real links rather than local state,
    so each is a URL somebody can send. */
 
-/* Lives inside `.draftbar` now (one merged bar instead of a tabs strip
- * stacked above a separate status/actions strip) -- no background or
- * border of its own, just a divider against whatever sits next to it. */
+/* Lives inside `.draftbar__left` now (one merged bar instead of a tabs
+ * strip stacked above a separate status/actions strip) -- a segmented
+ * control (a track plus a raised pill for whichever tab is current)
+ * rather than an underline, so it reads as chrome rather than as another
+ * row of page content competing with the version status beside it. */
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
-  padding-right: 16px;
-  border-right: 1px solid var(--border-strong);
+  padding: 2px;
+  background: var(--bg-2);
+  border-radius: 999px;
 }
 
 .tabs__tab {
-  padding: 8px 14px;
+  padding: 5px 14px;
+  border-radius: 999px;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
   text-decoration: none;
-  border-bottom: 3px solid transparent;
 }
 
 .tabs__tab:hover {
   color: var(--text);
-  background: var(--bg-2);
 }
 
-/* Colour is not the only signal: the current tab also carries a weight
-   change and a rule beneath it (spec 4.11). */
+/* Colour is not the only signal: the current tab is also raised off the
+   track -- a filled pill with its own shadow (spec 4.11). */
 .tabs__tab.active {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ---------- a full-width screen ---------- */
