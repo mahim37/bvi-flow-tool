@@ -1486,30 +1486,35 @@ details[open] > summary > .chevron {
   cursor: pointer;
 }
 
+/* A white card with a coloured left stripe, not a fully-tinted box -- the
+   old tinted background read fine on the page's own cream, but on top of
+   the draft bar's matching tan (`--info-bg`, the same token both used) an
+   info banner all but disappeared into it, leaving just a stark border.
+   White pops against either. */
 .banner {
   margin: 8px 0 0;
   padding: 10px 14px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  box-shadow: var(--shadow-sm);
   font-size: 0.88rem;
 }
 
-/* Each banner keeps its border and its wording; colour is the faster
-   signal, never the only one. */
+/* Each banner keeps its stripe colour and its wording; colour is the
+   faster signal, never the only one. */
 .banner--error {
-  background: var(--error-bg);
-  border-color: var(--danger);
+  border-left-color: var(--danger);
   color: var(--danger);
 }
 
 .banner--warn {
-  background: var(--warn-bg);
-  border-color: var(--warn-border);
+  border-left-color: var(--warn-border);
 }
 
 .banner--info {
-  background: var(--info-bg);
-  border-color: var(--accent);
+  border-left-color: var(--accent-2);
 }
 
 .banner p {
