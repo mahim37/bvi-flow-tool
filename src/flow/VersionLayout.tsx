@@ -1,11 +1,5 @@
 import { useEffect, useMemo } from "react";
-import {
-  NavLink,
-  Outlet,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useGraph, useProposals, useVersions } from "../api/queries";
@@ -295,24 +289,6 @@ export function VersionLayout() {
           </button>
         </div>
       </header>
-
-      {graph.data !== undefined && (
-        <nav className="tabs" aria-label="Version views">
-          <NavLink end to={`/versions/${versionId}`} className="tabs__tab">
-            Map
-          </NavLink>
-          {/* Shown for a published version too, where the same diff
-              answers "what did this release change" against the version
-              it superseded. That is the history half of spec 4.10, and it
-              needs no endpoint the review screen does not already call. */}
-          <NavLink to={`/versions/${versionId}/review`} className="tabs__tab">
-            {graph.data.version.is_draft ? "Review" : "What changed"}
-          </NavLink>
-          <NavLink to={`/versions/${versionId}/preview`} className="tabs__tab">
-            Preview
-          </NavLink>
-        </nav>
-      )}
 
       {versions.isError &&
         !(versionsError instanceof ApiError && versionsError.isForbidden) && (

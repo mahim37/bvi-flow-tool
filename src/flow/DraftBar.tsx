@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 
 import type { Graph, UUID } from "../api/types";
 import {
@@ -21,6 +21,30 @@ import {
 interface DraftBarProps {
   graph: Graph;
   onOpenVersion: (versionId: UUID) => void;
+}
+
+/** Map/Review/Preview -- folded into this bar (VersionLayout no longer
+ * renders a separate tabs strip above it) so the version's own status and
+ * actions sit in the same row as the views on it, instead of two stacked
+ * bars. */
+function VersionTabs({ versionId, isDraft }: { versionId: UUID; isDraft: boolean }) {
+  return (
+    <nav className="tabs" aria-label="Version views">
+      <NavLink end to={`/versions/${versionId}`} className="tabs__tab">
+        Map
+      </NavLink>
+      {/* Shown for a published version too, where the same diff answers
+          "what did this release change" against the version it superseded.
+          That is the history half of spec 4.10, and it needs no endpoint
+          the review screen does not already call. */}
+      <NavLink to={`/versions/${versionId}/review`} className="tabs__tab">
+        {isDraft ? "Review" : "What changed"}
+      </NavLink>
+      <NavLink to={`/versions/${versionId}/preview`} className="tabs__tab">
+        Preview
+      </NavLink>
+    </nav>
+  );
 }
 
 export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
@@ -103,6 +127,8 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   if (!graph.version.is_draft) {
     return (
       <div className="draftbar">
+        <VersionTabs versionId={versionId} isDraft={false} />
+
         <div className="draftbar__status">
           <strong>{versionLabel(graph.version)}</strong>
           <span className="draftbar__note">
@@ -158,7 +184,12 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             </button>
           </form>
         ) : (
-          <>
+          // Paired in one flex item rather than left as two siblings: with
+          // the tabs and the spawn button+note also competing for this row,
+          // a plain sibling note would wrap onto its own line separately
+          // from the button it explains, landing at the far left looking
+          // orphaned rather than staying under the button it describes.
+          <span className="draftbar__pair">
             <button
               className="button button--primary"
               type="button"
@@ -173,7 +204,7 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             <span className="draftbar__note">
               A draft is a whole copy of this version. Several can be open at once.
             </span>
-          </>
+          </span>
         )}
 
         {reviewRefused ? (
@@ -222,7 +253,7 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             </button>
           </form>
         ) : (
-          <>
+          <span className="draftbar__pair">
             <button className="button" type="button" onClick={() => setSpawning(true)}>
               Spawn a product
             </button>
@@ -232,7 +263,7 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             <span className="draftbar__note">
               Copies this version into a brand-new questionnaire, live immediately.
             </span>
-          </>
+          </span>
         )}
 
         {error !== null && (
@@ -249,6 +280,8 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
   if (changeRequest === null) {
     return (
       <div className="draftbar draftbar--draft">
+        <VersionTabs versionId={versionId} isDraft={true} />
+
         <p className="banner banner--warn">
           This version is a draft with no proposal attached, which should not be
           possible. Nothing here can be edited safely.
@@ -273,6 +306,8 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
 
   return (
     <div className="draftbar draftbar--draft">
+      <VersionTabs versionId={versionId} isDraft={true} />
+
       <div className="draftbar__status">
         <strong>
           {versionLabel(graph.version)} —{" "}

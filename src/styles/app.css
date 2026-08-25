@@ -1251,6 +1251,18 @@ details[open] > summary > .chevron {
   color: var(--text-muted);
 }
 
+/* A button and the note explaining it, kept as one flex item -- this row
+ * already has the tabs and the version status competing for width, so a
+ * note left as a plain sibling wraps onto its own line independently of
+ * its button, landing at the far left looking orphaned instead of staying
+ * under the button it describes. */
+.draftbar__pair {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .draftbar__form,
 .draftbar__actions {
   display: flex;
@@ -1512,22 +1524,24 @@ details[open] > summary > .chevron {
    The three screens on one version. Real links rather than local state,
    so each is a URL somebody can send. */
 
+/* Lives inside `.draftbar` now (one merged bar instead of a tabs strip
+ * stacked above a separate status/actions strip) -- no background or
+ * border of its own, just a divider against whatever sits next to it. */
 .tabs {
   display: flex;
   gap: 4px;
-  padding: 0 20px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  padding-right: 16px;
+  border-right: 1px solid var(--border-strong);
 }
 
 .tabs__tab {
-  padding: 10px 16px;
+  padding: 8px 14px;
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--text-muted);
   text-decoration: none;
   border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
 }
 
 .tabs__tab:hover {
