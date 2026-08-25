@@ -21,10 +21,9 @@ interface QuestionEditorProps {
 }
 
 /** The fields as they currently stand, for a form that starts from them
- * and sends only what moved. `prompt` is not here -- it is edited inline
- * in `DetailPanel`'s header now, matching break-backend's own edit-in-
- * place affordance for question text. */
+ * and sends only what moved. */
 interface Draft {
+  prompt: string;
   code: string;
   answer_type: AnswerType;
   is_required: boolean;
@@ -33,6 +32,7 @@ interface Draft {
 
 function draftOf(question: Question): Draft {
   return {
+    prompt: question.prompt,
     code: question.code,
     answer_type: question.answer_type,
     is_required: question.is_required,
@@ -40,19 +40,31 @@ function draftOf(question: Question): Draft {
   };
 }
 
+/** Sits right next to the question text in `DetailPanel`'s header: closed
+ * by default (just the text plus an "Edit" button, break-backend's own
+ * affordance for the text alone), opening into one combined form for
+ * every editable field on the question -- text included -- rather than a
+ * quick inline text editor plus a second, always-open "Edit this
+ * question" section further down the panel for everything else. One
+ * control, one place, next to the thing it edits. */
 export function QuestionEditor({ graph, question }: QuestionEditorProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const updateQuestion = useUpdateQuestion(versionId);
   const reorderQuestions = useReorderQuestions(versionId);
 
+  const promptId = useId();
   const codeId = useId();
   const typeId = useId();
   const sectionId = useId();
   const requiredId = useId();
 
+  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => draftOf(question));
-  useEffect(() => setDraft(draftOf(question)), [question]);
+  useEffect(() => {
+    setDraft(draftOf(question));
+    setEditing(false);
+  }, [question]);
 
   const sections = useMemo(
     () =>
@@ -85,6 +97,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
    * inherited. */
   function changed(): QuestionChanges {
     const changes: QuestionChanges = {};
+    if (draft.prompt !== question.prompt) changes.prompt = draft.prompt;
     if (draft.code !== question.code) changes.code = draft.code;
     if (draft.answer_type !== question.answer_type) {
       changes.answer_type = draft.answer_type;
@@ -120,121 +133,144 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
     );
 
   return (
-    <section className="panel__section" aria-labelledby="question-editor">
-      <h3 id="question-editor" className="panel__heading">
-        Edit this question
-      </h3>
+    <>
+      {editing ? (
+        <form
+          className="editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!dirty) return;
+            updateQuestion.mutate(
+              { questionId: question.id, changes },
+              { onError: onWriteError, onSuccess: () => setEditing(false) },
+            );
+          }}
+        >
+          <div className="field">
+            <label htmlFor={promptId}>Question text</label>
+            <textarea
+              id={promptId}
+              rows={3}
+              value={draft.prompt}
+              disabled={pending}
+              onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
+            />
+          </div>
 
-      <form
-        className="editor"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!dirty) return;
-          updateQuestion.mutate(
-            { questionId: question.id, changes },
-            { onError: onWriteError },
-          );
-        }}
-      >
-        <div className="field">
-          <label htmlFor={codeId}>Code</label>
-          <input
-            id={codeId}
-            value={draft.code}
-            disabled={pending}
-            onChange={(event) => setDraft({ ...draft, code: event.target.value })}
-          />
-          {/* Refused on anything this draft inherited, and that refusal is
-              the server's. A code is the identity that survives copying --
-              the review screen matches every item by it, because a draft is
-              a whole copy and every id in it is new -- so renaming an
-              inherited one would read as that item removed and a different
-              one added, carrying its options and edges with it. */}
-          <p className="panel__hint">
-            Editable only on something this draft introduced. Renaming an inherited code
-            reads as a removal and an addition in the review screen, so the server
-            refuses it — retire the question and add its replacement instead.
-          </p>
-        </div>
-
-        <div className="field">
-          <label htmlFor={typeId}>Answer type</label>
-          <select
-            id={typeId}
-            value={draft.answer_type}
-            disabled={pending}
-            onChange={(event) =>
-              setDraft({ ...draft, answer_type: event.target.value as AnswerType })
-            }
-          >
-            {ANSWER_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {answerTypeLabel(type)}
-              </option>
-            ))}
-          </select>
-          {losingGuards && (
-            // The silent-consequence case: the guards would stop matching,
-            // the flow would quietly fall to the question-level edge or
-            // end, and nothing downstream objects -- no target is dangling,
-            // so the publish gate says nothing. The server refuses it, and
-            // this says so before the refusal arrives.
-            <p className="panel__hint panel__hint--warn">
-              Per-option edges leave this question. An answer type that selects no
-              option would leave those guards unable to match, with nothing downstream
-              to catch it, so this change is refused until they are removed.
+          <div className="field">
+            <label htmlFor={codeId}>Code</label>
+            <input
+              id={codeId}
+              value={draft.code}
+              disabled={pending}
+              onChange={(event) => setDraft({ ...draft, code: event.target.value })}
+            />
+            {/* Refused on anything this draft inherited, and that refusal is
+                the server's. A code is the identity that survives copying --
+                the review screen matches every item by it, because a draft is
+                a whole copy and every id in it is new -- so renaming an
+                inherited one would read as that item removed and a different
+                one added, carrying its options and edges with it. */}
+            <p className="panel__hint">
+              Editable only on something this draft introduced. Renaming an inherited code
+              reads as a removal and an addition in the review screen, so the server
+              refuses it — retire the question and add its replacement instead.
             </p>
-          )}
-        </div>
+          </div>
 
-        <div className="field">
-          <label htmlFor={sectionId}>Section</label>
-          <select
-            id={sectionId}
-            value={draft.section}
-            disabled={pending}
-            onChange={(event) => setDraft({ ...draft, section: event.target.value })}
-          >
-            <option value={NO_SECTION}>No section</option>
-            {sections.map((section) => (
-              <option key={section.id} value={section.id}>
-                {section.name}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="field">
+            <label htmlFor={typeId}>Answer type</label>
+            <select
+              id={typeId}
+              value={draft.answer_type}
+              disabled={pending}
+              onChange={(event) =>
+                setDraft({ ...draft, answer_type: event.target.value as AnswerType })
+              }
+            >
+              {ANSWER_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {answerTypeLabel(type)}
+                </option>
+              ))}
+            </select>
+            {losingGuards && (
+              // The silent-consequence case: the guards would stop matching,
+              // the flow would quietly fall to the question-level edge or
+              // end, and nothing downstream objects -- no target is dangling,
+              // so the publish gate says nothing. The server refuses it, and
+              // this says so before the refusal arrives.
+              <p className="panel__hint panel__hint--warn">
+                Per-option edges leave this question. An answer type that selects no
+                option would leave those guards unable to match, with nothing downstream
+                to catch it, so this change is refused until they are removed.
+              </p>
+            )}
+          </div>
 
-        <div className="field field--check">
-          <input
-            id={requiredId}
-            type="checkbox"
-            checked={draft.is_required}
-            disabled={pending}
-            onChange={(event) =>
-              setDraft({ ...draft, is_required: event.target.checked })
-            }
-          />
-          <label htmlFor={requiredId}>Required</label>
-        </div>
+          <div className="field">
+            <label htmlFor={sectionId}>Section</label>
+            <select
+              id={sectionId}
+              value={draft.section}
+              disabled={pending}
+              onChange={(event) => setDraft({ ...draft, section: event.target.value })}
+            >
+              <option value={NO_SECTION}>No section</option>
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="editor__actions">
+          <div className="field field--check">
+            <input
+              id={requiredId}
+              type="checkbox"
+              checked={draft.is_required}
+              disabled={pending}
+              onChange={(event) =>
+                setDraft({ ...draft, is_required: event.target.checked })
+              }
+            />
+            <label htmlFor={requiredId}>Required</label>
+          </div>
+
+          <div className="editor__actions">
+            <button
+              className="button button--primary"
+              type="submit"
+              disabled={pending || !dirty}
+            >
+              {updateQuestion.isPending ? "Saving…" : "Save changes"}
+            </button>
+            <button
+              className="button button--quiet"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setDraft(draftOf(question));
+                setEditing(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="d-question">
+          {question.prompt}{" "}
           <button
-            className="button button--primary"
-            type="submit"
-            disabled={pending || !dirty}
-          >
-            {updateQuestion.isPending ? "Saving…" : "Save changes"}
-          </button>
-          <button
-            className="button button--quiet"
             type="button"
-            disabled={pending || !dirty}
-            onClick={() => setDraft(draftOf(question))}
+            className="opt-edit-btn d-edit-btn"
+            onClick={() => setEditing(true)}
           >
-            Revert
+            Edit
           </button>
-        </div>
-      </form>
+        </p>
+      )}
 
       <div className="editor__row">
         <span className="editor__rowlabel">
@@ -270,6 +306,6 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
           {error}
         </p>
       )}
-    </section>
+    </>
   );
 }

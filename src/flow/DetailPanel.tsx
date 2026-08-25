@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { useArchiveQuestion, useUpdateQuestion } from "../api/queries";
+import { useArchiveQuestion } from "../api/queries";
 import type { Edge, Graph, Question, UUID } from "../api/types";
 import { EdgeEditor } from "./EdgeEditor";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
@@ -51,87 +51,6 @@ function SubHeading({
     <h3 id={id} className="d-sub">
       {children} <span className="count">{count}</span>
     </h3>
-  );
-}
-
-/** The question text, edited in place -- ported from break-backend's own
- * affordance for it (an "Edit" button on the read view swaps it for a
- * textarea with Save/Cancel, `data-edit-question`/`data-save-question` and
- * `.content-edit-form` in app.js/styles.css). Everything else about a
- * question (code, answer type, section, required) still goes through
- * `QuestionEditor`'s persistent form below; only the text -- the thing
- * somebody is already looking at right here -- gets the quick, in-place
- * path. */
-function PromptEditor({ versionId, question }: { versionId: UUID; question: Question }) {
-  const onWriteError = useWriteErrorHandler();
-  const updateQuestion = useUpdateQuestion(versionId);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(question.prompt);
-
-  useEffect(() => {
-    setDraft(question.prompt);
-    setEditing(false);
-  }, [question.id, question.prompt]);
-
-  if (!editing) {
-    return (
-      <p className="d-question">
-        {question.prompt}{" "}
-        <button
-          type="button"
-          className="opt-edit-btn d-edit-btn"
-          onClick={() => setEditing(true)}
-        >
-          Edit
-        </button>
-      </p>
-    );
-  }
-
-  const dirty = draft !== question.prompt;
-  const error = writeErrorMessage(updateQuestion.error);
-
-  return (
-    <div className="content-edit-form">
-      <label htmlFor="prompt-edit">Question text</label>
-      <textarea
-        id="prompt-edit"
-        value={draft}
-        disabled={updateQuestion.isPending}
-        onChange={(event) => setDraft(event.target.value)}
-      />
-      <div className="edit-actions">
-        <button
-          type="button"
-          className="opt-edit-btn active"
-          disabled={updateQuestion.isPending || !dirty}
-          onClick={() =>
-            updateQuestion.mutate(
-              { questionId: question.id, changes: { prompt: draft } },
-              { onError: onWriteError, onSuccess: () => setEditing(false) },
-            )
-          }
-        >
-          {updateQuestion.isPending ? "Saving…" : "Save"}
-        </button>
-        <button
-          type="button"
-          className="opt-edit-btn"
-          disabled={updateQuestion.isPending}
-          onClick={() => {
-            setDraft(question.prompt);
-            setEditing(false);
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-      {error !== null && (
-        <p className="banner banner--error" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -316,7 +235,7 @@ export function DetailPanel({
       <header className="panel__header">
         <div className="d-id">{question.code}</div>
         {editable && live ? (
-          <PromptEditor versionId={graph.version.id} question={question} />
+          <QuestionEditor graph={graph} question={question} />
         ) : (
           <p className="d-question">{question.prompt}</p>
         )}
@@ -350,15 +269,12 @@ export function DetailPanel({
           guaranteed refusal. Discarding the draft is how an archival made
           by mistake is undone. */}
       {editable && live && (
-        <>
-          <OptionEditor
-            graph={graph}
-            question={question}
-            editable={editable}
-            onSelectQuestion={onSelectQuestion}
-          />
-          <QuestionEditor graph={graph} question={question} />
-        </>
+        <OptionEditor
+          graph={graph}
+          question={question}
+          editable={editable}
+          onSelectQuestion={onSelectQuestion}
+        />
       )}
 
       <EdgeEditor
