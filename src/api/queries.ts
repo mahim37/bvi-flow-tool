@@ -197,10 +197,27 @@ export function useReorderEdges(versionId: UUID) {
   });
 }
 
+/** Populates the "Submit for review" form's two reviewer pickers.
+ * Unpaginated, like `useVersions`: the eligible group is a handful of
+ * people, not a list that grows without bound. */
+export function useReviewers() {
+  return useQuery({
+    queryKey: ["reviewers"] as const,
+    queryFn: ({ signal }) => api.listReviewers(signal),
+    retry: retryUnlessRefused,
+  });
+}
+
 export function useSubmitDraft(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: () => api.submitDraft(versionId),
+    mutationFn: ({
+      reviewer1Id,
+      reviewer2Id,
+    }: {
+      reviewer1Id: UUID;
+      reviewer2Id: UUID;
+    }) => api.submitDraft(versionId, reviewer1Id, reviewer2Id),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }

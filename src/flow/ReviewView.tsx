@@ -117,6 +117,20 @@ export function ReviewView() {
   const isAuthor =
     changeRequest !== null && changeRequest.created_by_email === identity?.email;
 
+  // A `publish_flow_tool` holder who is not one of the two people this
+  // proposal actually named is refused the same way the author is --
+  // `editing.approve`/`editing.reject` both raise `NotANamedReviewerError`
+  // for exactly this case. Checked client-side for the same reason
+  // `DraftBar.tsx`'s `isAuthor` gate on Discard/Withdraw is: an offered
+  // button that then 403s would be read by `useWriteErrorHandler` as "this
+  // account lacks the publish grant," hiding every review control app-wide
+  // for the rest of the session instead of naming the real reason.
+  const isNamedReviewer =
+    changeRequest !== null &&
+    identity !== null &&
+    (changeRequest.reviewer_1_email === identity.email ||
+      changeRequest.reviewer_2_email === identity.email);
+
   const canApprove = status === "submitted";
   // Reject reaches an approved proposal too, not just a submitted one --
   // it is a reviewer's own way to reverse an approval they've changed
@@ -168,6 +182,13 @@ export function ReviewView() {
             {changeRequest.published_at !== null &&
               `. Published ${formatTimestamp(changeRequest.published_at)}`}
           </p>
+          {changeRequest.reviewer_1_email !== null &&
+            changeRequest.reviewer_2_email !== null && (
+              <p className="review__meta">
+                Reviewers: {changeRequest.reviewer_1_email} and{" "}
+                {changeRequest.reviewer_2_email}
+              </p>
+            )}
         </div>
       )}
 
@@ -270,12 +291,21 @@ export function ReviewView() {
           {canReject && !canApprove && isAuthor && (
             <p className="banner banner--warn">
               This is your own proposal, so you cannot send it back either, even now
-              that it is approved. Withdrawing it is yours to do instead, from the map --
-              that also drops the approval.
+              that it is approved. Withdrawing it is yours to do instead, from the map
+              -- that also drops the approval.
             </p>
           )}
 
-          {canReject && !isAuthor && (
+          {canReject && !isAuthor && !isNamedReviewer && changeRequest !== null && (
+            <p className="banner banner--warn">
+              You hold the publish grant, but this proposal named two other people as
+              its reviewers: {changeRequest.reviewer_1_email ?? "someone"} and{" "}
+              {changeRequest.reviewer_2_email ?? "someone"}. Only they can approve or
+              send it back.
+            </p>
+          )}
+
+          {canReject && !isAuthor && isNamedReviewer && (
             <div className="review__forms">
               {canApprove && (
                 <form
@@ -356,8 +386,7 @@ export function ReviewView() {
                   This returns the proposal to open so its author can work on it again.
                   {!canApprove &&
                     " It also withdraws the approval you're reversing."}{" "}
-                  Your note is kept with it and cannot be overwritten by a
-                  resubmission.
+                  Your note is kept with it and cannot be overwritten by a resubmission.
                 </p>
               </form>
             </div>

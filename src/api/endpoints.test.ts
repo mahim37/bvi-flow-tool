@@ -60,6 +60,16 @@ describe("paths", () => {
   });
 });
 
+describe("submit", () => {
+  it("names the two reviewers in the body", async () => {
+    await api.submitDraft("v1", "r1", "r2");
+
+    const call = lastCall();
+    expect(call.url).toBe("/api/staff/flow-tool/versions/v1/submit/");
+    expect(call.body).toEqual({ reviewer_1: "r1", reviewer_2: "r2" });
+  });
+});
+
 describe("edge updates", () => {
   it("sends only the end being moved", async () => {
     // `FlowToolEdgeUpdateSerializer` has no defaults, so an absent key

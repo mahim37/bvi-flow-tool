@@ -179,6 +179,14 @@ export interface Lock {
   since: Timestamp;
 }
 
+/** One person eligible to be named a reviewer on `submit`: holds
+ * `publish_flow_tool`. Minimal on purpose -- this only populates the
+ * picker, it doesn't describe the person any further. */
+export interface Reviewer {
+  id: UUID;
+  email: string;
+}
+
 /**
  * One reviewer's verdict on one submission of a proposal.
  *
@@ -216,6 +224,16 @@ export interface ChangeRequest {
    */
   published_by: UUID | null;
   published_by_email: string | null;
+  /**
+   * The two people who must both clear this proposal before it can
+   * publish. Null until `submit` names them, and null again once
+   * `withdraw`/`reject` reopen the proposal -- a resubmission has to name
+   * them again, same as `submitted_at`.
+   */
+  reviewer_1: UUID | null;
+  reviewer_1_email: string | null;
+  reviewer_2: UUID | null;
+  reviewer_2_email: string | null;
   /** Null when unheld *or* when the held lock has gone idle -- the server
    * decides which, through `editing.lock_holder`, so the banner and the
    * next write agree about whether somebody is really in there. */
