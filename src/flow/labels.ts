@@ -64,6 +64,15 @@ export function optionLabel(
   return option ? option.label : "Unknown option";
 }
 
+/** The instruction shown above a preview question's answers -- ported
+ * from break-backend's own preview-walkthrough copy. Takes `isMulti`
+ * rather than the full `AnswerType`: a free-text/scale answer selects no
+ * option at all, and `PreviewView` explains that separately instead of
+ * misusing this for something it doesn't do. */
+export function previewInstruction(isMulti: boolean): string {
+  return isMulti ? "Please select all that apply." : "Please select one option.";
+}
+
 export function formatTimestamp(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;

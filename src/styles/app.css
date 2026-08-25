@@ -1797,7 +1797,21 @@ details[open] > summary > .chevron {
   align-items: start;
 }
 
-.preview__current,
+/* Ported from break-backend's `.preview-stage`/`.preview-shell`
+ * (question_graph_editor/styles.css ~L1250-1437) -- styled to look like
+ * the real end-user questionnaire rather than this tool's own admin
+ * chrome, so what an author sees here is what a respondent would
+ * actually be shown, logo included. `--bg` already is break's literal
+ * stage colour (`#faf5ec`), so the card needs no new colour of its own. */
+.preview__current {
+  position: relative;
+  min-height: 420px;
+  padding: 56px 40px 20px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
 .preview__path {
   padding: 16px;
   background: var(--surface);
@@ -1805,6 +1819,16 @@ details[open] > summary > .chevron {
   border-radius: var(--radius-lg);
 }
 
+.preview__logo {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  height: 32px;
+  width: auto;
+}
+
+/* Kept as-is -- shared with the "route so far" list below, which is not
+ * part of this port. */
 .preview__code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 700;
@@ -1813,45 +1837,103 @@ details[open] > summary > .chevron {
   padding: 1px 6px;
 }
 
-.preview__prompt {
-  font-size: 1.05rem;
-  margin: 8px 0;
+.preview__question-code {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.preview__question {
+  margin: 4px 0 8px;
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.preview__subtitle {
+  margin: 0 0 24px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
 }
 
 .preview__options {
   list-style: none;
-  margin: 12px 0;
+  margin: 0 0 20px;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
+/* The pill itself is break's `.preview-option`; the native radio/checkbox
+ * stays visible inside it (rather than break's plain button, which relies
+ * on the selected pill's colour alone) so the checked state is never
+ * colour-only, matching this app's accessibility stance (CLAUDE.md). */
 .preview__option {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 20px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.95rem;
   cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .preview__option:hover {
-  background: var(--bg-2);
+  border-color: var(--text-dim);
+}
+
+.preview__option--selected {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #ffffff;
 }
 
 .preview__option input {
   width: auto;
   margin: 0;
+  accent-color: var(--accent-2);
 }
 
-.preview__options li + li {
-  margin-top: 6px;
+.preview__next {
+  padding: 12px 28px;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .preview__actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-top: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+/* Break's persistent bottom bar (`.preview-toolbar`) -- Back/Restart are
+ * navigation chrome, not something tied to the current question, so they
+ * read as a separate footer rather than living inline with the answers. */
+.preview__toolbar {
+  display: flex;
+  gap: 10px;
+  margin: 24px -40px -20px;
+  padding: 16px 40px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .preview__steps {

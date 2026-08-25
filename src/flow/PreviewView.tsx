@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
+import predmindLogo from "../assets/predmind-logo.webp";
 import { ApiError } from "../api/client";
 import { usePreviewWalk } from "../api/queries";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { PreviewAnswer, PreviewState, QuestionRecord, UUID } from "../api/types";
 import { useVersionContext } from "./versionContext";
-import { answerTypeLabel, versionLabel } from "./labels";
+import { previewInstruction, versionLabel } from "./labels";
 
 /** What the walk stood on, so a reader can see the route rather than just
  * where it ended. Kept beside the answers because the payload names only
@@ -132,14 +133,20 @@ export function PreviewView() {
 
       <div className="preview__body">
         <section className="preview__current" aria-labelledby="preview-question">
+          {/* Ported from break-backend's own preview walkthrough
+              (question_graph_editor's `.preview-stage`/`.preview-logo`) --
+              the respondent's own logo, not this tool's admin chrome, so
+              this reads as what a respondent would actually be shown. */}
+          <img className="preview__logo" src={predmindLogo} alt="Predmind" />
+
           {state === null && walk.isPending && <p className="empty">Starting…</p>}
 
           {state?.is_complete === true && (
             <>
-              <h3 id="preview-question" className="panel__heading">
+              <h3 id="preview-question" className="preview__question">
                 The questionnaire ends here
               </h3>
-              <p className="empty">
+              <p className="preview__subtitle">
                 {steps.length === 0
                   ? "No question is served at all: this version has no live entry point."
                   : "Nothing routes onward from the last answer, so a respondent would be finished."}
@@ -149,44 +156,51 @@ export function PreviewView() {
 
           {question !== null && (
             <>
-              <h3 id="preview-question" className="panel__heading">
-                <code className="preview__code">{question.code}</code>
+              <p className="preview__question-code">{question.code}</p>
+              <h3 id="preview-question" className="preview__question">
+                {question.prompt}
               </h3>
-              <p className="preview__prompt">{question.prompt}</p>
-              <p className="panel__hint">
-                {answerTypeLabel(question.answer_type)}
-                {question.is_required ? " · required" : " · optional"}
-              </p>
 
               {isChoice ? (
-                <ul className="preview__options">
-                  {question.options.map((option) => (
-                    <li key={option.id}>
-                      <label className="preview__option">
-                        <input
-                          type={isMulti ? "checkbox" : "radio"}
-                          name="preview-answer"
-                          checked={chosen.includes(option.id)}
-                          onChange={() => toggle(option.id)}
-                        />
-                        <span>{option.label}</span>
-                        <code className="options__code">{option.code}</code>
-                      </label>
-                    </li>
-                  ))}
-                  {question.options.length === 0 && (
-                    <li className="empty">
-                      This question offers no options, so nothing can be selected and
-                      only a question-level edge can fire.
-                    </li>
-                  )}
-                </ul>
+                <>
+                  <p className="preview__subtitle">
+                    {previewInstruction(isMulti)}
+                    {question.is_required ? "" : " Optional — you can continue without picking one."}
+                  </p>
+                  <ul className="preview__options">
+                    {question.options.map((option) => {
+                      const selected = chosen.includes(option.id);
+                      return (
+                        <li key={option.id}>
+                          <label
+                            className={`preview__option${selected ? " preview__option--selected" : ""}`}
+                          >
+                            <input
+                              type={isMulti ? "checkbox" : "radio"}
+                              name="preview-answer"
+                              checked={selected}
+                              onChange={() => toggle(option.id)}
+                            />
+                            <span>{option.label}</span>
+                            <code className="options__code">{option.code}</code>
+                          </label>
+                        </li>
+                      );
+                    })}
+                    {question.options.length === 0 && (
+                      <li className="empty">
+                        This question offers no options, so nothing can be selected and
+                        only a question-level edge can fire.
+                      </li>
+                    )}
+                  </ul>
+                </>
               ) : (
                 // A free-text or scale answer selects no option at all, so
                 // there is nothing to type here that could change the
                 // route. Saying so is more honest than a text box whose
                 // contents the resolver would ignore.
-                <p className="panel__hint">
+                <p className="preview__subtitle">
                   Answers to this question select no option, so only a question-level
                   edge can fire. What a respondent writes does not change where the flow
                   goes.
@@ -195,7 +209,7 @@ export function PreviewView() {
 
               <div className="preview__actions">
                 <button
-                  className="button button--primary"
+                  className="button button--primary preview__next"
                   type="button"
                   disabled={walk.isPending || (isChoice && chosen.length === 0)}
                   onClick={answer}
@@ -206,7 +220,7 @@ export function PreviewView() {
             </>
           )}
 
-          <div className="preview__actions">
+          <div className="preview__toolbar">
             <button
               className="button"
               type="button"
