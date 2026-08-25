@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 
-import type { Graph, UUID } from "../api/types";
+import type { Graph, UUID, VersionListItem } from "../api/types";
 import {
   useActivateVersion,
   useCreateDraft,
@@ -24,6 +24,13 @@ import {
 
 interface DraftBarProps {
   graph: Graph;
+  /** Every version of the current questionnaire, drafts included --
+   * `editing.create_draft` refuses a second one while any of these has
+   * `is_draft: true`, so this is how "Propose a change" knows to offer
+   * a link to the existing one instead of a form the server would just
+   * 409 on. Already fetched and scoped to this product by
+   * `VersionLayout`; not a second request. */
+  versions: VersionListItem[];
   /** Null means "nowhere in particular" -- the version landing screen,
    * which picks a sensible default. Only `discard` ever passes it: every
    * other caller (propose, spawn) always has a real id, the thing it just
@@ -86,7 +93,7 @@ function Cta({
   );
 }
 
-export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
+export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   const { identity, editRefused, reviewRefused } = useAuth();
   const onWriteError = useWriteErrorHandler();
   const onReviewError = useReviewErrorHandler();
@@ -164,6 +171,13 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
     );
   }
 
+  // `editing.create_draft` refuses a second draft while one is already
+  // open for this questionnaire -- checked here so "Propose a change" can
+  // send an editor straight to the existing one instead of opening a form
+  // the server would just 409 on. `versions` is already scoped to this
+  // product, so there is nothing else to filter by.
+  const existingDraft = versions.find((version) => version.is_draft);
+
   // Branches on `is_draft`, not on whether a proposal exists. A published
   // version keeps the proposal it was published from -- that row is the
   // history of the change, and `graph/` still serves it -- so "has a
@@ -239,17 +253,40 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
               <p className="banner banner--warn">
                 Your account can view the flow tool but not propose changes.
               </p>
+            ) : existingDraft !== undefined ? (
+              // Only one draft may be open per questionnaire (spec:
+              // `editing.DraftAlreadyExistsError`) -- offering the form
+              // anyway would be a button that always 409s, the same
+              // reasoning every other disabled-vs-hidden control in this
+              // file already follows. Stays a pill in the row rather than
+              // becoming a banner: it is still one click to the thing that
+              // matters (the existing draft), just quieted and relabelled
+              // instead of swapped for a form.
+              <button
+                className="button button--quiet"
+                type="button"
+                title={`${versionLabel(existingDraft)} is already open. Only one draft may exist per product at a time.`}
+                onClick={() => onOpenVersion(existingDraft.id)}
+              >
+                Already a draft exists
+              </button>
             ) : (
-              <EditorDropdown trigger="Propose a change">
+              <EditorDropdown
+                trigger={
+                  <span className="draftbar__cta">
+                    <span className="draftbar__cta-title">Propose a change</span>
+                    <span className="draftbar__cta-desc">
+                      A draft is a whole copy of this version. Only one may be open per
+                      product at a time.
+                    </span>
+                  </span>
+                }
+              >
                 {(close) => (
                   <form
                     className="editor"
                     onSubmit={(event) => startProposal(event, close)}
                   >
-                    <p className="panel__hint">
-                      A draft is a whole copy of this version. Several can be open at
-                      once.
-                    </p>
                     <div className="field">
                       <label htmlFor={labelId}>Name</label>
                       <input
@@ -285,16 +322,22 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
                 Your account can view the flow tool but not spawn a product from it.
               </p>
             ) : (
-              <EditorDropdown trigger="Spawn a product">
+              <EditorDropdown
+                trigger={
+                  <span className="draftbar__cta">
+                    <span className="draftbar__cta-title">Spawn a product</span>
+                    <span className="draftbar__cta-desc">
+                      Copies this version into a brand-new questionnaire, live
+                      immediately.
+                    </span>
+                  </span>
+                }
+              >
                 {(close) => (
                   <form
                     className="editor"
                     onSubmit={(event) => startSpawn(event, close)}
                   >
-                    <p className="panel__hint">
-                      Copies this version into a brand-new questionnaire, live
-                      immediately.
-                    </p>
                     <div className="field">
                       <label htmlFor={spawnNameId}>Name</label>
                       <input

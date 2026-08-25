@@ -2232,6 +2232,13 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+/* A `Cta`-style two-line trigger (title + description, e.g. "Spawn a
+   product") supplies its own padding via `.draftbar__cta` -- drop the
+   summary's own so the two do not stack. */
+.editor-dropdown > summary:has(.draftbar__cta) {
+  padding: 0;
+}
+
 .editor-dropdown > summary::-webkit-details-marker {
   display: none;
 }

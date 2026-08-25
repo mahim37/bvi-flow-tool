@@ -318,6 +318,7 @@ export function VersionLayout() {
         <>
           <DraftBar
             graph={graph.data}
+            versions={versions.data ?? []}
             onOpenVersion={(next) =>
               navigate(next === null ? "/" : `/versions/${next}`)
             }
