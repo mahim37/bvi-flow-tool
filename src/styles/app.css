@@ -179,10 +179,6 @@ body {
   letter-spacing: 0.6px;
 }
 
-.stat--pending b {
-  color: var(--gold);
-}
-
 .topbar__picker {
   flex: 1;
   min-width: 0;

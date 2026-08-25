@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
-import { useGraph, useProposals, useVersions } from "../api/queries";
+import { useGraph, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { AddQuestion } from "./AddQuestion";
@@ -124,29 +124,6 @@ export function VersionLayout() {
     graphData.version.is_draft &&
     graphData.change_request?.status === "open";
 
-  // Ported from break-backend's "N pending" badge (#pendingCount) -- scoped
-  // to the current version's own product, the same scope break has (one
-  // flow tool, one product). `enabled` false rather than an `undefined`
-  // questionnaire filter, which would count proposals across every product.
-  //
-  // Called unconditionally, before the `isForbidden` early return just
-  // below -- every hook in a component has to run on every render no
-  // matter which branch that render takes, and a hook declared after an
-  // early return runs on some renders and not others. React does not
-  // tolerate that (it throws "Rendered fewer hooks than expected"), which
-  // is exactly what happened here once: an expired session answers 403
-  // indistinguishably from a real permission refusal (see
-  // `isUnauthenticated`'s docstring in client.ts), so this component hits
-  // that early return far more often than "genuinely lacks the grant"
-  // alone would suggest.
-  const pending = useProposals({
-    questionnaire: graphData?.version.questionnaire ?? null,
-    status: "submitted",
-  });
-  useEffect(() => {
-    if (pending.error) noteApiError(pending.error);
-  }, [pending.error, noteApiError]);
-
   const versionsError = versions.error;
   // `!isUnauthenticated`: an expired/invalid session answers this same
   // 403, and showing "you don't have permission" for that would be
@@ -196,16 +173,15 @@ export function VersionLayout() {
 
         {graphData !== undefined && (
           // Ported from break-backend's .stats pills (#stats) -- question
-          // count and pending-proposal count, at a glance without opening
-          // the sidebar or a tab.
+          // count at a glance without opening the sidebar or a tab. The
+          // "N pending" pill that used to sit beside this counted
+          // proposals across the whole product, not this version, which
+          // read as "stuck" once the one open here was dealt with --
+          // dropped rather than relabelled.
           <div className="topbar__stats">
             <div className="stat">
               <b>{graphData.questions.length}</b>
               <span>Questions</span>
-            </div>
-            <div className={pending.data?.count ? "stat stat--pending" : "stat"}>
-              <b>{pending.data?.count ?? 0}</b>
-              <span>Pending</span>
             </div>
           </div>
         )}
