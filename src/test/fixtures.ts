@@ -23,6 +23,7 @@ export const E_NO_TO_END = "cccccccc-0000-4000-8000-000000000002";
 export const E_Q2_TO_ARCHIVED = "cccccccc-0000-4000-8000-000000000003";
 export const E_Q2_DEAD = "cccccccc-0000-4000-8000-000000000004";
 export const E_Q4_TO_MISSING = "cccccccc-0000-4000-8000-000000000005";
+export const E_FOREIGN_TO_Q2 = "cccccccc-0000-4000-8000-000000000006";
 export const FOREIGN_QUESTION = "dddddddd-0000-4000-8000-000000000009";
 
 const option = (
@@ -193,6 +194,17 @@ export function makeGraph(overrides: Partial<Graph> = {}): Graph {
         id: E_Q4_TO_MISSING,
         from_question: Q4_UNREACHABLE,
         to_question: FOREIGN_QUESTION,
+        priority: 0,
+      }),
+      // The source end can be just as unresolvable as the target -- same
+      // foreign question, this time on the near side of the arrow.
+      // Cytoscape refuses outright to add an edge whose source isn't
+      // already an element, which is a canvas crash if nothing stands in
+      // for it.
+      edge({
+        id: E_FOREIGN_TO_Q2,
+        from_question: FOREIGN_QUESTION,
+        to_question: Q2,
         priority: 0,
       }),
     ],

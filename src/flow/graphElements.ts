@@ -207,18 +207,29 @@ export function buildElements(graph: Graph): ElementDefinition[] {
     elements.push({ data, group: "nodes" });
   }
 
-  const missingTargets = new Set<UUID>();
+  // Either end of an edge can name a question this payload doesn't
+  // contain -- `to_question` across versions is the documented case, but
+  // `from_question` is no more guaranteed to resolve, and Cytoscape
+  // refuses outright to add an edge whose source or target isn't an
+  // element it already has, crashing the whole canvas rather than just
+  // that one edge. Both get the same placeholder treatment, keyed by
+  // question id so a question missing on both ends still gets one node,
+  // not two.
+  const missingQuestionIds = new Set<UUID>();
   for (const edge of graph.edges) {
+    if (!questionsById.has(edge.from_question)) {
+      missingQuestionIds.add(edge.from_question);
+    }
     if (edge.to_question !== null && !questionsById.has(edge.to_question)) {
-      missingTargets.add(edge.to_question);
+      missingQuestionIds.add(edge.to_question);
     }
   }
-  for (const targetId of missingTargets) {
+  for (const missingId of missingQuestionIds) {
     const data: NodeData = {
-      id: missingNodeId(targetId),
+      id: missingNodeId(missingId),
       kind: "missing",
       label: "Unknown question",
-      prompt: `This version has no question with id ${targetId}.`,
+      prompt: `This version has no question with id ${missingId}.`,
       sectionColor: NO_SECTION_COLOR,
       badgeKind: null,
       isEntry: false,
@@ -249,6 +260,9 @@ export function buildElements(graph: Graph): ElementDefinition[] {
   }
 
   for (const edge of graph.edges) {
+    const source = questionsById.has(edge.from_question)
+      ? edge.from_question
+      : missingNodeId(edge.from_question);
     const target =
       edge.to_question === null
         ? END_NODE_ID
@@ -257,7 +271,7 @@ export function buildElements(graph: Graph): ElementDefinition[] {
           : missingNodeId(edge.to_question);
     const data: EdgeData = {
       id: edge.id,
-      source: edge.from_question,
+      source,
       target,
       // Blank for the question-level fallback rather than the literal
       // "anything else" -- every *specific* option gets a label, so the

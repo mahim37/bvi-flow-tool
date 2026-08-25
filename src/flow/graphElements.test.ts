@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { EdgeData, NodeData } from "./graphElements";
 import { END_NODE_ID, buildElements, missingNodeId } from "./graphElements";
 import {
+  E_FOREIGN_TO_Q2,
   E_NO_TO_END,
   E_Q2_DEAD,
   E_Q2_TO_ARCHIVED,
@@ -115,6 +116,17 @@ describe("nodes", () => {
     expect(placeholder?.kind).toBe("missing");
     expect(placeholder?.hasFault).toBe(true);
   });
+
+  it("shares one placeholder for a question missing on both ends", () => {
+    // FOREIGN_QUESTION is E_Q4_TO_MISSING's target and E_FOREIGN_TO_Q2's
+    // source -- one node either way, not two, and not a duplicate id
+    // Cytoscape would refuse to add.
+    const built = nodes();
+
+    expect(
+      [...built.keys()].filter((id) => id === missingNodeId(FOREIGN_QUESTION)),
+    ).toHaveLength(1);
+  });
 });
 
 describe("edges", () => {
@@ -124,6 +136,14 @@ describe("edges", () => {
 
   it("routes a cross-version edge to the placeholder", () => {
     expect(edges().get(E_Q4_TO_MISSING)?.target).toBe(missingNodeId(FOREIGN_QUESTION));
+  });
+
+  it("sources a cross-version edge from the placeholder", () => {
+    // Same fallback, near end of the arrow this time -- a source this
+    // payload doesn't contain used to have no placeholder at all, which
+    // Cytoscape treats as fatal (it refuses to add an edge whose source
+    // isn't already an element) rather than just an edge failing to draw.
+    expect(edges().get(E_FOREIGN_TO_Q2)?.source).toBe(missingNodeId(FOREIGN_QUESTION));
   });
 
   it("names an option's own guard but leaves the question-level one blank", () => {
