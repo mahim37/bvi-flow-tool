@@ -176,7 +176,17 @@ export interface Edge {
 export interface Lock {
   user_id: UUID;
   email: string;
+  /** The holder's most recent edit, not when they first took the lock --
+   * `editing._take_lock` refreshes this on every write, not only the
+   * first. */
   since: Timestamp;
+  /** `since` plus the server's own idle timeout -- the same
+   * `LOCK_IDLE_TIMEOUT` `editing.lock_holder` reads to decide "held" vs
+   * "gone idle", so a client showing this can never disagree with the
+   * server's own next decision about it. Not a promise the lock survives
+   * this long: any edit before then pushes it back out by refreshing
+   * `since`, and releasing early ends it sooner. */
+  expires_at: Timestamp;
 }
 
 /** One person eligible to be named a reviewer on `submit`: holds

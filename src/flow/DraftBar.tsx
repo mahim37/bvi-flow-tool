@@ -621,7 +621,9 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
       {lock !== null &&
         (heldByMe ? (
           <p className="banner banner--info">
-            You have been holding this draft since {formatTimestamp(lock.since)}.{" "}
+            You last edited this draft at {formatTimestamp(lock.since)}. It's yours to
+            keep editing until {formatTimestamp(lock.expires_at)} unless you edit again
+            before then.{" "}
             <button
               className="link"
               type="button"
@@ -630,15 +632,18 @@ export function DraftBar({ graph, onOpenVersion }: DraftBarProps) {
             >
               Release it
             </button>{" "}
-            so somebody else can edit.
+            so somebody else can edit sooner.
           </p>
         ) : (
           // Not an error state: the lock is taken by the first edit and
           // released automatically once it goes idle, so the honest thing
-          // to say is who to ask, not "locked".
+          // to say is who to ask, not "locked". `expires_at` names the
+          // moment this banner's own advice goes stale -- past it, the
+          // lock is gone whether or not they ever come back to release it.
           <p className="banner banner--warn">
-            {lock.email} has been editing since {formatTimestamp(lock.since)}. Your
-            edits will be refused until they release it or it goes idle.
+            {lock.email} last edited this at {formatTimestamp(lock.since)}. Nobody else
+            can edit until {formatTimestamp(lock.expires_at)}, unless they release it
+            first.
           </p>
         ))}
 
