@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import { useArchiveQuestion } from "../api/queries";
 import type { Edge, Graph, Question, UUID } from "../api/types";
+import { ConfirmAction } from "./ConfirmAction";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { Options } from "./Options";
 import { QuestionEditor } from "./QuestionEditor";
@@ -72,28 +73,30 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
         Danger zone
       </h3>
       <div className="danger-zone">
-        <button
-          className="button button--danger"
-          type="button"
-          disabled={archiveQuestion.isPending}
-          onClick={() => {
-            if (
-              !window.confirm(
-                `Retire ${question.code}? It stops being served, stays drawn while anything still points at it, and there is no way to bring it back except discarding the draft.`,
-              )
-            ) {
-              return;
-            }
-            archiveQuestion.mutate(question.id, { onError: onWriteError });
-          }}
+        <ConfirmAction
+          message={`Retire ${question.code}? It stops being served, stays drawn while anything still points at it, and there is no way to bring it back except discarding the draft.`}
+          confirmLabel="Retire this question"
+          danger
+          onConfirm={() =>
+            archiveQuestion.mutate(question.id, { onError: onWriteError })
+          }
         >
-          Retire this question
-        </button>
+          {(open) => (
+            <button
+              className="button button--danger"
+              type="button"
+              disabled={archiveQuestion.isPending}
+              onClick={open}
+            >
+              Retire this question
+            </button>
+          )}
+        </ConfirmAction>
         <p className="panel__hint">
           Retiring archives rather than deletes, and there is no un-archive: an archival
-          made by mistake is undone by discarding the draft. Edges pointing at it are left
-          alone on purpose — they become broken edges, which is what keeps the arrow into
-          nowhere visible until somebody deals with it.
+          made by mistake is undone by discarding the draft. Edges pointing at it are
+          left alone on purpose — they become broken edges, which is what keeps the
+          arrow into nowhere visible until somebody deals with it.
         </p>
       </div>
       {error !== null && (
@@ -308,7 +311,9 @@ export function DetailPanel({
         )}
       </section>
 
-      {editable && live && <DangerZone versionId={graph.version.id} question={question} />}
+      {editable && live && (
+        <DangerZone versionId={graph.version.id} question={question} />
+      )}
     </aside>
   );
 }

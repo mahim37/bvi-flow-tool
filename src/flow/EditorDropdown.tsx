@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
+
+import { useOutsideDismiss } from "./useOutsideDismiss";
 
 interface EditorDropdownProps {
   /** The pill button that opens the panel -- plain text or a short node,
@@ -34,26 +36,7 @@ interface EditorDropdownProps {
 export function EditorDropdown({ trigger, disabled, children }: EditorDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDetailsElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onOutsidePointerDown(event: PointerEvent) {
-      if (ref.current !== null && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    document.addEventListener("pointerdown", onOutsidePointerDown);
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("pointerdown", onOutsidePointerDown);
-      document.removeEventListener("keydown", onEscape);
-    };
-  }, [open]);
+  useOutsideDismiss(ref, open, () => setOpen(false));
 
   return (
     <details

@@ -10,6 +10,7 @@ import {
 } from "../api/queries";
 import type { ChangeRequest, DiffKind, ItemDiff, UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { ConfirmAction } from "./ConfirmAction";
 import { DiffList } from "./DiffList";
 import { useVersionContext } from "./versionContext";
 import {
@@ -401,23 +402,22 @@ export function ReviewView() {
                   : ""}
                 . Publishing makes this the live questionnaire.
               </p>
-              <button
-                className="button button--primary"
-                type="button"
-                disabled={publish.isPending || reviewRefused}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      "Publish this version? It becomes the live questionnaire, and every new assessment is served from it.",
-                    )
-                  ) {
-                    return;
-                  }
-                  publish.mutate(undefined, { onError: onReviewError });
-                }}
+              <ConfirmAction
+                message="Publish this version? It becomes the live questionnaire, and every new assessment is served from it."
+                confirmLabel="Publish"
+                onConfirm={() => publish.mutate(undefined, { onError: onReviewError })}
               >
-                {publish.isPending ? "Publishing…" : "Publish"}
-              </button>
+                {(open) => (
+                  <button
+                    className="button button--primary"
+                    type="button"
+                    disabled={publish.isPending || reviewRefused}
+                    onClick={open}
+                  >
+                    {publish.isPending ? "Publishing…" : "Publish"}
+                  </button>
+                )}
+              </ConfirmAction>
               <p className="panel__hint">
                 The version this replaces is kept exactly as it is, so rolling back is
                 activating the old one rather than restoring anything.

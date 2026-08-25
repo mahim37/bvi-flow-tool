@@ -2210,6 +2210,16 @@ textarea:focus-visible {
   position: relative;
 }
 
+/* `ConfirmAction`'s wrapper -- same positioning role as `.editor-dropdown`
+   above, for a trigger that isn't a `<details>` (a plain button, or `Cta`'s
+   title+description one). `inline-flex` so it hugs its child instead of
+   stretching to fill the flex row it sits in (`.draftbar__right`,
+   `.danger-zone`, `.review__publish`). */
+.confirm-trigger {
+  position: relative;
+  display: inline-flex;
+}
+
 .editor-dropdown > summary {
   list-style: none;
   cursor: pointer;
