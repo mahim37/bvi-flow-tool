@@ -106,29 +106,81 @@ body {
   height: 100vh;
 }
 
+/* Ported from break-backend's .topbar (question_graph_editor/styles.css
+ * ~L64-72) -- flat, border-only chrome (background matches the page,
+ * `--bg`, not the raised white `--surface` cards), exact padding/gap. */
 .topbar {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 14px 20px;
-  background: var(--surface);
+  padding: 10px 16px;
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
   /* `sticky` over `fixed`: it pins to the same spot once the page scrolls
      past it, without needing a compensating margin-top on whatever comes
      next -- `fixed` takes it out of flow and that offset would have to be
-     kept in sync by hand every time this bar's height changes. */
+     kept in sync by hand every time this bar's height changes. Break has
+     no equivalent because its `body` never scrolls at all. */
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
+.topbar__brand {
+  flex-shrink: 0;
+}
+
+/* Ported from break-backend's .brand-text h1 (~L90-95). Weight/letter-
+ * spacing kept exact; `white-space: nowrap` is this app's own addition --
+ * "Questionnaire flow tool" is longer than break's "Flow Tool". */
 .topbar__title {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
   margin: 0;
   white-space: nowrap;
+}
+
+/* Ported from break-backend's #viewSub (.brand-text p, ~L96-100). */
+.topbar__subtitle {
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Ported from break-backend's #stats/.stat/.stat-pending
+ * (question_graph_editor/styles.css ~L102-129). */
+.topbar__stats {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.stat b {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.stat span {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.stat--pending b {
+  color: var(--gold);
 }
 
 .topbar__picker {
@@ -165,6 +217,7 @@ body {
 }
 
 .canvas {
+  position: relative;
   min-height: 0;
   background:
     radial-gradient(circle at 1px 1px, var(--canvas-dot) 1.5px, transparent 0) 0 0 /
@@ -174,17 +227,116 @@ body {
   border-right: 1px solid var(--border);
 }
 
+.canvas__stage {
+  position: absolute;
+  inset: 0;
+}
+
+/* Ported from break-backend's .canvas-controls/.icon-btn/.hint
+ * (static/question_graph_editor/styles.css ~L469-517) -- values carried
+ * over as-is, the same as canvasStyle.ts's badges: this app's tokens for
+ * panel-2/border/shadow/text-dim already match break's values exactly. */
+.canvas-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 6;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 7px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  box-shadow: var(--shadow-md);
+  z-index: 6;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.hint strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* ---------- sidebar ---------- */
 
+/* Background matches break-backend's .sidebar (~L180-189): chrome surfaces
+ * are separated from the canvas by a border only, not a fill change --
+ * `--surface` (white) is reserved for raised elements inside it (inputs,
+ * the search box, list-item hover), same role break gives `--panel-2`. */
 .sidebar {
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   padding: 16px 14px;
-  background: var(--surface);
+  background: var(--bg);
 }
 
 .sidebar__block + .sidebar__block {
   margin-top: 22px;
   padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+/* Grows to fill whatever space Search and the disclosure group below
+ * leave it, scrolling its own list rather than the whole sidebar --
+ * `min-height: 0` overrides the flex default that would otherwise let a
+ * long section list force this block past the space actually available. */
+.sidebar__block--sections {
+  flex: 1 1 0;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar__block--sections > .sections {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Fixed height, not `flex: 1` -- stays anchored at whatever the three
+ * disclosures inside it naturally need instead of being squeezed by
+ * Sections above. */
+.sidebar__block--disclosures {
+  flex-shrink: 0;
+}
+
+/* Ported from break-backend's `.disclosure-group`/`.disclosure + .disclosure`
+ * (styles.css ~L405-413) -- the three disclosures sit snug against each
+ * other, a hairline border and nothing else, not the standard
+ * `.sidebar__block` gap that separates unrelated blocks. */
+.sidebar__disclosure + .sidebar__disclosure {
   border-top: 1px solid var(--border);
 }
 
@@ -195,6 +347,15 @@ body {
   letter-spacing: 0.06em;
   color: var(--text-muted);
   margin: 0 0 10px;
+}
+
+/* A flex item's own margin box, not just its content, is what
+ * `align-items: center` centers -- the bottom-only margin above (meant
+ * for this heading's other life as a standalone block, e.g. "Sections")
+ * made summary's chevron+heading pair center on two different boxes, so
+ * the text sat visibly higher than the chevron beside it. */
+summary > .sidebar__heading {
+  margin: 0;
 }
 
 .sidebar__label {
@@ -314,38 +475,59 @@ summary::-webkit-details-marker {
   display: none;
 }
 
-summary::before {
-  content: "";
-  flex: 0 0 6px;
-  width: 6px;
-  height: 6px;
-  margin-right: 2px;
-  border-right: 2px solid var(--text-muted);
-  border-bottom: 2px solid var(--text-muted);
-  transform: rotate(-45deg);
-  transition: transform 0.12s ease;
+/* Ported from break-backend's `.chevron` (see the `Chevron` component in
+ * Sidebar.tsx for why this replaced the previous CSS-only arrow). */
+.chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
 }
 
-details[open] > summary::before {
-  transform: rotate(45deg);
+details[open] > summary > .chevron {
+  transform: rotate(90deg);
+}
+
+/* The three bottom-of-sidebar disclosures (Diagnostics/History/colour key)
+ * carry one heading and nothing else in their `<summary>` -- unlike a
+ * diagnostic sub-group's own summary (label + count), `space-between` has
+ * only the chevron pseudo-element and that one span to split apart, so it
+ * pushes the heading to the far right instead of reading left-to-right. */
+.sidebar__disclosure > summary {
+  justify-content: flex-start;
+  padding-top: 15px;
+  padding-bottom: 15px;
+}
+
+/* Capped rather than left to grow with the content -- see the comment
+ * beside Diagnostics' `<div className="disclosure-body">` in Sidebar.tsx
+ * for why. Tall enough that Diagnostics' own 8 collapsed rows (its
+ * tallest baseline case) fit without needing this scroll at all -- it
+ * only kicks in once one or more of those rows are themselves expanded. */
+.disclosure-body {
+  max-height: 420px;
+  overflow-y: auto;
+  margin-top: 2px;
 }
 
 .diagnostics__label,
 .sections__name {
   flex: 1;
   min-width: 0;
+  text-align: left;
 }
 
 /* Decorative only: a stable colour per position in the section list, so a
    section is recognisable by colour on the canvas legend and in this list
-   without the API needing to own a colour field. */
+   without the API needing to own a colour field. Rounded square, not a
+   circle, and the exact size/gap -- ported from break-backend's own
+   `.legend-swatch` (styles.css ~L345-350). */
 .sections > li .sections__name::before {
   content: "";
   display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 9px;
-  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  margin-right: 10px;
+  border-radius: 4px;
   vertical-align: middle;
   background: var(--section-dot, var(--text-muted));
 }
@@ -387,6 +569,31 @@ details[open] > summary::before {
   --section-dot: #6b7280;
 }
 
+/* Ported from break-backend's .legend-row (~L325-344) -- the section
+ * list is a flat button row per section, not an expandable one. */
+.sections__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sections__row:hover {
+  background: var(--surface);
+}
+
+.sections__row--active {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
 .diagnostics__count,
 .sections__count {
   font-variant-numeric: tabular-nums;
@@ -413,23 +620,119 @@ details[open] > summary::before {
   color: var(--text-muted);
 }
 
-.legend {
+/* Ported from break-backend's `.node-key`/`.node-key li`/`.node-key-icon`
+ * (styles.css ~L364-403) -- icon-led rows, no bullets, replacing this
+ * list's previous plain `<li>` bullets. */
+.node-key {
+  list-style: none;
   margin: 0;
-  padding-left: 18px;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 
-.legend li + li {
-  margin-top: 4px;
+.node-key li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.node-key-icon {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+/* This app's own diagnostics (archived/end/missing/fault/dead/broken) --
+ * break's `.node-key-swatch` variants are its pending-new/-delete/-modified
+ * cases, which have no equivalent here (see the comment above this list in
+ * Sidebar.tsx), so these colours are this app's own canvas values (see
+ * canvasStyle.ts), not a port. */
+.node-key-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.node-key-swatch--archived {
+  background: #f1e7d2;
+  border: 2px dashed #d6c6a0;
+}
+
+.node-key-swatch--end {
+  background: #f1e7d2;
+  border: 2px solid #766c5c;
+}
+
+.node-key-swatch--missing {
+  background: #fbe2dc;
+  border: 2px dashed #b91c1c;
+}
+
+.node-key-swatch--fault {
+  background: var(--surface);
+  border: 2px solid #b91c1c;
+}
+
+.node-key-swatch--dead,
+.node-key-swatch--broken {
+  height: 0;
+  border-radius: 0;
+  border-top: 2px dashed #9a3412;
+}
+
+.node-key-swatch--broken {
+  border-top-style: dotted;
+  border-top-color: #b91c1c;
+  border-top-width: 3px;
+}
+
+/* The sidebar's History disclosure -- rows are compact by design, this
+ * column is 300px wide, not the review screen's `.reviews__row` cards. */
+.history {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.history li {
+  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history li + li {
+  border-top: 1px solid var(--border);
+}
+
+.history__what {
+  font-weight: 600;
+}
+
+.history__detail {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.history__by {
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 /* ---------- detail panel ---------- */
 
+/* Same flat-chrome background as .sidebar above -- matches break-backend's
+ * .detail (~L660-669), which also carries no fill of its own beyond the
+ * page's. */
 .panel {
   overflow-y: auto;
   padding: 20px;
-  background: var(--surface);
+  background: var(--bg);
 }
 
 .panel__header {

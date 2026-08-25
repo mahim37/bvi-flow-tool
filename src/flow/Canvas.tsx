@@ -20,10 +20,8 @@ const LAYOUT = {
 interface CanvasProps {
   elements: ElementDefinition[];
   selectedId: string | null;
-  /** Ids the sidebar or a diagnostic list is pointing at. Highlighted
-   * rather than filtered: hiding the rest would answer "where is this
-   * question" by removing the context that makes the answer mean
-   * anything. */
+  /** Ids the sidebar or a diagnostic list is pointing at. The camera pans
+   * and fits to show them; nothing about the elements' own styling changes. */
   highlightedIds: readonly string[];
   onSelectNode: (id: string | null) => void;
   onSelectEdge: (id: string) => void;
@@ -75,6 +73,21 @@ export function Canvas({
     });
     cy.on("tap", (event) => {
       if (event.target === cy) selectHandlers.current.onSelectNode(null);
+    });
+
+    // Hover-to-trace, ported from break-backend's focus/highlight engine
+    // (state.hover in app.js): fade everything except the hovered node's
+    // own connected edges/neighbours, so tracing one question's routing
+    // doesn't require clicking it first.
+    cy.on("mouseover", "node", (event) => {
+      const set = event.target.closedNeighborhood();
+      cy.elements().addClass("faded");
+      set.removeClass("faded");
+      set.nodes().addClass("hl");
+      set.edges().addClass("hl");
+    });
+    cy.on("mouseout", "node", () => {
+      cy.elements().removeClass("faded hl");
     });
 
     return () => {
@@ -146,27 +159,92 @@ export function Canvas({
   useEffect(() => {
     const cy = cyRef.current;
     if (cy === null) return;
-    cy.batch(() => {
-      cy.elements().removeClass("highlighted");
-      for (const id of highlightedIds) cy.getElementById(id).addClass("highlighted");
-    });
+    let set = cy.collection();
+    for (const id of highlightedIds) set = set.union(cy.getElementById(id));
+    // Ported from break-backend's focusGroup/diag-chip fit
+    // (app.js ~L2028-2032, ~L2092-2097) -- a section or diagnostic group
+    // pans/zooms to fit every question it lit up, not just the first.
+    if (set.nonempty()) {
+      cy.animate({ fit: { eles: set, padding: 70 }, duration: 360, easing: "ease-out" });
+    }
   }, [highlightedIds]);
 
+  // Ported from break-backend's #zoomIn/#zoomOut/#fit/#reset (app.js
+  // ~L3594-3623) -- same factors and durations. Break's "reset" also
+  // clears its own search/focus state, which lives in this app's Sidebar
+  // instead of Canvas, so here it only resets the camera.
+  function zoomBy(factor: number) {
+    const cy = cyRef.current;
+    if (cy === null) return;
+    cy.animate(
+      { zoom: cy.zoom() * factor, center: { eles: cy.elements() } },
+      { duration: 180 },
+    );
+  }
+  function fitToScreen() {
+    const cy = cyRef.current;
+    if (cy === null) return;
+    cy.animate({ fit: { eles: cy.elements(), padding: 50 } }, { duration: 300 });
+  }
+
   return (
-    <div
-      className="canvas"
-      ref={containerRef}
-      // The canvas is a picture as far as assistive technology is
-      // concerned: cytoscape draws to a <canvas> element with no DOM to
-      // traverse. Rather than fake a tree that would go stale, the same
-      // information is available in full as real, focusable DOM -- the
-      // section list, the search results and the detail panel -- and this
-      // says so instead of pretending to be navigable.
-      role="img"
-      aria-label={
-        "Questionnaire flow diagram. Use the question list and detail panel " +
-        "for a keyboard-navigable view of the same routing."
-      }
-    />
+    <div className="canvas">
+      <div
+        className="canvas__stage"
+        ref={containerRef}
+        // The canvas is a picture as far as assistive technology is
+        // concerned: cytoscape draws to a <canvas> element with no DOM to
+        // traverse. Rather than fake a tree that would go stale, the same
+        // information is available in full as real, focusable DOM -- the
+        // section list, the search results and the detail panel -- and this
+        // says so instead of pretending to be navigable.
+        role="img"
+        aria-label={
+          "Questionnaire flow diagram. Use the question list and detail panel " +
+          "for a keyboard-navigable view of the same routing."
+        }
+      />
+
+      <div className="canvas-controls">
+        <button
+          type="button"
+          className="icon-btn"
+          title="Zoom in"
+          onClick={() => zoomBy(1.3)}
+        >
+          ＋
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          title="Zoom out"
+          onClick={() => zoomBy(1 / 1.3)}
+        >
+          －
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          title="Fit to screen"
+          onClick={fitToScreen}
+        >
+          ⤢
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          title="Reset view"
+          onClick={fitToScreen}
+        >
+          ⟲
+        </button>
+      </div>
+
+      <div className="hint" aria-hidden="true">
+        <strong>Click</strong> a question for details · <strong>Hover</strong> to trace
+        its paths · <strong>Drag the canvas</strong> to pan ·{" "}
+        <strong>Drag a question</strong> to move it · <strong>Scroll</strong> to zoom
+      </div>
+    </div>
   );
 }

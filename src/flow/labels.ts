@@ -1,4 +1,5 @@
 import type {
+  ActivityEventType,
   AnswerType,
   ChangeRequestStatus,
   DiffChange,
@@ -85,6 +86,36 @@ export function statusMeaning(status: ChangeRequestStatus): string {
 
 export function decisionLabel(decision: ReviewDecision): string {
   return decision === "approved" ? "Approved" : "Sent back";
+}
+
+const ACTIVITY_EVENT_LABELS: Record<ActivityEventType, string> = {
+  draft_opened: "Draft opened",
+  draft_discarded: "Draft discarded",
+  submitted: "Submitted for review",
+  withdrawn: "Withdrawn",
+  approved: "Approved",
+  rejected: "Sent back",
+  published: "Published",
+  rolled_back: "Rolled back",
+  section_added: "Section added",
+  section_changed: "Section changed",
+  section_removed: "Section removed",
+  question_added: "Question added",
+  question_changed: "Question changed",
+  question_archived: "Question archived",
+  questions_reordered: "Questions reordered",
+  option_added: "Option added",
+  option_changed: "Option changed",
+  option_removed: "Option removed",
+  options_reordered: "Options reordered",
+  edge_added: "Edge added",
+  edge_changed: "Edge changed",
+  edge_removed: "Edge removed",
+  edges_reordered: "Edges reordered",
+};
+
+export function activityEventLabel(type: ActivityEventType): string {
+  return ACTIVITY_EVENT_LABELS[type];
 }
 
 const DIFF_KIND_LABELS: Record<DiffKind, string> = {

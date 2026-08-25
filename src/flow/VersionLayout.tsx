@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 
 import { ApiError } from "../api/client";
-import { useGraph, useVersions } from "../api/queries";
+import { useGraph, useProposals, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { AddQuestion } from "./AddQuestion";
@@ -112,8 +112,52 @@ export function VersionLayout() {
     [versions.data],
   );
 
+  // A plain local rather than repeated `graph.data` reads: TypeScript
+  // narrows a `const` across the closures below (the `onAdded`/
+  // `onSelectQuestion` callbacks), which it will not do for a query
+  // object's property, re-evaluated on every access.
+  const graphData = graph.data;
+  const editable =
+    graphData !== undefined &&
+    graphData.version.is_draft &&
+    graphData.change_request?.status === "open";
+
+  // Ported from break-backend's "N pending" badge (#pendingCount) -- scoped
+  // to the current version's own product, the same scope break has (one
+  // flow tool, one product). `enabled` false rather than an `undefined`
+  // questionnaire filter, which would count proposals across every product.
+  //
+  // Called unconditionally, before the `isForbidden` early return just
+  // below -- every hook in a component has to run on every render no
+  // matter which branch that render takes, and a hook declared after an
+  // early return runs on some renders and not others. React does not
+  // tolerate that (it throws "Rendered fewer hooks than expected"), which
+  // is exactly what happened here once: an expired session answers 403
+  // indistinguishably from a real permission refusal (see
+  // `isUnauthenticated`'s docstring in client.ts), so this component hits
+  // that early return far more often than "genuinely lacks the grant"
+  // alone would suggest.
+  const pending = useProposals({
+    questionnaire: graphData?.version.questionnaire ?? null,
+    status: "submitted",
+  });
+  useEffect(() => {
+    if (pending.error) noteApiError(pending.error);
+  }, [pending.error, noteApiError]);
+
   const versionsError = versions.error;
-  if (versionsError instanceof ApiError && versionsError.isForbidden) {
+  // `!isUnauthenticated`: an expired/invalid session answers this same
+  // 403, and showing "you don't have permission" for that would be
+  // actively misleading -- the fix is signing in again, not asking an
+  // admin for a grant. `noteApiError` above (called on every render via
+  // the earlier effect) already clears identity for that case, which
+  // swaps the whole tree to the sign-in screen; this just avoids painting
+  // the wrong message for the one render in between.
+  if (
+    versionsError instanceof ApiError &&
+    versionsError.isForbidden &&
+    !versionsError.isUnauthenticated
+  ) {
     // Signing in again will not help: the account is authenticated and
     // simply does not hold `view_flow_tool`, which is granted per user and
     // never through a role. Saying so beats an endless login loop.
@@ -132,20 +176,37 @@ export function VersionLayout() {
     );
   }
 
-  // A plain local rather than repeated `graph.data` reads: TypeScript
-  // narrows a `const` across the closures below (the `onAdded`/
-  // `onSelectQuestion` callbacks), which it will not do for a query
-  // object's property, re-evaluated on every access.
-  const graphData = graph.data;
-  const editable =
-    graphData !== undefined &&
-    graphData.version.is_draft &&
-    graphData.change_request?.status === "open";
-
   return (
     <div className="app">
       <header className="topbar">
-        <h1 className="topbar__title">Questionnaire flow tool</h1>
+        <div className="topbar__brand">
+          <h1 className="topbar__title">Questionnaire flow tool</h1>
+          {/* Ported from break-backend's #viewSub subtitle line -- named
+              from the version actually loaded rather than a fixed string,
+              since (unlike break) this tool serves more than one product. */}
+          {graphData !== undefined && (
+            <p className="topbar__subtitle">
+              {graphData.version.questionnaire_name} ·{" "}
+              {graphData.version.is_draft ? "draft" : "live"}
+            </p>
+          )}
+        </div>
+
+        {graphData !== undefined && (
+          // Ported from break-backend's .stats pills (#stats) -- question
+          // count and pending-proposal count, at a glance without opening
+          // the sidebar or a tab.
+          <div className="topbar__stats">
+            <div className="stat">
+              <b>{graphData.questions.length}</b>
+              <span>Questions</span>
+            </div>
+            <div className={pending.data?.count ? "stat stat--pending" : "stat"}>
+              <b>{pending.data?.count ?? 0}</b>
+              <span>Pending</span>
+            </div>
+          </div>
+        )}
 
         {questionnaires.length > 1 && (
           <label className="topbar__picker">
@@ -314,7 +375,7 @@ export function VersionLanding() {
   }, [firstVersionId, navigate]);
 
   const error = versions.error;
-  if (error instanceof ApiError && error.isForbidden) {
+  if (error instanceof ApiError && error.isForbidden && !error.isUnauthenticated) {
     return (
       <main className="gate">
         <h1>No access to the flow tool</h1>

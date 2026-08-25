@@ -68,6 +68,31 @@ export function useGraph(versionId: UUID | null) {
   });
 }
 
+/** How many proposals are waiting on somebody -- the topbar's "N pending"
+ * count. Scoped to a questionnaire the same way the version picker is, so
+ * switching products doesn't leave yesterday's count on screen. Disabled
+ * with no questionnaire given rather than defaulting to "every product",
+ * which the topbar has no use for and would just waste the round trip. */
+export function useProposals(filters: api.ProposalFilters) {
+  return useQuery({
+    queryKey: ["proposals", filters] as const,
+    queryFn: ({ signal }) => api.listProposals(filters, signal),
+    enabled: filters.questionnaire !== null && filters.questionnaire !== undefined,
+    retry: retryUnlessRefused,
+  });
+}
+
+/** The activity trail behind the sidebar's History disclosure. Same table
+ * the compliance audit log reads, through the flow tool's own permission --
+ * see `listHistory`'s docstring in endpoints.ts. */
+export function useHistory(filters: api.HistoryFilters) {
+  return useQuery({
+    queryKey: ["history", filters] as const,
+    queryFn: ({ signal }) => api.listHistory(filters, signal),
+    retry: retryUnlessRefused,
+  });
+}
+
 /**
  * Every write refetches the map instead of patching it in place.
  *

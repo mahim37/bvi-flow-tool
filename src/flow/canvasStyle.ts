@@ -228,8 +228,24 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     selector: ".dimmed",
     css: { opacity: 0.15 },
   },
+  // Hover-to-trace: not ported when the rest of this file was (see the
+  // docstring above) -- added later to fade every edge/node except the
+  // hovered node's own connected ones, matching break's own hover
+  // behaviour value-for-value (app.js's ".faded"/".hl"/"edge.hl" rules).
   {
-    selector: ".highlighted",
-    css: { "overlay-color": "#9a5209", "overlay-opacity": 0.3, "overlay-padding": 6 },
+    selector: ".faded",
+    css: { opacity: 0.32 },
+  },
+  {
+    selector: "edge.faded",
+    css: { opacity: 0.2 },
+  },
+  {
+    selector: "node.hl",
+    css: { "border-width": 3.5, "z-index": 30, "font-weight": 600 },
+  },
+  {
+    selector: "edge.hl",
+    css: { opacity: 1, width: 2.6, "z-index": 35 },
   },
 ];
