@@ -1406,6 +1406,10 @@ details[open] > summary > .chevron {
 }
 
 .button--primary:hover:not(:disabled) {
+  /* `.button:hover` resets background to the page's cream -- without
+     restating it here, a primary button's white text would sit on that
+     same near-white background the instant it's hovered. */
+  background: var(--accent);
   filter: brightness(1.08);
 }
 
