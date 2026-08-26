@@ -1010,11 +1010,12 @@ details[open] > summary > .chevron {
   margin-bottom: 7px;
 }
 
-/* One or more edges nested inside an `.opt` card, under the option (or
- * "Anything else") they're guarded by -- `Options.tsx`'s merge of what used
- * to be a separate "Outgoing edges" list. A dashed rule separates the
- * edges from the option's own label/fields above, and again between
- * edges when an option carries more than one. */
+/* One or more edges nested inside an `.opt` card, under the option they're
+ * guarded by (also reused, unstyled by `.opt`, inside `.fallback-section`
+ * for the default route) -- `Options.tsx`'s merge of what used to be a
+ * separate "Outgoing edges" list. A dashed rule separates the edges from
+ * the option's own label/fields above, and again between edges when an
+ * option carries more than one. */
 .opt-edges {
   margin-top: 8px;
   padding-top: 8px;
@@ -1058,6 +1059,43 @@ details[open] > summary > .chevron {
 .opt-add-edge .editor {
   width: 100%;
   margin-top: 0;
+}
+
+/* The question-level ("Default route") configuration -- sits first inside
+ * Options, ahead of the answer list. Same white-card-plus-colour
+ * treatment `.banner` already uses app-wide (a flat tint reads as bland
+ * and can vanish against this app's own cream background -- the exact
+ * problem that redesign fixed), a soft all-round gold outline rather than
+ * a bold single-edge stripe: `--gold` at low opacity, the same token this
+ * file's own "active configuration" states already use
+ * (`.opt-edit-btn.active`, the retarget banner), so it reads as one
+ * consistent colour language rather than a new one-off. Still visibly
+ * not an `.opt` card -- the outline and icon are what an answer never
+ * has. */
+.fallback-section {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid rgba(154, 82, 9, 0.35);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.fallback-section > .opt-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 650;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fallback-section__icon {
+  color: var(--gold);
+  font-size: 13px;
 }
 
 .options__code {

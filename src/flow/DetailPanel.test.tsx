@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DetailPanel } from "./DetailPanel";
 import {
+  E_Q2_TO_ARCHIVED,
   E_YES_TO_Q2,
   OPTION_YES,
   Q1,
@@ -110,7 +111,7 @@ describe("edit controls", () => {
     panelFor(Q1, false);
 
     expect(
-      screen.queryByRole("button", { name: "+ Add a route" }),
+      screen.queryByRole("button", { name: "+ Add a default route" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
   });
@@ -120,10 +121,10 @@ describe("edit controls", () => {
     panelFor(Q1, true);
 
     // Closed by default -- opening it is what reveals the actual form. Q1
-    // takes options, so the section-wide route is a fallback rather than
-    // a plain "+ Add a route" (that name is reserved for a specific
-    // answer's own card -- see below).
-    const toggle = screen.getByRole("button", { name: "+ Add a fallback route" });
+    // takes options, so the default-route section's own button is
+    // labeled distinctly from "Add a specific route" (that name is
+    // reserved for a specific answer's own card -- see below).
+    const toggle = screen.getByRole("button", { name: "+ Add a default route" });
     expect(screen.queryByRole("button", { name: "Add route" })).not.toBeInTheDocument();
 
     await user.click(toggle);
@@ -231,7 +232,7 @@ describe("edit controls", () => {
     expect(onCancelPick).toHaveBeenCalled();
   });
 
-  it("offers no 'Add a route' on an answer that already has one", () => {
+  it("offers no 'Add a specific route' on an answer that already has one", () => {
     // "Yes" already routes to Q2 in the fixture -- adding a second route
     // through this affordance isn't offered; retargeting the existing one
     // is the way to change where it goes.
@@ -239,7 +240,7 @@ describe("edit controls", () => {
 
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
     expect(
-      within(yesRow).queryByRole("button", { name: "Add a route" }),
+      within(yesRow).queryByRole("button", { name: "Add a specific route" }),
     ).not.toBeInTheDocument();
   });
 
@@ -267,12 +268,14 @@ describe("edit controls", () => {
     );
 
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
-    await user.click(within(yesRow).getByRole("button", { name: "Add a route" }));
+    await user.click(
+      within(yesRow).getByRole("button", { name: "Add a specific route" }),
+    );
 
     expect(onStartAddRoute).toHaveBeenCalledWith(Q1, OPTION_YES, expect.any(String));
   });
 
-  it("shows Cancel add route on the answer currently mid-add", async () => {
+  it("shows Cancel specific route on the answer currently mid-add", async () => {
     const user = userEvent.setup();
     const onCancelPick = vi.fn();
     const graph = makeGraph();
@@ -296,9 +299,11 @@ describe("edit controls", () => {
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
 
     expect(
-      within(yesRow).queryByRole("button", { name: "Add a route" }),
+      within(yesRow).queryByRole("button", { name: "Add a specific route" }),
     ).not.toBeInTheDocument();
-    await user.click(within(yesRow).getByRole("button", { name: "Cancel add route" }));
+    await user.click(
+      within(yesRow).getByRole("button", { name: "Cancel specific route" }),
+    );
 
     expect(onCancelPick).toHaveBeenCalled();
   });
@@ -317,21 +322,21 @@ describe("edit controls", () => {
     ).toBeDisabled();
   });
 
-  it("offers a one-click fall-through only when this question has a fallback edge", () => {
-    // Base fixture: Q1 has no question-level ("Anything else") edge, so
+  it("offers a one-click fall-through only when this question has a default route", () => {
+    // Base fixture: Q1 has no question-level (default route) edge, so
     // "Yes"'s own edge has nothing to fall through to -- no button.
     panelFor(Q1, true);
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
     expect(
-      within(yesRow).queryByRole("button", { name: /Fall through to/ }),
+      within(yesRow).queryByRole("button", { name: /Use the default route/ }),
     ).not.toBeInTheDocument();
   });
 
-  it("offers a one-click fall-through on a per-option edge once this question has a fallback", () => {
+  it("offers a one-click fall-through on a per-option edge once this question has a default route", () => {
     const graph = makeGraph();
-    // Give Q1 a question-level ("Anything else") edge alongside "Yes"'s
+    // Give Q1 a question-level (default route) edge alongside "Yes"'s
     // own -- exactly the shape the button exists for: b points somewhere
-    // explicitly, "Anything else" already points somewhere too, so
+    // explicitly, the default route already points somewhere too, so
     // removing b's own edge is one click away instead of Edit-then-Remove.
     graph.edges = [
       ...graph.edges,
@@ -363,11 +368,11 @@ describe("edit controls", () => {
     // Available without opening this answer's Edit toggle, like Retarget
     // and End-the-flow-here -- it acts immediately and isn't hidden away.
     expect(
-      within(yesRow).getByRole("button", { name: 'Fall through to "Anything else"' }),
+      within(yesRow).getByRole("button", { name: "Use the default route instead" }),
     ).toBeEnabled();
   });
 
-  it("offers no fall-through button on the fallback edge's own row", () => {
+  it("offers no fall-through button on the default route's own row", () => {
     const graph = makeGraph();
     graph.edges = [
       ...graph.edges,
@@ -395,29 +400,54 @@ describe("edit controls", () => {
       />,
     );
 
-    const anythingRow = screen.getByText("Anything else").closest("li") as HTMLElement;
+    const defaultRouteSection = screen
+      .getByText("Default route")
+      .closest(".fallback-section") as HTMLElement;
     expect(
-      within(anythingRow).queryByRole("button", { name: /Fall through to/ }),
+      within(defaultRouteSection).queryByRole("button", {
+        name: /Use the default route/,
+      }),
     ).not.toBeInTheDocument();
   });
 
   it("offers no per-option add-route affordance on a question whose answers select nothing", async () => {
     // A scale question has no options at all, so there's no per-option
-    // card to nest an "Add a route" into -- only the one, section-wide
-    // affordance (which every route on such a question uses).
+    // card to nest an "Add a specific route" into -- only the section-wide
+    // default route, which every route on such a question uses. Q2's own
+    // default route is stripped here so that affordance is actually
+    // offered -- the base fixture already has one (E_Q2_TO_ARCHIVED),
+    // which the "hide when one already exists" rule would otherwise hide
+    // it behind.
     const user = userEvent.setup();
-    panelFor(Q2, true);
+    const graph = makeGraph();
+    graph.edges = graph.edges.filter((item) => item.id !== E_Q2_TO_ARCHIVED);
+    const question = graph.questions.find((item) => item.id === Q2);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
+      />,
+    );
 
-    // The per-option button reads exactly "Add a route" (no "+") -- Q2
-    // has no options at all, so there's no card to render one on.
+    // The per-option button reads "Add a specific route" -- Q2 has no
+    // options at all, so there's no card to render one on.
     expect(
-      screen.queryByRole("button", { name: "Add a route" }),
+      screen.queryByRole("button", { name: "Add a specific route" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("This route applies no matter what's answered."),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "+ Add a route" }));
 
-    expect(
-      screen.getByText(/this question has no separate answer options/),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
   });
 });

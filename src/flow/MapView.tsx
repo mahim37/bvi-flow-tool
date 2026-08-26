@@ -61,7 +61,7 @@ export function MapView() {
     } else {
       // A new edge goes last by default (`editing.add_edge`'s own rule),
       // which the server then refuses outright if this question already
-      // has a question-level ("Anything else") edge -- appending a
+      // has a default route (question-level edge) -- appending a
       // per-option edge below one that matches every answer would create
       // a route that can never fire. Sidestep that for the one case this
       // picker can actually cause (adding a *per-option* edge) by asking

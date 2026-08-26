@@ -15,7 +15,7 @@ import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { Edge, Graph, Question, QuestionOption, UUID } from "../api/types";
 import { BlockingList } from "./BlockingList";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
-import { optionLabel, targetLabel } from "./labels";
+import { targetLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const END_OF_FLOW = "__end__";
@@ -85,11 +85,11 @@ function EdgeRow({
    * boolean so only the one row involved re-renders into its "Cancel"
    * state. */
   retargetingEdgeId: UUID | null;
-  /** Whether this row's question has a question-level ("Anything else")
-   * edge -- offers a one-click way to delete a per-option edge in favour
-   * of falling through to it, instead of "Remove" (behind Edit) plus
-   * knowing that's what an empty card does. `false` for `EdgeGroupCard`'s
-   * rows: removing the fallback itself doesn't fall through to itself. */
+  /** Whether this row's question has a default route (question-level
+   * edge) -- offers a one-click way to delete a per-option edge in favour
+   * of it, instead of "Remove" (behind Edit) plus knowing that's what an
+   * empty card does. `false` for `EdgeGroupCard`'s rows: removing the
+   * default route itself doesn't fall through to itself. */
   hasFallback: boolean;
   onMoveEdge: (edge: Edge, direction: -1 | 1) => void;
   onSelectQuestion: (id: UUID) => void;
@@ -202,7 +202,7 @@ function EdgeRow({
               disabled={pending}
               onClick={() => removeEdge.mutate(edge.id, { onError: onWriteError })}
             >
-              Fall through to &quot;Anything else&quot;
+              Use the default route instead
             </button>
           )}
           {expanded && (
@@ -246,10 +246,12 @@ function EdgeRow({
 }
 
 /** A collapsed reveal for a block of routes that has no label/code of its
- * own to edit ("Anything else", "Can't be used") -- an Edit/Done toggle
- * around the same `EdgeRow` Move/Remove controls `OptionCard` gates the
- * same way (Retarget/"End the flow here" show regardless, per `EdgeRow`'s
- * own doc comment). */
+ * own to edit -- today just "Can't be used" (dead-guard edges; the
+ * question-level route has its own dedicated `DefaultRouteSection`
+ * instead, since it isn't one more answer). An Edit/Done toggle around
+ * the same `EdgeRow` Move/Remove controls `OptionCard` gates the same way
+ * (Retarget/"End the flow here" show regardless, per `EdgeRow`'s own doc
+ * comment). */
 function EdgeGroupCard({
   heading,
   note,
@@ -323,6 +325,179 @@ function EdgeGroupCard({
   );
 }
 
+/** The question-level route (`from_option === null`) -- the one any answer
+ * uses when it has no explicit route of its own, below. Sits first inside
+ * the Options section, ahead of the answer list, but is deliberately not
+ * one more `<li>` in `.opt-list`: it isn't an answer, it's a configuration
+ * that applies across all of them, so it gets its own callout-styled
+ * block (`.fallback-section`) instead -- outside `Options`' own answer
+ * count, with its own explanation of what it means. Owns its own "+ Add a
+ * default route" form (only shown once this question has none yet -- the
+ * server allows only one) rather than sharing `Options`' "+ Add an
+ * answer" one, since the two no longer have anything to do with each
+ * other. */
+function DefaultRouteSection({
+  versionId,
+  questionId,
+  takesOptions,
+  edges,
+  allEdges,
+  ctx,
+  editable,
+  disabled,
+  retargetingEdgeId,
+  onMoveEdge,
+  onSelectQuestion,
+  onStartRetarget,
+  onCancelPick,
+}: {
+  versionId: UUID;
+  questionId: UUID;
+  takesOptions: boolean;
+  edges: Edge[];
+  allEdges: Edge[];
+  ctx: EdgeContext;
+  editable: boolean;
+  disabled: boolean;
+  retargetingEdgeId: UUID | null;
+  onMoveEdge: (edge: Edge, direction: -1 | 1) => void;
+  onSelectQuestion: (id: UUID) => void;
+  onStartRetarget: (edgeId: UUID, label: string) => void;
+  onCancelPick: () => void;
+}) {
+  const onWriteError = useWriteErrorHandler();
+  const addEdge = useAddEdge(versionId);
+  const addTargetId = useId();
+  const [editing, setEditing] = useState(false);
+  const [addingEdge, setAddingEdge] = useState(false);
+  const [newTarget, setNewTarget] = useState<string>(END_OF_FLOW);
+
+  return (
+    <div className="fallback-section">
+      <div className="opt-label">
+        <span>
+          <span className="fallback-section__icon" aria-hidden="true">
+            ⚙
+          </span>{" "}
+          Default route
+        </span>
+        {editable && edges.length > 0 && (
+          <button
+            type="button"
+            className="opt-edit-btn d-edit-btn"
+            onClick={() => setEditing((value) => !value)}
+          >
+            {editing ? "Done" : "Edit"}
+          </button>
+        )}
+      </div>
+      <p className="panel__hint">
+        {takesOptions
+          ? "The route used by any answer without one of its own -- an answer with an explicit route configured above always takes that instead."
+          : "This route applies no matter what's answered."}
+      </p>
+
+      {edges.length > 0 && (
+        <div className="opt-edges">
+          {edges.map((edge) => (
+            <EdgeRow
+              key={edge.id}
+              versionId={versionId}
+              edge={edge}
+              selectLabel="Where the default route leads"
+              allEdges={allEdges}
+              ctx={ctx}
+              editable={editable}
+              expanded={editing}
+              disabled={disabled}
+              retargetingEdgeId={retargetingEdgeId}
+              hasFallback={false}
+              onMoveEdge={onMoveEdge}
+              onSelectQuestion={onSelectQuestion}
+              onStartRetarget={onStartRetarget}
+              onCancelPick={onCancelPick}
+            />
+          ))}
+        </div>
+      )}
+
+      {editable && edges.length === 0 && (
+        <>
+          {addingEdge ? (
+            <form
+              className="editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                addEdge.mutate(
+                  {
+                    from_question: questionId,
+                    from_option: null,
+                    to_question: newTarget === END_OF_FLOW ? null : newTarget,
+                  },
+                  {
+                    onError: onWriteError,
+                    onSuccess: () => {
+                      setNewTarget(END_OF_FLOW);
+                      setAddingEdge(false);
+                    },
+                  },
+                );
+              }}
+            >
+              <div className="field field--inline">
+                <label htmlFor={addTargetId}>Go to</label>
+                <select
+                  id={addTargetId}
+                  value={newTarget}
+                  disabled={addEdge.isPending || disabled}
+                  onChange={(event) => setNewTarget(event.target.value)}
+                >
+                  <option value={END_OF_FLOW}>End of flow</option>
+                  {ctx.targets.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="editor__actions">
+                <button
+                  className="button button--primary"
+                  type="submit"
+                  disabled={addEdge.isPending || disabled}
+                >
+                  Add route
+                </button>
+                <button
+                  className="button button--quiet"
+                  type="button"
+                  disabled={addEdge.isPending || disabled}
+                  onClick={() => setAddingEdge(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              className="button button--quiet"
+              type="button"
+              onClick={() => setAddingEdge(true)}
+            >
+              {takesOptions ? "+ Add a default route" : "+ Add a route"}
+            </button>
+          )}
+          {writeErrorMessage(addEdge.error) !== null && (
+            <p className="banner banner--error" role="alert">
+              {writeErrorMessage(addEdge.error)}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 interface OptionCardProps {
   versionId: UUID;
   questionId: UUID;
@@ -331,9 +506,9 @@ interface OptionCardProps {
   allEdges: Edge[];
   ctx: EdgeContext;
   isUncovered: boolean;
-  /** Whether this question has a question-level ("Anything else") edge --
+  /** Whether this question has a default route (question-level edge) --
    * passed down to each of this answer's `EdgeRow`s so they can offer a
-   * one-click "fall through to it instead" in place of that edge. */
+   * one-click "use it instead" in place of that edge. */
   hasFallback: boolean;
   isGuard: boolean;
   canMoveUp: boolean;
@@ -589,7 +764,7 @@ function OptionCard({
               className="opt-edit-btn active"
               onClick={onCancelPick}
             >
-              Cancel add route
+              Cancel specific route
             </button>
           ) : (
             <button
@@ -600,7 +775,7 @@ function OptionCard({
                 onStartAddRoute(questionId, option.id, `"${option.label}"'s new route`)
               }
             >
-              Add a route
+              Add a specific route
             </button>
           )}
         </div>
@@ -624,7 +799,6 @@ export function Options({
   const onWriteError = useWriteErrorHandler();
   const addOption = useAddOption(versionId);
   const reorderOptions = useReorderOptions(versionId);
-  const addEdge = useAddEdge(versionId);
   const reorderEdges = useReorderEdges(versionId);
 
   const optionCodeId = useId();
@@ -632,10 +806,6 @@ export function Options({
   const [addingOption, setAddingOption] = useState(false);
   const [newOptionCode, setNewOptionCode] = useState("");
   const [newOptionLabel, setNewOptionLabel] = useState("");
-
-  const addTargetId = useId();
-  const [addingEdge, setAddingEdge] = useState(false);
-  const [newTarget, setNewTarget] = useState<string>(END_OF_FLOW);
 
   const options = useMemo(
     () =>
@@ -748,15 +918,9 @@ export function Options({
   );
 
   const pending =
-    addOption.isPending ||
-    reorderOptions.isPending ||
-    addEdge.isPending ||
-    reorderEdges.isPending;
+    addOption.isPending || reorderOptions.isPending || reorderEdges.isPending;
   const error =
-    writeErrorMessage(addOption.error) ??
-    writeErrorMessage(reorderOptions.error) ??
-    writeErrorMessage(addEdge.error) ??
-    writeErrorMessage(reorderEdges.error);
+    writeErrorMessage(addOption.error) ?? writeErrorMessage(reorderEdges.error);
 
   function moveOption(index: number, direction: -1 | 1) {
     const swapWith = index + direction;
@@ -792,32 +956,7 @@ export function Options({
     );
   }
 
-  // Always a fallback ("anything else") route: a route tied to one
-  // specific answer is added from that answer's own card instead (see
-  // `OptionCard`'s own add-route form), so this one never needs a guard
-  // picker.
-  function submitNewEdge(event: React.FormEvent) {
-    event.preventDefault();
-    addEdge.mutate(
-      {
-        from_question: question.id,
-        from_option: null,
-        to_question: newTarget === END_OF_FLOW ? null : newTarget,
-      },
-      {
-        onError: onWriteError,
-        onSuccess: () => {
-          setNewTarget(END_OF_FLOW);
-          setAddingEdge(false);
-        },
-      },
-    );
-  }
-
-  const cardCount =
-    options.length +
-    (anyAnswerEdges.length > 0 ? 1 : 0) +
-    (deadGuardEdges.length > 0 ? 1 : 0);
+  const cardCount = options.length + (deadGuardEdges.length > 0 ? 1 : 0);
 
   return (
     <section className="panel__section" aria-labelledby="options-heading">
@@ -827,18 +966,36 @@ export function Options({
       <p className="panel__hint">
         Where each answer leads. If more than one route could apply, the first one
         listed wins; otherwise the flow ends there. Retargeting a route, or adding one
-        for a specific answer, happens on the canvas: click "Retarget"/"Add a route"
-        below, then click the destination question.
+        for a specific answer, happens on the canvas: click "Retarget"/"Add a specific
+        route" below, then click the destination question.
       </p>
 
-      {options.length === 0 &&
-      anyAnswerEdges.length === 0 &&
-      deadGuardEdges.length === 0 ? (
-        <p className="empty">
-          {takesOptions
-            ? "This question has no answers yet."
-            : "Nothing leads anywhere yet, so answering this question ends the flow."}
-        </p>
+      {(anyAnswerEdges.length > 0 || editable) && (
+        <DefaultRouteSection
+          versionId={versionId}
+          questionId={question.id}
+          takesOptions={takesOptions}
+          edges={anyAnswerEdges}
+          allEdges={edges}
+          ctx={ctx}
+          editable={editable}
+          disabled={pending}
+          retargetingEdgeId={retargetingEdgeId}
+          onMoveEdge={moveEdge}
+          onSelectQuestion={onSelectQuestion}
+          onStartRetarget={onStartRetarget}
+          onCancelPick={onCancelPick}
+        />
+      )}
+
+      {options.length === 0 && deadGuardEdges.length === 0 ? (
+        anyAnswerEdges.length === 0 && (
+          <p className="empty">
+            {takesOptions
+              ? "This question has no answers yet."
+              : "Nothing leads anywhere yet, so answering this question ends the flow."}
+          </p>
+        )
       ) : (
         <ul className="opt-list">
           {options.map((option, index) => (
@@ -867,24 +1024,6 @@ export function Options({
               onCancelPick={onCancelPick}
             />
           ))}
-
-          {anyAnswerEdges.length > 0 && (
-            <EdgeGroupCard
-              heading={optionLabel(question, null)}
-              versionId={versionId}
-              edges={anyAnswerEdges}
-              allEdges={edges}
-              ctx={ctx}
-              selectLabel={`Where "${optionLabel(question, null)}" leads`}
-              editable={editable}
-              disabled={pending}
-              retargetingEdgeId={retargetingEdgeId}
-              onMoveEdge={moveEdge}
-              onSelectQuestion={onSelectQuestion}
-              onStartRetarget={onStartRetarget}
-              onCancelPick={onCancelPick}
-            />
-          )}
 
           {deadGuardEdges.length > 0 && (
             <EdgeGroupCard
@@ -998,57 +1137,6 @@ export function Options({
               This question's answers don't use separate options -- like a written
               response or a number -- so there's nothing to add here.
             </p>
-          )}
-
-          {addingEdge ? (
-            <form className="editor" onSubmit={submitNewEdge}>
-              <div className="field field--inline">
-                <label htmlFor={addTargetId}>Go to</label>
-                <select
-                  id={addTargetId}
-                  value={newTarget}
-                  disabled={pending}
-                  onChange={(event) => setNewTarget(event.target.value)}
-                >
-                  <option value={END_OF_FLOW}>End of flow</option>
-                  {targets.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.code}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p className="panel__hint">
-                {takesOptions
-                  ? "This route applies no matter which answer is given -- for a route tied to one specific answer, add it from that answer's own card above."
-                  : "Since this question has no separate answer options, this route applies no matter what's answered."}
-              </p>
-              <div className="editor__actions">
-                <button
-                  className="button button--primary"
-                  type="submit"
-                  disabled={pending}
-                >
-                  Add route
-                </button>
-                <button
-                  className="button button--quiet"
-                  type="button"
-                  disabled={pending}
-                  onClick={() => setAddingEdge(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            <button
-              className="button button--quiet"
-              type="button"
-              onClick={() => setAddingEdge(true)}
-            >
-              {takesOptions ? "+ Add a fallback route" : "+ Add a route"}
-            </button>
           )}
         </div>
       )}

@@ -54,12 +54,11 @@ export function optionLabel(
   question: Question | undefined,
   optionId: UUID | null,
 ): string {
-  // "Any answer" reads as a technical routing term (a wildcard guard) --
-  // "Anything else" says the same thing (the question-level fallback,
-  // `from_option === null`) in words a non-technical reader parses
-  // without translating first, and still reads naturally lowercased
-  // inline ("when anything else").
-  if (optionId === null) return "Anything else";
+  // Matches `Options.tsx`'s "Default route" section -- the question-level
+  // route (`from_option === null`) that any answer without one of its own
+  // uses. Capitalized so it also reads naturally lowercased inline
+  // ("when the default route").
+  if (optionId === null) return "The default route";
   const option = question?.options.find((candidate) => candidate.id === optionId);
   return option ? option.label : "Unknown option";
 }
