@@ -2136,7 +2136,15 @@ details[open] > summary > .chevron {
  * centered instead, since a single question in a full-width card reads
  * as too wide once "The route so far" isn't there to balance it. */
 .preview__body--solo .preview__current {
-  max-width: 80%;
+  /* `max-width` alone was a no-op: this card sizes to its own content
+   * (a number-input question is naturally narrow, a multi-option one
+   * naturally wide), so it never actually grew to the grid track's
+   * width in the first place, and there was nothing for `max-width` to
+   * clamp -- explicit `width: 100%` is what makes it fill the track
+   * (and therefore need clamping) regardless of which question is
+   * showing. */
+  width: 100%;
+  max-width: 70%;
   margin: 0 auto;
 }
 
