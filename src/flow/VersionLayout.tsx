@@ -10,6 +10,7 @@ import {
 import { ApiError } from "../api/client";
 import { useGraph, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
+import croppedLogo from "../assets/predmind-logo - cropped.webp";
 import { useAuth } from "../auth/useAuth";
 import { AddQuestion } from "./AddQuestion";
 import { DraftBar } from "./DraftBar";
@@ -182,16 +183,19 @@ export function VersionLayout() {
     <div className="app">
       <header className="topbar">
         <div className="topbar__brand">
-          <h1 className="topbar__title">Questionnaire flow tool</h1>
-          {/* Ported from break-backend's #viewSub subtitle line -- named
-              from the version actually loaded rather than a fixed string,
-              since (unlike break) this tool serves more than one product. */}
-          {graphData !== undefined && (
-            <p className="topbar__subtitle">
-              {graphData.version.questionnaire_name} ·{" "}
-              {graphData.version.is_draft ? "draft" : "live"}
-            </p>
-          )}
+          <img className="topbar__logo" src={croppedLogo} alt="" />
+          <div>
+            <h1 className="topbar__title">Flow Tool</h1>
+            {/* Ported from break-backend's #viewSub subtitle line -- named
+                from the version actually loaded rather than a fixed string,
+                since (unlike break) this tool serves more than one product. */}
+            {graphData !== undefined && (
+              <p className="topbar__subtitle">
+                {graphData.version.questionnaire_name} ·{" "}
+                {graphData.version.is_draft ? "draft" : "live"}
+              </p>
+            )}
+          </div>
         </div>
 
         {graphData !== undefined && (

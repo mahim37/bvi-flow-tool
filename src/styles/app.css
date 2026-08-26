@@ -127,12 +127,20 @@ body {
 }
 
 .topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-shrink: 0;
 }
 
+.topbar__logo {
+  display: block;
+  height: 28px;
+  width: auto;
+}
+
 /* Ported from break-backend's .brand-text h1 (~L90-95). Weight/letter-
- * spacing kept exact; `white-space: nowrap` is this app's own addition --
- * "Questionnaire flow tool" is longer than break's "Flow Tool". */
+ * spacing kept exact; `white-space: nowrap` is this app's own addition. */
 .topbar__title {
   font-size: 15px;
   font-weight: 650;
@@ -180,13 +188,12 @@ body {
 }
 
 .topbar__picker {
-  flex: 1;
+  flex-shrink: 1;
   min-width: 0;
 }
 
 .topbar__picker select {
-  max-width: 520px;
-  width: 100%;
+  max-width: 260px;
   font-weight: 600;
 }
 
@@ -200,6 +207,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-left: auto;
   color: var(--text-muted);
   font-size: 0.85rem;
   white-space: nowrap;
