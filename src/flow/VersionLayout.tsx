@@ -90,6 +90,22 @@ export function VersionLayout() {
 
   const versions = useVersions(effectiveQuestionnaireId);
 
+  // Picking a questionnaire in `topbar__picker` only ever changed which
+  // product the *version* select's own options belonged to -- the page
+  // itself stayed on whatever version was already loaded, which wasn't
+  // even one of those options anymore, so the picker looked like it did
+  // nothing. Land on that product's own top version, same "active first"
+  // ordering `VersionLanding` already relies on, the moment the fetched
+  // list stops containing the version currently on screen.
+  const firstOfFilteredVersionId = versions.data?.[0]?.id;
+  useEffect(() => {
+    if (versions.data === undefined) return;
+    if (versions.data.some((version) => version.id === versionId)) return;
+    if (firstOfFilteredVersionId !== undefined) {
+      navigate(`/versions/${firstOfFilteredVersionId}`, { replace: true });
+    }
+  }, [versions.data, firstOfFilteredVersionId, versionId, navigate]);
+
   useEffect(() => {
     if (versions.error) noteApiError(versions.error);
   }, [versions.error, noteApiError]);
