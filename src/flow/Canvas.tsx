@@ -13,9 +13,46 @@ const LAYOUT = {
   nodeSep: 45,
   rankSep: 80,
   animate: false,
-  fit: true,
+  // Framing the opening view is done by hand below (`fitToChainStart`),
+  // not dagre's own fit-to-everything -- a large questionnaire would
+  // otherwise open shrunk down to unreadable text.
+  fit: false,
   padding: 40,
 } as const;
+
+const INITIAL_VIEW_QUESTION_COUNT = 10;
+
+/** Frames the camera on roughly the first `count` questions of the chain
+ * from the entry point, rather than the whole graph -- BFS over the
+ * already-drawn edges to pick which nodes the opening view shows, not a
+ * resolver: it never decides which edge fires for an answer, only which
+ * nodes the camera happens to look at first. */
+function fitToChainStart(cy: Core, count: number) {
+  const start =
+    cy.nodes().filter((node) => node.data("isEntry") === true)[0] ?? cy.nodes()[0];
+  if (start === undefined) return;
+
+  const visited = new Set([start.id()]);
+  const order = [start];
+  let frontier = [start];
+  while (order.length < count && frontier.length > 0) {
+    const next: typeof frontier = [];
+    for (const node of frontier) {
+      node.outgoers("node").forEach((successor) => {
+        if (visited.has(successor.id())) return;
+        visited.add(successor.id());
+        order.push(successor);
+        next.push(successor);
+      });
+    }
+    frontier = next;
+  }
+
+  const framed = order
+    .slice(0, count)
+    .reduce((collected, node) => collected.union(node), cy.collection());
+  cy.fit(framed, 40);
+}
 
 interface CanvasProps {
   elements: ElementDefinition[];
@@ -204,6 +241,7 @@ export function Canvas({
     if (signature !== signatureRef.current) {
       signatureRef.current = signature;
       cy.layout(LAYOUT).run();
+      fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
     }
   }, [elements]);
 
