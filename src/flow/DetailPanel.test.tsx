@@ -14,6 +14,14 @@ import {
 } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 
+// The trigger is a `<span class="opt-edit-btn">` inside a native
+// `<summary>` (styled to match "Edit text" beside it) -- `<summary>`
+// carries no accessible role jsdom's ARIA mapping recognizes, so these
+// tests find it by its text instead of `getByRole("button", ...)`.
+function changeDestinationTrigger(row: HTMLElement) {
+  return within(row).getByText("Change destination", { selector: "span" });
+}
+
 function panelFor(questionId: string, editable = false) {
   const graph = makeGraph();
   const question = graph.questions.find((item) => item.id === questionId);
@@ -132,7 +140,7 @@ describe("edit controls", () => {
     expect(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
   });
 
-  it("keep an answer's rename/reorder/delete controls collapsed until Edit is clicked", async () => {
+  it("keep an answer's rename/delete controls collapsed until Edit text is clicked", async () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
     const section = screen.getByRole("region", { name: /^Options/ });
@@ -143,34 +151,36 @@ describe("edit controls", () => {
     ).not.toBeInTheDocument();
 
     await user.click(
-      within(section).getAllByRole("button", { name: "Edit" })[0] as HTMLElement,
+      within(section).getAllByRole("button", { name: "Edit text" })[0] as HTMLElement,
     );
 
     expect(within(section).getByLabelText("Label")).toBeInTheDocument();
     expect(within(section).getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("offers no retargeting at all on a published version", () => {
+  it("offers no destination controls at all on a published version", () => {
     panelFor(Q1, false);
-    expect(screen.queryByRole("button", { name: "Retarget" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Change destination", { selector: "span" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("shows a route's Retarget and End-the-flow buttons without needing that answer's Edit", () => {
-    // Unlike Move/Remove (still behind Edit -- see the test above), these
-    // two act immediately and aren't destructive, so they don't need the
-    // extra click.
+  it("shows a route's Change-destination popup without needing that answer's Edit text", async () => {
+    // Unlike Remove (still behind Edit text -- see the test above), this
+    // acts immediately and isn't destructive, so it doesn't need the extra
+    // click.
+    const user = userEvent.setup();
     panelFor(Q1, true);
 
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    await user.click(changeDestinationTrigger(yesRow));
+
     expect(
-      within(yesRow).getByRole("button", { name: "Retarget" }),
+      within(yesRow).getByRole("button", { name: "Jump to a specific question" }),
     ).toBeInTheDocument();
     expect(
       within(yesRow).getByRole("button", { name: "End the flow here" }),
     ).toBeInTheDocument();
-    expect(
-      within(yesRow).queryByRole("button", { name: "Move up" }),
-    ).not.toBeInTheDocument();
     expect(
       within(yesRow).queryByRole("button", { name: "Remove" }),
     ).not.toBeInTheDocument();
@@ -197,12 +207,15 @@ describe("edit controls", () => {
     );
 
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
-    await user.click(within(yesRow).getByRole("button", { name: "Retarget" }));
+    await user.click(changeDestinationTrigger(yesRow));
+    await user.click(
+      within(yesRow).getByRole("button", { name: "Jump to a specific question" }),
+    );
 
     expect(onStartRetarget).toHaveBeenCalledWith(E_YES_TO_Q2, 'Where "Yes" leads');
   });
 
-  it("shows Cancel, not Retarget, on the row currently mid-retarget", async () => {
+  it("shows Cancel, not Change destination, on the row currently mid-retarget", async () => {
     const user = userEvent.setup();
     const onCancelPick = vi.fn();
     const graph = makeGraph();
@@ -225,7 +238,7 @@ describe("edit controls", () => {
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
 
     expect(
-      within(yesRow).queryByRole("button", { name: "Retarget" }),
+      within(yesRow).queryByText("Change destination", { selector: "span" }),
     ).not.toBeInTheDocument();
     await user.click(within(yesRow).getByRole("button", { name: "Cancel retarget" }));
 
@@ -308,11 +321,14 @@ describe("edit controls", () => {
     expect(onCancelPick).toHaveBeenCalled();
   });
 
-  it("disables 'End the flow here' on a route that already ends the flow", () => {
+  it("disables 'End the flow here' on a route that already ends the flow", async () => {
+    const user = userEvent.setup();
     panelFor(Q1, true);
 
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
     const noRow = screen.getByText("No").closest("li") as HTMLElement;
+    await user.click(changeDestinationTrigger(yesRow));
+    await user.click(changeDestinationTrigger(noRow));
 
     expect(
       within(yesRow).getByRole("button", { name: "End the flow here" }),
@@ -322,17 +338,20 @@ describe("edit controls", () => {
     ).toBeDisabled();
   });
 
-  it("offers a one-click fall-through only when this question has a default route", () => {
+  it("offers a one-click fall-through only when this question has a default route", async () => {
     // Base fixture: Q1 has no question-level (default route) edge, so
     // "Yes"'s own edge has nothing to fall through to -- no button.
+    const user = userEvent.setup();
     panelFor(Q1, true);
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    await user.click(changeDestinationTrigger(yesRow));
     expect(
       within(yesRow).queryByRole("button", { name: /Use the default route/ }),
     ).not.toBeInTheDocument();
   });
 
-  it("offers a one-click fall-through on a per-option edge once this question has a default route", () => {
+  it("offers a one-click fall-through on a per-option edge once this question has a default route", async () => {
+    const user = userEvent.setup();
     const graph = makeGraph();
     // Give Q1 a question-level (default route) edge alongside "Yes"'s
     // own -- exactly the shape the button exists for: b points somewhere
@@ -365,14 +384,17 @@ describe("edit controls", () => {
     );
 
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
-    // Available without opening this answer's Edit toggle, like Retarget
-    // and End-the-flow-here -- it acts immediately and isn't hidden away.
+    // Available without opening this answer's Edit text toggle, like the
+    // rest of "Change destination" -- it acts immediately and isn't
+    // hidden away.
+    await user.click(changeDestinationTrigger(yesRow));
     expect(
       within(yesRow).getByRole("button", { name: "Use the default route instead" }),
     ).toBeEnabled();
   });
 
-  it("offers no fall-through button on the default route's own row", () => {
+  it("offers no fall-through button on the default route's own row", async () => {
+    const user = userEvent.setup();
     const graph = makeGraph();
     graph.edges = [
       ...graph.edges,
@@ -403,6 +425,7 @@ describe("edit controls", () => {
     const defaultRouteSection = screen
       .getByText("Default route")
       .closest(".fallback-section") as HTMLElement;
+    await user.click(changeDestinationTrigger(defaultRouteSection));
     expect(
       within(defaultRouteSection).queryByRole("button", {
         name: /Use the default route/,

@@ -56,8 +56,7 @@ export function optionLabel(
 ): string {
   // Matches `Options.tsx`'s "Default route" section -- the question-level
   // route (`from_option === null`) that any answer without one of its own
-  // uses. Capitalized so it also reads naturally lowercased inline
-  // ("when the default route").
+  // uses.
   if (optionId === null) return "The default route";
   const option = question?.options.find((candidate) => candidate.id === optionId);
   return option ? option.label : "Unknown option";

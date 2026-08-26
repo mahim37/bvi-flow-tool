@@ -312,14 +312,16 @@ export function DetailPanel({
                     <br />
                     <span className="in-via">
                       {guards.length === 1 ? (
-                        `when ${guards[0]?.toLowerCase()}`
+                        <>
+                          when {guards[0] !== undefined && <strong>{guards[0]}</strong>}
+                        </>
                       ) : (
                         <>
                           when:
                           {guards.map((guard, index) => (
                             <span key={index}>
                               <br />
-                              {index + 1}. {guard}
+                              {index + 1}. <strong>{guard}</strong>
                             </span>
                           ))}
                         </>

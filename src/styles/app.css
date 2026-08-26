@@ -1205,6 +1205,17 @@ details[open] > summary > .chevron {
   color: var(--bg);
 }
 
+/* "Change destination"'s popup content -- ported in spirit from
+ * break-backend's own destination-picker modal (a prompt line, then the
+ * choices stacked one per line), just inside this app's existing anchored
+ * `.editor-panel` dropdown instead of a full-screen overlay. */
+.destination-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .d-edit-btn {
   margin-left: 8px;
   vertical-align: middle;
@@ -2438,11 +2449,13 @@ textarea:focus-visible {
 }
 
 /* A trigger styled as its own `.button` (e.g. "Propose a change", primary)
-   supplies its own padding/border/background (including the hover
-   inversion) -- drop the summary's own so two borders/backgrounds don't
-   sit on top of each other. A plain-text trigger still gets the
-   summary's own chrome, which is the only border/background it has. */
-.editor-dropdown > summary:has(.button) {
+   or `.opt-edit-btn` (e.g. "Change destination", matching the "Edit text"
+   button beside it) supplies its own padding/border/background (including
+   the hover inversion) -- drop the summary's own so two borders/
+   backgrounds don't sit on top of each other. A plain-text trigger still
+   gets the summary's own chrome, which is the only border/background it
+   has. */
+.editor-dropdown > summary:has(.button, .opt-edit-btn) {
   padding: 0;
   border: none;
   background: transparent;
@@ -2473,6 +2486,23 @@ textarea:focus-visible {
   box-shadow: var(--shadow-md);
   padding: 14px;
   z-index: 20;
+}
+
+/* The detail panel's own column is 380px, minus its 20px padding and
+   whatever a card inside it nests further -- `.editor-panel`'s default
+   340px width, right-anchored to a trigger that usually sits nowhere
+   near the panel's own right edge (a "Change destination"/"Edit text"
+   pair, "Retire this question" in the Danger Zone), bled past the panel
+   entirely into the canvas behind it, which then painted over it.
+   Narrower and left-anchored instead, so any popup opened from inside
+   this panel stays inside it -- scoped to `.panel` rather than each
+   individual trigger's own row, so this covers every one of them,
+   present and future, not just the ones already hit by it. */
+.panel .editor-panel {
+  left: 0;
+  right: auto;
+  width: 260px;
+  z-index: 30;
 }
 
 .panel__hint--warn {
