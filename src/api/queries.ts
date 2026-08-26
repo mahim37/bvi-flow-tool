@@ -339,6 +339,18 @@ export function usePreviewWalk(versionId: UUID) {
   });
 }
 
+/**
+ * A mutation for the same reason `usePreviewWalk` is one: it reads, but
+ * it is a one-off kicked off by clicking "Preview from here" and
+ * consumed immediately (fed into a navigation), not state worth caching
+ * under a query key.
+ */
+export function usePreviewPathTo(versionId: UUID) {
+  return useMutation({
+    mutationFn: (questionId: UUID) => api.previewPathTo(versionId, questionId),
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Content editing (phase 7).                                          */
 /*                                                                     */

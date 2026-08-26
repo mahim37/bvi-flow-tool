@@ -425,6 +425,15 @@ export interface PreviewState {
   total_count: number;
 }
 
+/** One valid route from the entry point to a specific question --
+ * `answers` excludes the target itself, since replaying them through
+ * `previewWalk` is what makes it come back as `next_question`. Computed
+ * server-side (`routing.path_to`) so a reviewer's "Preview from here"
+ * seeds a real walk instead of guessing at one. */
+export interface PreviewPath {
+  answers: PreviewAnswer[];
+}
+
 /* ------------------------------------------------------------------ */
 /* Compare (phase 9): any two versions, side by side.                  */
 /* ------------------------------------------------------------------ */

@@ -10,6 +10,7 @@ import type {
   Graph,
   Paginated,
   PreviewAnswer,
+  PreviewPath,
   PreviewState,
   Proposal,
   QuestionOption,
@@ -233,6 +234,24 @@ export const previewWalk = (versionId: UUID, answers: PreviewAnswer[]) =>
     method: "POST",
     body: { answers },
   });
+
+/**
+ * One valid route from the entry point to `questionId`.
+ *
+ * `GET`, unlike `previewWalk` above: nothing is posted, this only asks
+ * how a respondent would even reach this question. 404s if the question
+ * isn't reachable from the entry point at all -- there is no route to
+ * hand back.
+ */
+export const previewPathTo = (
+  versionId: UUID,
+  questionId: UUID,
+  signal?: AbortSignal,
+) =>
+  request<PreviewPath>(
+    `${version(versionId)}/preview/path-to/${questionId}/`,
+    signal ? { signal } : {},
+  );
 
 /* ------------------------------------------------------------------ */
 /* Content editing (phase 7).                                          */

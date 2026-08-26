@@ -1784,6 +1784,20 @@ details[open] > summary > .chevron {
   max-width: 72ch;
 }
 
+/* Preview's own header: the mode toggle sits beside the title instead of
+ * a description line underneath -- the toggle already says what the two
+ * modes are, so a separate sentence explaining the screen was dropped
+ * rather than kept alongside it. */
+.page__header--preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page__header--preview .page__title {
+  margin: 0;
+}
+
 /* ---------- review ---------- */
 
 .review__status {
@@ -1996,6 +2010,66 @@ details[open] > summary > .chevron {
 
 /* ---------- preview ---------- */
 
+/* Ported value-for-value from break-backend's `.seg` segmented toggle
+ * (styles.css ~L229-257) -- its own List/Graph view switch, here reused
+ * for Full-preview/Changes-only. `--panel-2` there is `--surface` here,
+ * same as everywhere else those two tokens line up in this app. */
+.seg {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.seg button {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.seg button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(20, 16, 8, 0.18);
+}
+
+.preview__modeswitch {
+  flex: 0 0 auto;
+}
+
+/* One line: the change count/name on the left, Previous/Next on the
+ * right, instead of stacking the nav under its own sentence -- wraps
+ * only if the viewport genuinely can't fit both. */
+.preview__changebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.preview__changebar p {
+  margin: 0;
+}
+
+.preview__changenav {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
 .preview__progress {
   margin: 0 0 14px;
   font-weight: 700;
@@ -2011,6 +2085,13 @@ details[open] > summary > .chevron {
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
+}
+
+/* "Changes only" mode drops "The route so far" (see `PreviewView.tsx`),
+ * leaving one section -- without this it would still sit in the grid's
+ * first (2fr) column with an empty gap where the second used to be. */
+.preview__body--solo {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Ported from break-backend's `.preview-stage`/`.preview-shell`
