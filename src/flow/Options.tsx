@@ -25,7 +25,12 @@ interface OptionsProps {
   graph: Graph;
   question: Question;
   editable: boolean;
+  retargetingEdgeId: UUID | null;
+  addingRouteOptionId: UUID | null;
   onSelectQuestion: (id: UUID) => void;
+  onStartRetarget: (edgeId: UUID, label: string) => void;
+  onStartAddRoute: (questionId: UUID, optionId: UUID | null, label: string) => void;
+  onCancelPick: () => void;
 }
 
 /** Read-only data every route row needs, bundled so it isn't six separate
@@ -39,12 +44,13 @@ interface EdgeContext {
   brokenEdges: ReadonlySet<UUID>;
 }
 
-/** One route's destination chip + (when `editable` and the card it lives
- * in is open for editing) its retarget/move/remove controls. The select
- * and buttons here act immediately -- there is no draft/Save step for a
- * route the way there is for an option's label/code -- so showing or
- * hiding this block is purely about not cluttering the read view, not
- * about protecting unsaved work. */
+/** One route's destination chip, its Retarget/"End the flow here" pair
+ * (shown whenever `editable` -- these act immediately and aren't
+ * destructive, so there's no need to hide them behind a confirmation
+ * step), and -- only once the card it lives in is opened for editing via
+ * `expanded` -- its move/remove controls, which are either reordering
+ * something else's meaning or destructive enough to want that extra
+ * step. */
 function EdgeRow({
   versionId,
   edge,
@@ -52,22 +58,43 @@ function EdgeRow({
   allEdges,
   ctx,
   editable,
+  expanded,
   disabled,
+  retargetingEdgeId,
+  hasFallback,
   onMoveEdge,
   onSelectQuestion,
+  onStartRetarget,
+  onCancelPick,
 }: {
   versionId: UUID;
   edge: Edge;
-  /** Full accessible name for the retarget select, e.g. `Where "Yes"
-   * leads` -- the row itself carries no visible label of its own (that
-   * lives once, on the card it's nested in). */
+  /** Names what this row routes, e.g. `Where "Yes" leads` -- the row
+   * itself carries no visible label of its own (that lives once, on the
+   * card it's nested in). Doubles as the retarget banner's context text. */
   selectLabel: string;
   allEdges: Edge[];
   ctx: EdgeContext;
   editable: boolean;
+  /** Whether the card this row lives in has its own "Edit" toggle open --
+   * gates only Move up/down/Remove, not Retarget/"End the flow here". */
+  expanded: boolean;
   disabled: boolean;
+  /** The edge currently mid-retarget (clicking a question on the canvas
+   * sets its target), if any. Compared by id rather than passing a
+   * boolean so only the one row involved re-renders into its "Cancel"
+   * state. */
+  retargetingEdgeId: UUID | null;
+  /** Whether this row's question has a question-level ("Anything else")
+   * edge -- offers a one-click way to delete a per-option edge in favour
+   * of falling through to it, instead of "Remove" (behind Edit) plus
+   * knowing that's what an empty card does. `false` for `EdgeGroupCard`'s
+   * rows: removing the fallback itself doesn't fall through to itself. */
+  hasFallback: boolean;
   onMoveEdge: (edge: Edge, direction: -1 | 1) => void;
   onSelectQuestion: (id: UUID) => void;
+  onStartRetarget: (edgeId: UUID, label: string) => void;
+  onCancelPick: () => void;
 }) {
   const onWriteError = useWriteErrorHandler();
   const updateEdge = useUpdateEdge(versionId);
@@ -80,6 +107,7 @@ function EdgeRow({
 
   const isDead = ctx.deadEdges.has(edge.id);
   const isBroken = ctx.brokenEdges.has(edge.id);
+  const isRetargeting = retargetingEdgeId === edge.id;
   const targetQuestion =
     edge.to_question !== null ? ctx.questionsById.get(edge.to_question) : undefined;
   const targetColor =
@@ -89,7 +117,9 @@ function EdgeRow({
 
   return (
     <div className="edge-row">
-      <div className={edge.to_question === null ? "opt-dest terminal-dest" : "opt-dest"}>
+      <div
+        className={edge.to_question === null ? "opt-dest terminal-dest" : "opt-dest"}
+      >
         <span className="arrow" aria-hidden="true">
           {edge.to_question === null ? "⏹" : "↘"}
         </span>
@@ -124,56 +154,85 @@ function EdgeRow({
         </p>
       )}
 
+      {editable && isRetargeting && (
+        <p className="panel__hint" role="status">
+          Click a question on the canvas to send this route there, or press Esc to
+          cancel.
+        </p>
+      )}
+
       {editable && (
         <div className="opt-edit-row">
-          <select
-            aria-label={selectLabel}
-            value={edge.to_question ?? END_OF_FLOW}
-            disabled={pending}
-            onChange={(event) =>
+          {isRetargeting ? (
+            <button
+              type="button"
+              className="opt-edit-btn active"
+              disabled={pending}
+              onClick={onCancelPick}
+            >
+              Cancel retarget
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="opt-edit-btn"
+              disabled={pending}
+              onClick={() => onStartRetarget(edge.id, selectLabel)}
+            >
+              Retarget
+            </button>
+          )}
+          <button
+            type="button"
+            className="opt-edit-btn"
+            disabled={pending || edge.to_question === null}
+            onClick={() =>
               updateEdge.mutate(
-                {
-                  edgeId: edge.id,
-                  changes: {
-                    to_question:
-                      event.target.value === END_OF_FLOW ? null : event.target.value,
-                  },
-                },
+                { edgeId: edge.id, changes: { to_question: null } },
                 { onError: onWriteError },
               )
             }
           >
-            <option value={END_OF_FLOW}>End of flow</option>
-            {ctx.targets.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.code}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="opt-edit-btn"
-            disabled={pending || index <= 0}
-            onClick={() => onMoveEdge(edge, -1)}
-          >
-            Move up
+            End the flow here
           </button>
-          <button
-            type="button"
-            className="opt-edit-btn"
-            disabled={pending || index < 0 || index >= allEdges.length - 1}
-            onClick={() => onMoveEdge(edge, 1)}
-          >
-            Move down
-          </button>
-          <button
-            type="button"
-            className="opt-edit-btn danger"
-            disabled={pending}
-            onClick={() => removeEdge.mutate(edge.id, { onError: onWriteError })}
-          >
-            Remove
-          </button>
+          {edge.from_option !== null && hasFallback && (
+            <button
+              type="button"
+              className="opt-edit-btn"
+              disabled={pending}
+              onClick={() => removeEdge.mutate(edge.id, { onError: onWriteError })}
+            >
+              Fall through to &quot;Anything else&quot;
+            </button>
+          )}
+          {expanded && (
+            <>
+              <button
+                type="button"
+                className="opt-edit-btn"
+                disabled={pending || index <= 0}
+                onClick={() => onMoveEdge(edge, -1)}
+              >
+                Move up
+              </button>
+              <button
+                type="button"
+                className="opt-edit-btn"
+                disabled={pending || index < 0 || index >= allEdges.length - 1}
+                onClick={() => onMoveEdge(edge, 1)}
+              >
+                Move down
+              </button>
+              <button
+                type="button"
+                className="opt-edit-btn danger"
+                disabled={pending}
+                onClick={() => removeEdge.mutate(edge.id, { onError: onWriteError })}
+              >
+                Remove
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -187,9 +246,10 @@ function EdgeRow({
 }
 
 /** A collapsed reveal for a block of routes that has no label/code of its
- * own to edit ("Anything else", "Can't be used") -- just an Edit/Done
- * toggle around the same live-acting `EdgeRow` controls `OptionCard`
- * gates behind its own Edit. */
+ * own to edit ("Anything else", "Can't be used") -- an Edit/Done toggle
+ * around the same `EdgeRow` Move/Remove controls `OptionCard` gates the
+ * same way (Retarget/"End the flow here" show regardless, per `EdgeRow`'s
+ * own doc comment). */
 function EdgeGroupCard({
   heading,
   note,
@@ -200,8 +260,11 @@ function EdgeGroupCard({
   selectLabel,
   editable,
   disabled,
+  retargetingEdgeId,
   onMoveEdge,
   onSelectQuestion,
+  onStartRetarget,
+  onCancelPick,
 }: {
   heading: string;
   note?: string;
@@ -212,8 +275,11 @@ function EdgeGroupCard({
   selectLabel: string;
   editable: boolean;
   disabled: boolean;
+  retargetingEdgeId: UUID | null;
   onMoveEdge: (edge: Edge, direction: -1 | 1) => void;
   onSelectQuestion: (id: UUID) => void;
+  onStartRetarget: (edgeId: UUID, label: string) => void;
+  onCancelPick: () => void;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -241,10 +307,15 @@ function EdgeGroupCard({
             selectLabel={selectLabel}
             allEdges={allEdges}
             ctx={ctx}
-            editable={editable && editing}
+            editable={editable}
+            expanded={editing}
             disabled={disabled}
+            retargetingEdgeId={retargetingEdgeId}
+            hasFallback={false}
             onMoveEdge={onMoveEdge}
             onSelectQuestion={onSelectQuestion}
+            onStartRetarget={onStartRetarget}
+            onCancelPick={onCancelPick}
           />
         ))}
       </div>
@@ -254,11 +325,16 @@ function EdgeGroupCard({
 
 interface OptionCardProps {
   versionId: UUID;
+  questionId: UUID;
   option: QuestionOption;
   edges: Edge[];
   allEdges: Edge[];
   ctx: EdgeContext;
   isUncovered: boolean;
+  /** Whether this question has a question-level ("Anything else") edge --
+   * passed down to each of this answer's `EdgeRow`s so they can offer a
+   * one-click "fall through to it instead" in place of that edge. */
+  hasFallback: boolean;
   isGuard: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -266,24 +342,36 @@ interface OptionCardProps {
   onMoveEdge: (edge: Edge, direction: -1 | 1) => void;
   editable: boolean;
   disabled: boolean;
+  retargetingEdgeId: UUID | null;
+  /** Non-null (and equal to this card's `option.id`) while a new route
+   * for this answer is mid-add on the canvas. */
+  addingRouteOptionId: UUID | null;
   onSelectQuestion: (id: UUID) => void;
+  onStartRetarget: (edgeId: UUID, label: string) => void;
+  onStartAddRoute: (questionId: UUID, optionId: UUID | null, label: string) => void;
+  onCancelPick: () => void;
 }
 
 /** One answer, one card: what it's called, what leads from it, and (when
- * editable) every control for both -- label/code, reorder, delete, and
- * per-route retarget/reorder/remove -- collapsed behind one "Edit" until
- * asked for, matching `QuestionEditor`'s own text-edit toggle rather than
- * showing every control on every card at once. Combines what were three
- * separate places (a read-only Options list, a separate "Edit options"
- * form, and `EdgeEditor`'s own "Outgoing edges" list) into the one place
- * somebody actually thinks about an answer: together with where it goes. */
+ * editable) every control for both. Label/code rename, reorder, and
+ * delete stay collapsed behind one "Edit" until asked for, matching
+ * `QuestionEditor`'s own text-edit toggle; so do a route's own Move/
+ * Remove (see `EdgeRow`). Retarget, "End the flow here," and adding a new
+ * route for this answer do not -- they act immediately and aren't
+ * destructive, so hiding them behind Edit would just be an extra click
+ * for no protection. Combines what were three separate places (a
+ * read-only Options list, a separate "Edit options" form, and
+ * `EdgeEditor`'s own "Outgoing edges" list) into the one place somebody
+ * actually thinks about an answer: together with where it goes. */
 function OptionCard({
   versionId,
+  questionId,
   option,
   edges,
   allEdges,
   ctx,
   isUncovered,
+  hasFallback,
   isGuard,
   canMoveUp,
   canMoveDown,
@@ -291,7 +379,12 @@ function OptionCard({
   onMoveEdge,
   editable,
   disabled,
+  retargetingEdgeId,
+  addingRouteOptionId,
   onSelectQuestion,
+  onStartRetarget,
+  onStartAddRoute,
+  onCancelPick,
 }: OptionCardProps) {
   const onWriteError = useWriteErrorHandler();
   const updateOption = useUpdateOption(versionId);
@@ -302,6 +395,7 @@ function OptionCard({
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(option.label);
   const [code, setCode] = useState(option.code);
+  const isAddingRoute = addingRouteOptionId === option.id;
 
   const dirty = label !== option.label || code !== option.code;
   const pending = updateOption.isPending || removeOption.isPending || disabled;
@@ -344,7 +438,8 @@ function OptionCard({
         </div>
       ) : (
         <div className="opt-label">
-          <span>{option.label}</span> <code className="options__code">{option.code}</code>
+          <span>{option.label}</span>{" "}
+          <code className="options__code">{option.code}</code>
           {editable && (
             <button
               type="button"
@@ -466,19 +561,65 @@ function OptionCard({
               selectLabel={`Where "${option.label}" leads`}
               allEdges={allEdges}
               ctx={ctx}
-              editable={editable && editing}
+              editable={editable}
+              expanded={editing}
               disabled={disabled}
+              retargetingEdgeId={retargetingEdgeId}
+              hasFallback={hasFallback}
               onMoveEdge={onMoveEdge}
               onSelectQuestion={onSelectQuestion}
+              onStartRetarget={onStartRetarget}
+              onCancelPick={onCancelPick}
             />
           ))}
+        </div>
+      )}
+
+      {editable && edges.length === 0 && (
+        <div className="opt-add-edge">
+          {isAddingRoute && (
+            <p className="panel__hint" role="status">
+              Click a question on the canvas to route this answer there, or press Esc to
+              cancel.
+            </p>
+          )}
+          {isAddingRoute ? (
+            <button
+              type="button"
+              className="opt-edit-btn active"
+              onClick={onCancelPick}
+            >
+              Cancel add route
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="opt-edit-btn"
+              disabled={disabled}
+              onClick={() =>
+                onStartAddRoute(questionId, option.id, `"${option.label}"'s new route`)
+              }
+            >
+              Add a route
+            </button>
+          )}
         </div>
       )}
     </li>
   );
 }
 
-export function Options({ graph, question, editable, onSelectQuestion }: OptionsProps) {
+export function Options({
+  graph,
+  question,
+  editable,
+  retargetingEdgeId,
+  addingRouteOptionId,
+  onSelectQuestion,
+  onStartRetarget,
+  onStartAddRoute,
+  onCancelPick,
+}: OptionsProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const addOption = useAddOption(versionId);
@@ -492,10 +633,8 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
   const [newOptionCode, setNewOptionCode] = useState("");
   const [newOptionLabel, setNewOptionLabel] = useState("");
 
-  const addGuardId = useId();
   const addTargetId = useId();
   const [addingEdge, setAddingEdge] = useState(false);
-  const [newGuard, setNewGuard] = useState<string>(ANY_ANSWER);
   const [newTarget, setNewTarget] = useState<string>(END_OF_FLOW);
 
   const options = useMemo(
@@ -534,7 +673,10 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
     () => new Map(graph.questions.map((item) => [item.id, item])),
     [graph.questions],
   );
-  const sectionColors = useMemo(() => sectionColorMap(graph.sections), [graph.sections]);
+  const sectionColors = useMemo(
+    () => sectionColorMap(graph.sections),
+    [graph.sections],
+  );
   const targets = useMemo(
     () =>
       graph.questions
@@ -550,7 +692,13 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
     () => new Set(graph.diagnostics.broken_edge_ids),
     [graph.diagnostics.broken_edge_ids],
   );
-  const ctx: EdgeContext = { questionsById, sectionColors, targets, deadEdges, brokenEdges };
+  const ctx: EdgeContext = {
+    questionsById,
+    sectionColors,
+    targets,
+    deadEdges,
+    brokenEdges,
+  };
 
   const edges = useMemo(
     () =>
@@ -587,7 +735,10 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
   // edges vanish from the panel instead of just failing to route, so
   // anything left over after every real option and "anything else" gets
   // its card is swept into one more, rather than silently dropped.
-  const optionIds = useMemo(() => new Set(options.map((option) => option.id)), [options]);
+  const optionIds = useMemo(
+    () => new Set(options.map((option) => option.id)),
+    [options],
+  );
   const deadGuardEdges = useMemo(
     () =>
       edges.filter(
@@ -641,18 +792,21 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
     );
   }
 
+  // Always a fallback ("anything else") route: a route tied to one
+  // specific answer is added from that answer's own card instead (see
+  // `OptionCard`'s own add-route form), so this one never needs a guard
+  // picker.
   function submitNewEdge(event: React.FormEvent) {
     event.preventDefault();
     addEdge.mutate(
       {
         from_question: question.id,
-        from_option: newGuard === ANY_ANSWER ? null : newGuard,
+        from_option: null,
         to_question: newTarget === END_OF_FLOW ? null : newTarget,
       },
       {
         onError: onWriteError,
         onSuccess: () => {
-          setNewGuard(ANY_ANSWER);
           setNewTarget(END_OF_FLOW);
           setAddingEdge(false);
         },
@@ -672,10 +826,14 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
       </h3>
       <p className="panel__hint">
         Where each answer leads. If more than one route could apply, the first one
-        listed wins; otherwise the flow ends there.
+        listed wins; otherwise the flow ends there. Retargeting a route, or adding one
+        for a specific answer, happens on the canvas: click "Retarget"/"Add a route"
+        below, then click the destination question.
       </p>
 
-      {options.length === 0 && anyAnswerEdges.length === 0 && deadGuardEdges.length === 0 ? (
+      {options.length === 0 &&
+      anyAnswerEdges.length === 0 &&
+      deadGuardEdges.length === 0 ? (
         <p className="empty">
           {takesOptions
             ? "This question has no answers yet."
@@ -687,11 +845,13 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
             <OptionCard
               key={option.id}
               versionId={versionId}
+              questionId={question.id}
               option={option}
               edges={edgesByGuard.get(option.id) ?? []}
               allEdges={edges}
               ctx={ctx}
               isUncovered={uncovered.has(option.id)}
+              hasFallback={anyAnswerEdges.length > 0}
               isGuard={guardOptionIds.has(option.id)}
               canMoveUp={index > 0}
               canMoveDown={index < options.length - 1}
@@ -699,7 +859,12 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
               onMoveEdge={moveEdge}
               editable={editable}
               disabled={pending}
+              retargetingEdgeId={retargetingEdgeId}
+              addingRouteOptionId={addingRouteOptionId}
               onSelectQuestion={onSelectQuestion}
+              onStartRetarget={onStartRetarget}
+              onStartAddRoute={onStartAddRoute}
+              onCancelPick={onCancelPick}
             />
           ))}
 
@@ -713,8 +878,11 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
               selectLabel={`Where "${optionLabel(question, null)}" leads`}
               editable={editable}
               disabled={pending}
+              retargetingEdgeId={retargetingEdgeId}
               onMoveEdge={moveEdge}
               onSelectQuestion={onSelectQuestion}
+              onStartRetarget={onStartRetarget}
+              onCancelPick={onCancelPick}
             />
           )}
 
@@ -729,8 +897,11 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
               selectLabel="Where this route leads"
               editable={editable}
               disabled={pending}
+              retargetingEdgeId={retargetingEdgeId}
               onMoveEdge={moveEdge}
               onSelectQuestion={onSelectQuestion}
+              onStartRetarget={onStartRetarget}
+              onCancelPick={onCancelPick}
             />
           )}
         </ul>
@@ -745,7 +916,11 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
                 onSubmit={(event) => {
                   event.preventDefault();
                   addOption.mutate(
-                    { question: question.id, code: newOptionCode, label: newOptionLabel },
+                    {
+                      question: question.id,
+                      code: newOptionCode,
+                      label: newOptionLabel,
+                    },
                     {
                       onError: onWriteError,
                       onSuccess: () => {
@@ -784,7 +959,9 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
                     className="button button--primary"
                     type="submit"
                     disabled={
-                      pending || newOptionCode.trim() === "" || newOptionLabel.trim() === ""
+                      pending ||
+                      newOptionCode.trim() === "" ||
+                      newOptionLabel.trim() === ""
                     }
                   >
                     {addOption.isPending ? "Adding…" : "Add option"}
@@ -826,23 +1003,6 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
           {addingEdge ? (
             <form className="editor" onSubmit={submitNewEdge}>
               <div className="field field--inline">
-                <label htmlFor={addGuardId}>When the answer is</label>
-                <select
-                  id={addGuardId}
-                  value={newGuard}
-                  disabled={pending}
-                  onChange={(event) => setNewGuard(event.target.value)}
-                >
-                  <option value={ANY_ANSWER}>Anything else</option>
-                  {takesOptions &&
-                    question.options.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div className="field field--inline">
                 <label htmlFor={addTargetId}>Go to</label>
                 <select
                   id={addTargetId}
@@ -858,14 +1018,17 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
                   ))}
                 </select>
               </div>
-              {!takesOptions && (
-                <p className="panel__hint">
-                  Since this question has no separate answer options, this route applies
-                  no matter what's answered.
-                </p>
-              )}
+              <p className="panel__hint">
+                {takesOptions
+                  ? "This route applies no matter which answer is given -- for a route tied to one specific answer, add it from that answer's own card above."
+                  : "Since this question has no separate answer options, this route applies no matter what's answered."}
+              </p>
               <div className="editor__actions">
-                <button className="button button--primary" type="submit" disabled={pending}>
+                <button
+                  className="button button--primary"
+                  type="submit"
+                  disabled={pending}
+                >
                   Add route
                 </button>
                 <button
@@ -884,7 +1047,7 @@ export function Options({ graph, question, editable, onSelectQuestion }: Options
               type="button"
               onClick={() => setAddingEdge(true)}
             >
-              + Add a route
+              {takesOptions ? "+ Add a fallback route" : "+ Add a route"}
             </button>
           )}
         </div>

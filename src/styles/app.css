@@ -311,6 +311,31 @@ body {
   background: var(--surface);
 }
 
+/* Same "active edit mode" visual language `.opt-edit-btn.active` already
+ * uses (--gold), not a new one-off colour -- ported in spirit from
+ * break-backend's own `.retarget-banner` (styles.css ~L1719-1738), whose
+ * literal `rgba(242, 193, 78, ...)` tint is replaced with this app's own
+ * --gold value rather than copied verbatim, since --gold here is already
+ * a value-for-value port of break's own token (`#9a5209`) and this keeps
+ * the banner tied to that same token instead of a second gold. */
+.retarget-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(154, 82, 9, 0.12);
+  border: 1px solid var(--gold);
+  color: var(--text);
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 7;
+  box-shadow: var(--shadow-md);
+}
+
 .hint {
   position: absolute;
   left: 50%;
@@ -1017,6 +1042,20 @@ details[open] > summary > .chevron {
 }
 
 .options-add .editor {
+  width: 100%;
+  margin-top: 0;
+}
+
+/* An option's own "+ Add a route" -- same dashed-separator treatment as
+ * `.opt-edges` immediately above it, so it reads as one more thing nested
+ * inside this answer's card rather than a form that wandered in. */
+.opt-add-edge {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.opt-add-edge .editor {
   width: 100%;
   margin-top: 0;
 }

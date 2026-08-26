@@ -3,7 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { DetailPanel } from "./DetailPanel";
-import { Q1, Q2, Q3_ARCHIVED, makeGraph } from "../test/fixtures";
+import {
+  E_YES_TO_Q2,
+  OPTION_YES,
+  Q1,
+  Q2,
+  Q3_ARCHIVED,
+  makeGraph,
+} from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 
 function panelFor(questionId: string, editable = false) {
@@ -15,7 +22,12 @@ function panelFor(questionId: string, editable = false) {
       graph={graph}
       question={question}
       editable={editable}
+      retargetingEdgeId={null}
+      addingRouteOptionId={null}
       onSelectQuestion={vi.fn()}
+      onStartRetarget={vi.fn()}
+      onStartAddRoute={vi.fn()}
+      onCancelPick={vi.fn()}
     />,
   );
 }
@@ -41,7 +53,12 @@ describe("a live question", () => {
         graph={{ ...graph, edges: [...graph.edges].reverse() }}
         question={question}
         editable={false}
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
         onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
       />,
     );
 
@@ -102,8 +119,11 @@ describe("edit controls", () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
 
-    // Closed by default -- opening it is what reveals the actual form.
-    const toggle = screen.getByRole("button", { name: "+ Add a route" });
+    // Closed by default -- opening it is what reveals the actual form. Q1
+    // takes options, so the section-wide route is a fallback rather than
+    // a plain "+ Add a route" (that name is reserved for a specific
+    // answer's own card -- see below).
+    const toggle = screen.getByRole("button", { name: "+ Add a fallback route" });
     expect(screen.queryByRole("button", { name: "Add route" })).not.toBeInTheDocument();
 
     await user.click(toggle);
@@ -121,23 +141,281 @@ describe("edit controls", () => {
       within(section).queryByRole("button", { name: "Delete" }),
     ).not.toBeInTheDocument();
 
-    await user.click(within(section).getAllByRole("button", { name: "Edit" })[0] as HTMLElement);
+    await user.click(
+      within(section).getAllByRole("button", { name: "Edit" })[0] as HTMLElement,
+    );
 
     expect(within(section).getByLabelText("Label")).toBeInTheDocument();
     expect(within(section).getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("offer no per-option guard on a question whose answers select nothing", async () => {
-    // A scale answer never selects an option, so a per-option edge on it
-    // is dead the moment it is saved. The server refuses it too; this just
-    // stops the UI from offering it.
+  it("offers no retargeting at all on a published version", () => {
+    panelFor(Q1, false);
+    expect(screen.queryByRole("button", { name: "Retarget" })).not.toBeInTheDocument();
+  });
+
+  it("shows a route's Retarget and End-the-flow buttons without needing that answer's Edit", () => {
+    // Unlike Move/Remove (still behind Edit -- see the test above), these
+    // two act immediately and aren't destructive, so they don't need the
+    // extra click.
+    panelFor(Q1, true);
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    expect(
+      within(yesRow).getByRole("button", { name: "Retarget" }),
+    ).toBeInTheDocument();
+    expect(
+      within(yesRow).getByRole("button", { name: "End the flow here" }),
+    ).toBeInTheDocument();
+    expect(
+      within(yesRow).queryByRole("button", { name: "Move up" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(yesRow).queryByRole("button", { name: "Remove" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("asks the map to start a retarget, naming the route being retargeted", async () => {
+    const user = userEvent.setup();
+    const onStartRetarget = vi.fn();
+    const graph = makeGraph();
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={onStartRetarget}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
+      />,
+    );
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    await user.click(within(yesRow).getByRole("button", { name: "Retarget" }));
+
+    expect(onStartRetarget).toHaveBeenCalledWith(E_YES_TO_Q2, 'Where "Yes" leads');
+  });
+
+  it("shows Cancel, not Retarget, on the row currently mid-retarget", async () => {
+    const user = userEvent.setup();
+    const onCancelPick = vi.fn();
+    const graph = makeGraph();
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={E_YES_TO_Q2}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={onCancelPick}
+      />,
+    );
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+
+    expect(
+      within(yesRow).queryByRole("button", { name: "Retarget" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(yesRow).getByRole("button", { name: "Cancel retarget" }));
+
+    expect(onCancelPick).toHaveBeenCalled();
+  });
+
+  it("offers no 'Add a route' on an answer that already has one", () => {
+    // "Yes" already routes to Q2 in the fixture -- adding a second route
+    // through this affordance isn't offered; retargeting the existing one
+    // is the way to change where it goes.
+    panelFor(Q1, true);
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    expect(
+      within(yesRow).queryByRole("button", { name: "Add a route" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("asks the map to start adding a route for an answer that has none yet", async () => {
+    const user = userEvent.setup();
+    const onStartAddRoute = vi.fn();
+    const graph = makeGraph();
+    // Strip "Yes"'s existing edge so it has no route yet -- the affordance
+    // this test exercises is only offered in that case.
+    graph.edges = graph.edges.filter((item) => item.id !== E_YES_TO_Q2);
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={onStartAddRoute}
+        onCancelPick={vi.fn()}
+      />,
+    );
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    await user.click(within(yesRow).getByRole("button", { name: "Add a route" }));
+
+    expect(onStartAddRoute).toHaveBeenCalledWith(Q1, OPTION_YES, expect.any(String));
+  });
+
+  it("shows Cancel add route on the answer currently mid-add", async () => {
+    const user = userEvent.setup();
+    const onCancelPick = vi.fn();
+    const graph = makeGraph();
+    graph.edges = graph.edges.filter((item) => item.id !== E_YES_TO_Q2);
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={OPTION_YES}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={onCancelPick}
+      />,
+    );
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+
+    expect(
+      within(yesRow).queryByRole("button", { name: "Add a route" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(yesRow).getByRole("button", { name: "Cancel add route" }));
+
+    expect(onCancelPick).toHaveBeenCalled();
+  });
+
+  it("disables 'End the flow here' on a route that already ends the flow", () => {
+    panelFor(Q1, true);
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const noRow = screen.getByText("No").closest("li") as HTMLElement;
+
+    expect(
+      within(yesRow).getByRole("button", { name: "End the flow here" }),
+    ).toBeEnabled();
+    expect(
+      within(noRow).getByRole("button", { name: "End the flow here" }),
+    ).toBeDisabled();
+  });
+
+  it("offers a one-click fall-through only when this question has a fallback edge", () => {
+    // Base fixture: Q1 has no question-level ("Anything else") edge, so
+    // "Yes"'s own edge has nothing to fall through to -- no button.
+    panelFor(Q1, true);
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    expect(
+      within(yesRow).queryByRole("button", { name: /Fall through to/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a one-click fall-through on a per-option edge once this question has a fallback", () => {
+    const graph = makeGraph();
+    // Give Q1 a question-level ("Anything else") edge alongside "Yes"'s
+    // own -- exactly the shape the button exists for: b points somewhere
+    // explicitly, "Anything else" already points somewhere too, so
+    // removing b's own edge is one click away instead of Edit-then-Remove.
+    graph.edges = [
+      ...graph.edges,
+      {
+        id: "fallback-edge",
+        from_question: Q1,
+        from_option: null,
+        to_question: Q2,
+        priority: 2,
+      },
+    ];
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
+      />,
+    );
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    // Available without opening this answer's Edit toggle, like Retarget
+    // and End-the-flow-here -- it acts immediately and isn't hidden away.
+    expect(
+      within(yesRow).getByRole("button", { name: 'Fall through to "Anything else"' }),
+    ).toBeEnabled();
+  });
+
+  it("offers no fall-through button on the fallback edge's own row", () => {
+    const graph = makeGraph();
+    graph.edges = [
+      ...graph.edges,
+      {
+        id: "fallback-edge",
+        from_question: Q1,
+        from_option: null,
+        to_question: Q2,
+        priority: 2,
+      },
+    ];
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
+      />,
+    );
+
+    const anythingRow = screen.getByText("Anything else").closest("li") as HTMLElement;
+    expect(
+      within(anythingRow).queryByRole("button", { name: /Fall through to/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no per-option add-route affordance on a question whose answers select nothing", async () => {
+    // A scale question has no options at all, so there's no per-option
+    // card to nest an "Add a route" into -- only the one, section-wide
+    // affordance (which every route on such a question uses).
     const user = userEvent.setup();
     panelFor(Q2, true);
 
-    await user.click(screen.getByRole("button", { name: "+ Add a route" }));
-    const guard = screen.getByLabelText("When the answer is");
+    // The per-option button reads exactly "Add a route" (no "+") -- Q2
+    // has no options at all, so there's no card to render one on.
+    expect(
+      screen.queryByRole("button", { name: "Add a route" }),
+    ).not.toBeInTheDocument();
 
-    expect(within(guard).getAllByRole("option")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "+ Add a route" }));
+
     expect(
       screen.getByText(/this question has no separate answer options/),
     ).toBeInTheDocument();

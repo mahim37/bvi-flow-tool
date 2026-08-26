@@ -27,6 +27,13 @@ interface CanvasProps {
   onSelectEdge: (id: string) => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  /** Non-null while a route is mid-retarget, or a new route is mid-add
+   * (see `MapView`/`Options`) -- names what's being picked, for the
+   * banner. Tapping a node completes it instead of selecting the node;
+   * tapping empty canvas or pressing Esc cancels, same as `onCancelPick`. */
+  pickLabel: string | null;
+  onPickTarget: (id: string) => void;
+  onCancelPick: () => void;
 }
 
 /** The id set, in a form that is cheap to compare. A change here means
@@ -48,12 +55,30 @@ export function Canvas({
   onSelectEdge,
   sidebarCollapsed,
   onToggleSidebar,
+  pickLabel,
+  onPickTarget,
+  onCancelPick,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const signatureRef = useRef<string>("");
-  const selectHandlers = useRef({ onSelectNode, onSelectEdge });
-  selectHandlers.current = { onSelectNode, onSelectEdge };
+  const selectHandlers = useRef({
+    onSelectNode,
+    onSelectEdge,
+    onPickTarget,
+    onCancelPick,
+  });
+  selectHandlers.current = {
+    onSelectNode,
+    onSelectEdge,
+    onPickTarget,
+    onCancelPick,
+  };
+  // Read inside the `cy.on(...)` handlers registered once below, so
+  // whether a tap selects or picks a target reflects the latest mode
+  // without re-binding cytoscape's listeners on every mode change.
+  const pickingRef = useRef(pickLabel !== null);
+  pickingRef.current = pickLabel !== null;
 
   useEffect(() => {
     if (containerRef.current === null) return;
@@ -70,13 +95,29 @@ export function Canvas({
     cyRef.current = cy;
 
     cy.on("tap", "node", (event) => {
+      if (pickingRef.current) {
+        selectHandlers.current.onPickTarget(event.target.id() as string);
+        return;
+      }
       selectHandlers.current.onSelectNode(event.target.id() as string);
     });
     cy.on("tap", "edge", (event) => {
+      if (pickingRef.current) return;
       selectHandlers.current.onSelectEdge(event.target.id() as string);
     });
     cy.on("tap", (event) => {
-      if (event.target === cy) selectHandlers.current.onSelectNode(null);
+      if (event.target !== cy) return;
+      // A blank-canvas tap mid-pick used to fall through to
+      // `onSelectNode(null)`, closing the detail panel but silently
+      // leaving pick mode active -- inconsistent with Esc/Cancel, and
+      // easy to not notice. Ported from break-backend's own fix for this
+      // (app.js's cy "tap" handler, ~L2369-2382): treat it the same as
+      // backing out.
+      if (pickingRef.current) {
+        selectHandlers.current.onCancelPick();
+        return;
+      }
+      selectHandlers.current.onSelectNode(null);
     });
 
     // Hover-to-trace, ported from break-backend's focus/highlight engine
@@ -134,8 +175,28 @@ export function Canvas({
         const id = element.data.id;
         if (id === undefined) continue;
         const existing = cy.getElementById(id);
-        if (existing.nonempty()) existing.data(element.data);
-        else cy.add(element);
+        if (existing.nonempty()) {
+          // Cytoscape treats an edge's source/target as fixed at creation
+          // time -- merging new values into `.data()` updates what the
+          // edge *reports*, but not which nodes it's actually drawn
+          // between, so a retargeted or newly-ended edge would keep
+          // pointing at its old destination forever. Remove and re-add it
+          // under the same id instead; every other field (priority,
+          // guard, fault flags) still merges in place below.
+          const data = element.data as { source?: string; target?: string };
+          if (
+            existing.isEdge() &&
+            (existing.data("source") !== data.source ||
+              existing.data("target") !== data.target)
+          ) {
+            existing.remove();
+            cy.add(element);
+          } else {
+            existing.data(element.data);
+          }
+        } else {
+          cy.add(element);
+        }
       }
     });
 
@@ -179,9 +240,25 @@ export function Canvas({
     // (app.js ~L2028-2032, ~L2092-2097) -- a section or diagnostic group
     // pans/zooms to fit every question it lit up, not just the first.
     if (set.nonempty()) {
-      cy.animate({ fit: { eles: set, padding: 70 }, duration: 360, easing: "ease-out" });
+      cy.animate({
+        fit: { eles: set, padding: 70 },
+        duration: 360,
+        easing: "ease-out",
+      });
     }
   }, [highlightedIds]);
+
+  // Ported from break-backend's global Escape handler (app.js
+  // ~L3665-3669) -- only wired up while a pick is actually active, so
+  // this doesn't compete with any other Esc behaviour elsewhere.
+  useEffect(() => {
+    if (pickLabel === null) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onCancelPick();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [pickLabel, onCancelPick]);
 
   // Ported from break-backend's #zoomIn/#zoomOut/#fit/#reset (app.js
   // ~L3594-3623) -- same factors and durations. Break's "reset" also
@@ -215,9 +292,20 @@ export function Canvas({
         role="img"
         aria-label={
           "Questionnaire flow diagram. Use the question list and detail panel " +
-          "for a keyboard-navigable view of the same routing."
+          "for a keyboard-navigable view of the same routing, with one exception: " +
+          "retargeting a route or adding one to a specific question requires " +
+          "clicking a question on this canvas."
         }
       />
+
+      {pickLabel !== null && (
+        <div className="retarget-banner" role="status">
+          <span>Click a question for {pickLabel}, or press Esc to cancel.</span>
+          <button type="button" className="opt-edit-btn" onClick={onCancelPick}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Ported from break-backend's #sidebarToggle (index.html ~L174-188,
           same hamburger path) -- there it lives in the topbar, but this

@@ -13,7 +13,19 @@ interface DetailPanelProps {
   graph: Graph;
   question: Question | null;
   editable: boolean;
+  /** The edge currently mid-retarget on the canvas, if any -- see
+   * `MapView`. Threaded straight through to `Options`. */
+  retargetingEdgeId: UUID | null;
+  /** The option (or `null` for a fallback route) a new route is currently
+   * mid-add for, if any -- see `MapView`. Threaded straight through to
+   * `Options`. */
+  addingRouteOptionId: UUID | null;
   onSelectQuestion: (id: UUID) => void;
+  onStartRetarget: (edgeId: UUID, label: string) => void;
+  onStartAddRoute: (questionId: UUID, optionId: UUID | null, label: string) => void;
+  /** Cancels whichever of the above is in progress. One handler, since
+   * only one canvas pick can be active at a time. */
+  onCancelPick: () => void;
   /** Optional so the panel can be rendered outside the router. Clears the
    * map's selection, which is what closes the drawer (there is no
    * separate "closed" state to track). */
@@ -112,7 +124,12 @@ export function DetailPanel({
   graph,
   question,
   editable,
+  retargetingEdgeId,
+  addingRouteOptionId,
   onSelectQuestion,
+  onStartRetarget,
+  onStartAddRoute,
+  onCancelPick,
   onClose,
 }: DetailPanelProps) {
   const questionsById = useMemo(
@@ -252,7 +269,12 @@ export function DetailPanel({
         graph={graph}
         question={question}
         editable={editable && live}
+        retargetingEdgeId={retargetingEdgeId}
+        addingRouteOptionId={addingRouteOptionId}
         onSelectQuestion={onSelectQuestion}
+        onStartRetarget={onStartRetarget}
+        onStartAddRoute={onStartAddRoute}
+        onCancelPick={onCancelPick}
       />
 
       <section className="panel__section" aria-labelledby="incoming-heading">

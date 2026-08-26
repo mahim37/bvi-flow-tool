@@ -93,6 +93,13 @@ export interface NewEdge {
   from_question: UUID;
   from_option: UUID | null;
   to_question: UUID | null;
+  /** Omitted, almost always -- the server appends a new edge last by
+   * default, which is always right for a question-level edge. The one
+   * caller that sets this (`MapView`'s add-route pick) does so only to
+   * land a per-option edge above an already-existing question-level one,
+   * using a priority number lower than any this question already has --
+   * still fully re-validated server-side, same as every other write. */
+  priority?: number;
 }
 
 export const addEdge = (versionId: UUID, edge: NewEdge) =>
