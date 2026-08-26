@@ -2239,6 +2239,17 @@ textarea:focus-visible {
   padding: 0;
 }
 
+/* A `primary` `Cta` trigger (e.g. "Propose a change") additionally
+   carries `.button`/`.button--primary`, which supplies its own border and
+   background too (including the hover inversion) -- drop the summary's
+   own so two borders/backgrounds do not sit on top of each other. Plain
+   (non-`.button`) `.draftbar__cta` triggers still get the summary's own
+   chrome, which is the only border/background they have. */
+.editor-dropdown > summary:has(.draftbar__cta.button) {
+  border: none;
+  background: transparent;
+}
+
 .editor-dropdown > summary::-webkit-details-marker {
   display: none;
 }

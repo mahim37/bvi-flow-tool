@@ -273,11 +273,11 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
             ) : (
               <EditorDropdown
                 trigger={
-                  <span className="draftbar__cta">
+                  <span className="button draftbar__cta button--primary">
                     <span className="draftbar__cta-title">Propose a change</span>
                     <span className="draftbar__cta-desc">
-                      A draft is a whole copy of this version. Only one may be open per
-                      product at a time.
+                      A draft is a whole copy of this version. Only one may be open at a
+                      time.
                     </span>
                   </span>
                 }
@@ -406,16 +406,29 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
 
   const lock = changeRequest.lock;
   const heldByMe = lock !== null && lock.email === identity?.email;
-  // `editing.discard_draft`/`editing.withdraw` are author-only on the
-  // server (`_require_author`) -- not a permission grant, so offering the
-  // button to anyone else would be a control that always 403s. Checked
-  // here rather than left to the write-error handler because that 403
-  // would otherwise be indistinguishable from "this account lacks
-  // edit_flow_tool" and would wrongly hide every edit control for the
-  // rest of the session (see `useWriteErrorHandler`) -- the same reason
-  // ReviewView keeps its own `isAuthor` check for approve/reject instead
-  // of relying on the refusal.
+  // `editing.withdraw` is author-only on the server (`_require_author`) --
+  // not a permission grant, so offering the button to anyone else would be
+  // a control that always 403s. Checked here rather than left to the
+  // write-error handler because that 403 would otherwise be
+  // indistinguishable from "this account lacks edit_flow_tool" and would
+  // wrongly hide every edit control for the rest of the session (see
+  // `useWriteErrorHandler`) -- the same reason ReviewView keeps its own
+  // `isAuthor` check for approve/reject instead of relying on the
+  // refusal. `editing.discard_draft` is wider (see `isPublisher` below);
+  // `isAuthor` alone still gates Withdraw, which stayed author-only.
   const isAuthor = changeRequest.created_by_email === identity?.email;
+  // Whether *this* account holds `publish_flow_tool` at all -- not
+  // `isNamedReviewer` below, which only answers "is one of *this*
+  // proposal's two," a fact that does not exist yet for an OPEN draft
+  // (`submit` is what names them). `reviewers` already lists everyone
+  // holding the grant (fetched for the submit form's picker), so this
+  // reads it rather than adding a second source of truth or falling back
+  // to guess-by-refusal (`reviewRefused`), which is one-way -- it only
+  // ever turns true after a refusal, so it cannot positively confirm
+  // anyone holds the grant before they have tried and failed to use it.
+  const isPublisher = (reviewers.data ?? []).some(
+    (reviewer) => reviewer.email === identity?.email,
+  );
   const isOpen = changeRequest.status === "open";
   // Withdrawing accepts both, and drops an approval rather than banking
   // it: what comes back is an editable proposal, and an approval of an
@@ -580,12 +593,16 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
             </EditorDropdown>
           )}
 
-          {/* Discard and Withdraw are author-only on the server -- see
-              `isAuthor`'s comment above -- so neither is offered to
-              anyone else. `isOpen`/`isFrozen` between them cover every
-              status this bar reaches (never both at once), so exactly
-              one control or the explanatory note below renders. */}
-          {isOpen && isAuthor && (
+          {/* Discard accepts the author or anyone holding the publish
+              grant (`isPublisher`) -- widened from author-only so an
+              abandoned draft does not permanently occupy the one slot
+              `create_draft` now caps a questionnaire at. Withdraw stays
+              author-only on the server (`_require_author`) -- neither is
+              offered to anyone else. `isOpen`/`isFrozen` between them
+              cover every status this bar reaches (never both at once),
+              so exactly one control or the explanatory note below
+              renders. */}
+          {isOpen && (isAuthor || isPublisher) && (
             <ConfirmAction
               message="Discard this draft? The proposal and every edit in it are deleted."
               confirmLabel="Discard draft"
@@ -595,8 +612,8 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 // drafted from another (now-discarded) draft -- an edge
                 // case worth not crashing on, not a version to fall back
                 // to: `versionId` is the one that just stopped existing.
-                // `onOpenVersion(null)` sends the author somewhere that
-                // still does.
+                // `onOpenVersion(null)` sends whoever discarded it
+                // somewhere that still does.
                 discardDraft.mutate(versionId, {
                   onError: onWriteError,
                   onSuccess: () => onOpenVersion(graph.version.parent_version),
@@ -607,7 +624,12 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 <button
                   className="button button--danger"
                   type="button"
-                  disabled={busy || editRefused}
+                  // `editRefused` only matters on the author path: a pure
+                  // publisher needs no edit grant for this action at all,
+                  // so an unrelated edit refusal earlier this session
+                  // must not block a discard they are otherwise entitled
+                  // to.
+                  disabled={busy || (editRefused && !isPublisher)}
                   onClick={open}
                 >
                   Discard draft
@@ -697,12 +719,13 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
           giving this one the same full-width treatment is what actually
           lets the row above stay on one line.
 
-          Only shown once frozen (`!isOpen`): while open, Discard being
-          author-only is a minor aside -- Submit for review and every
-          content edit are still wide open to a non-author editor, so
-          there's plenty else to do and nothing missing worth explaining.
-          Once frozen, Withdraw is the one thing left that Publish isn't,
-          so its absence is worth a word. */}
+          Only shown once frozen (`!isOpen`): while open, Discard is
+          already offered to a publisher, not just the author, and an
+          ordinary editor still has Submit for review and every content
+          edit to do, so there's nothing missing worth explaining. Once
+          frozen, Withdraw is author-only with no publisher exception (see
+          `isAuthor`'s comment above) and is the one thing left that
+          Publish isn't, so its absence is worth a word. */}
       {!isAuthor && !isOpen && (
         <p className="banner banner--info">
           Only {changeRequest.created_by_email} can discard or withdraw this proposal.
