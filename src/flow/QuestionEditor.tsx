@@ -146,9 +146,9 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
                 inherited one would read as that item removed and a different
                 one added, carrying its options and edges with it. */}
             <p className="panel__hint">
-              Editable only on something this draft introduced. Renaming an inherited code
-              reads as a removal and an addition in the review screen, so the server
-              refuses it — retire the question and add its replacement instead.
+              Editable only on something this draft introduced. Renaming an inherited
+              code reads as a removal and an addition in the review screen, so the
+              server refuses it — retire the question and add its replacement instead.
             </p>
           </div>
 

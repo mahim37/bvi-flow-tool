@@ -274,8 +274,12 @@ describe("errors", () => {
       "User is not active.",
       "Session has expired.",
     ]) {
-      vi.mocked(globalThis.fetch).mockResolvedValueOnce(respond(403, { detail }, false));
-      const caught = (await request("/api/x/").catch((error: unknown) => error)) as ApiError;
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+        respond(403, { detail }, false),
+      );
+      const caught = (await request("/api/x/").catch(
+        (error: unknown) => error,
+      )) as ApiError;
       expect(caught.isUnauthenticated).toBe(true);
     }
 
@@ -286,7 +290,9 @@ describe("errors", () => {
         false,
       ),
     );
-    const denied = (await request("/api/x/").catch((error: unknown) => error)) as ApiError;
+    const denied = (await request("/api/x/").catch(
+      (error: unknown) => error,
+    )) as ApiError;
     expect(denied.isUnauthenticated).toBe(false);
     expect(denied.isForbidden).toBe(true);
   });

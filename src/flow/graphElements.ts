@@ -197,7 +197,9 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       sectionColor: question.section
         ? (sectionColor.get(question.section) ?? NO_SECTION_COLOR)
         : NO_SECTION_COLOR,
-      badgeKind: archived ? null : badgeKindFor(isDecision, isUnreachable, isEntry, isTerminal),
+      badgeKind: archived
+        ? null
+        : badgeKindFor(isDecision, isUnreachable, isEntry, isTerminal),
       isEntry,
       isTerminal,
       isDecision,

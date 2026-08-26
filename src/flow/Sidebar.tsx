@@ -136,7 +136,11 @@ function Chevron() {
  * draws as corner badges on the canvas (`BADGE_ICON`, copied from break
  * value-for-value there too), so the legend shows the exact mark a node
  * actually carries rather than a generic stand-in shape. */
-function BadgeIcon({ kind }: { kind: "entry" | "terminal" | "branch" | "unreachable" }) {
+function BadgeIcon({
+  kind,
+}: {
+  kind: "entry" | "terminal" | "branch" | "unreachable";
+}) {
   return (
     <svg
       className="node-key-icon"
@@ -191,7 +195,8 @@ function HistoryPanel({ questionnaireId }: { questionnaireId: UUID }) {
   }, [history.error, noteApiError]);
 
   if (history.isPending) return <p className="empty">Loading…</p>;
-  if (history.isError) return <p className="empty">Could not load the activity trail.</p>;
+  if (history.isError)
+    return <p className="empty">Could not load the activity trail.</p>;
 
   const events = history.data.results;
   if (events.length === 0) return <p className="empty">Nothing has happened yet.</p>;
@@ -201,7 +206,9 @@ function HistoryPanel({ questionnaireId }: { questionnaireId: UUID }) {
       {events.map((event) => (
         <li key={event.id}>
           <span className="history__what">{activityEventLabel(event.event_type)}</span>
-          {event.detail !== "" && <span className="history__detail">{event.detail}</span>}
+          {event.detail !== "" && (
+            <span className="history__detail">{event.detail}</span>
+          )}
           <span className="history__by">
             {event.actor_email} · {event.version_name} ·{" "}
             {formatTimestamp(event.occurred_at)}
@@ -520,7 +527,8 @@ export function Sidebar({
                 </li>
                 <li>
                   <span className="node-key-swatch node-key-swatch--end" />
-                  End of flow — the shared destination every "flow ends here" edge points at
+                  End of flow — the shared destination every "flow ends here" edge
+                  points at
                 </li>
                 <li>
                   <span className="node-key-swatch node-key-swatch--missing" />

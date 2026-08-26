@@ -165,7 +165,9 @@ export function PreviewView() {
                 <>
                   <p className="preview__subtitle">
                     {previewInstruction(isMulti)}
-                    {question.is_required ? "" : " Optional — you can continue without picking one."}
+                    {question.is_required
+                      ? ""
+                      : " Optional — you can continue without picking one."}
                   </p>
                   <ul className="preview__options">
                     {question.options.map((option) => {

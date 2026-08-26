@@ -1,7 +1,7 @@
 # Questionnaire flow tool
 
 Internal, admin-only UI for viewing and proposing changes to questionnaire
-branching logic. It is the frontend for the `staff/flow-tool/` API in 
+branching logic. It is the frontend for the `staff/flow-tool/` API in
 `bvi-backend`, and it is a **proposal system, not a live editor** — edits land
 on a draft copy of a version, and publishing is a separate, reviewed step.
 

@@ -30,7 +30,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Uncaught error, showing the reload screen instead of a blank page:", error, info);
+    console.error(
+      "Uncaught error, showing the reload screen instead of a blank page:",
+      error,
+      info,
+    );
   }
 
   render() {
