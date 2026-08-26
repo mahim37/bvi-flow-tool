@@ -13,11 +13,11 @@ interface EditorDropdownProps {
    * hand via `aria-disabled` plus swallowing the click that would
    * otherwise toggle it open. */
   disabled?: boolean;
-  /** Either the panel's contents, or a function receiving `close` for the
-   * one case that wants to dismiss itself on success (`DraftBar`'s
-   * submit form) -- `AddQuestion`/`SectionEditor` ignore it and stay open,
-   * since adding one thing and immediately wanting to add another is the
-   * point of those two. */
+  /** Either the panel's contents, or a function receiving `close` to
+   * dismiss itself on a successful submit (`DraftBar`'s forms,
+   * `AddQuestion`) -- `SectionEditor` ignores it and stays open instead,
+   * since adding one section and immediately wanting to add another is
+   * the point of that one. */
   children: ReactNode | ((close: () => void) => ReactNode);
 }
 
