@@ -2122,6 +2122,15 @@ details[open] > summary > .chevron {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* With no second column to share the row with, the card would otherwise
+ * stretch edge-to-edge (a grid item's default `stretch`) -- capped and
+ * centered instead, since a single question in a full-width card reads
+ * as too wide once "The route so far" isn't there to balance it. */
+.preview__body--solo .preview__current {
+  max-width: 60%;
+  margin: 0 auto;
+}
+
 /* Ported from break-backend's `.preview-stage`/`.preview-shell`
  * (question_graph_editor/styles.css ~L1250-1437) -- styled to look like
  * the real end-user questionnaire rather than this tool's own admin

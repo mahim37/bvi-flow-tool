@@ -15,10 +15,14 @@ type PreviewMode = "full" | "changes";
 
 /** What the walk stood on, so a reader can see the route rather than just
  * where it ended. Kept beside the answers because the payload names only
- * the *next* question -- a question already answered has left the walk. */
+ * the *next* question -- a question already answered has left the walk.
+ * `freeValue` is display-only, same as the input it comes from (see the
+ * free-text/scale branch below) -- never sent to `walk`, since the
+ * resolver's routing for these types doesn't depend on it either. */
 interface Step {
   question: QuestionRecord;
   optionIds: UUID[];
+  freeValue: string | null;
 }
 
 function answersFrom(steps: Step[]): PreviewAnswer[] {
@@ -40,6 +44,7 @@ export function PreviewView() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [state, setState] = useState<PreviewState | null>(null);
   const [chosen, setChosen] = useState<UUID[]>([]);
+  const [freeValue, setFreeValue] = useState("");
   // `null` until the reviewer explicitly flips the toggle -- until then,
   // the mode is *derived* (see `mode` below) rather than chosen, so a
   // toggle that later loses its changes (this draft got edited further)
@@ -66,6 +71,7 @@ export function PreviewView() {
           setSteps(next);
           setState(result);
           setChosen([]);
+          setFreeValue("");
         },
       });
     },
@@ -147,6 +153,7 @@ export function PreviewView() {
     setSteps([]);
     setState(null);
     setChosen([]);
+    setFreeValue("");
 
     const target = mode === "changes" ? changedQuestionIds[changeIndex] : undefined;
     if (target === undefined) {
@@ -168,7 +175,11 @@ export function PreviewView() {
             mutate([], { onSuccess: (result) => setState(result) });
             return;
           }
-          seededSteps.push({ question: found, optionIds: answer.option_ids });
+          seededSteps.push({
+            question: found,
+            optionIds: answer.option_ids,
+            freeValue: null,
+          });
         }
         walkTo(seededSteps);
       },
@@ -197,7 +208,14 @@ export function PreviewView() {
 
   function answer() {
     if (question === null) return;
-    walkTo([...steps, { question, optionIds: chosen }]);
+    walkTo([
+      ...steps,
+      {
+        question,
+        optionIds: chosen,
+        freeValue: isChoice ? null : freeValue.trim() || null,
+      },
+    ]);
   }
 
   const conflict = walk.error instanceof ApiError && walk.error.isConflict;
@@ -390,7 +408,9 @@ export function PreviewView() {
                     // everything else gets `type="number"`/`"text"`) --
                     // shown for realism only, same as there: a free-text or
                     // scale answer selects no option, so nothing typed here
-                    // is read back or changes the route.
+                    // changes the route. It is echoed back in "The route so
+                    // far" below, though, so a reviewer can see what they
+                    // typed rather than a flat "no option selected".
                     <>
                       <p className="preview__subtitle">
                         {previewInstruction(question.answer_type)}
@@ -404,6 +424,8 @@ export function PreviewView() {
                             ? "Enter a number"
                             : "Enter your response"
                         }
+                        value={freeValue}
+                        onChange={(event) => setFreeValue(event.target.value)}
                       />
                     </>
                   )}
@@ -464,16 +486,16 @@ export function PreviewView() {
                   <li key={`${step.question.id}-${String(index)}`}>
                     <code className="preview__code">{step.question.code}</code>
                     <span className="preview__answer">
-                      {step.optionIds.length === 0
-                        ? "no option selected"
-                        : step.optionIds
+                      {step.optionIds.length > 0
+                        ? step.optionIds
                             .map(
                               (optionId) =>
                                 step.question.options.find(
                                   (option) => option.id === optionId,
                                 )?.label ?? "unknown option",
                             )
-                            .join(", ")}
+                            .join(", ")
+                        : (step.freeValue ?? "no option selected")}
                     </span>
                   </li>
                 ))}
