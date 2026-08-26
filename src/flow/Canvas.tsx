@@ -84,6 +84,35 @@ function nodeSignature(elements: ElementDefinition[]): string {
     .join("|");
 }
 
+function idsFromSignature(signature: string): Set<string> {
+  return new Set(signature === "" ? [] : signature.split("|"));
+}
+
+/** Places a brand new question beside its section's own first question
+ * instead of wherever dagre's own disconnected-component placement
+ * happened to land it -- a new question has no edges yet, so dagre sees
+ * it as its own component with no relation to the rest of its section.
+ * Purely a starting position, same reasoning as `fitToChainStart`: it
+ * doesn't touch routing, just where a freshly-added node's camera-facing
+ * position begins (a further drag/re-layout is unaffected). Several new
+ * questions sharing one anchor (added in the same batch) stagger down
+ * from it rather than stacking exactly on top of each other. */
+function repositionNewSiblings(cy: Core, newNodeIds: ReadonlySet<string>) {
+  const placedPerAnchor = new Map<string, number>();
+  for (const id of newNodeIds) {
+    const node = cy.getElementById(id);
+    if (node.empty()) continue;
+    const anchorId = node.data("sectionAnchorId") as string | null;
+    if (anchorId === null) continue;
+    const anchor = cy.getElementById(anchorId);
+    if (anchor.empty()) continue;
+    const index = placedPerAnchor.get(anchorId) ?? 0;
+    placedPerAnchor.set(anchorId, index + 1);
+    const anchorPosition = anchor.position();
+    node.position({ x: anchorPosition.x + 220, y: anchorPosition.y + index * 90 });
+  }
+}
+
 export function Canvas({
   elements,
   selectedId,
@@ -239,8 +268,18 @@ export function Canvas({
 
     const signature = nodeSignature(elements);
     if (signature !== signatureRef.current) {
+      const previousIds = idsFromSignature(signatureRef.current);
       signatureRef.current = signature;
       cy.layout(LAYOUT).run();
+      // Only for an incremental change -- on the very first layout every
+      // node is "new" against an empty previous set, and that first full
+      // layout is exactly the one case this should leave alone.
+      if (previousIds.size > 0) {
+        const newIds = new Set(
+          [...idsFromSignature(signature)].filter((id) => !previousIds.has(id)),
+        );
+        repositionNewSiblings(cy, newIds);
+      }
       fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
     }
   }, [elements]);

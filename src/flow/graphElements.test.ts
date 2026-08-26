@@ -300,3 +300,57 @@ describe("change highlighting", () => {
     expect(changeKindsFromDiff(changed).options.get(OPTION_YES)).toBe("changed");
   });
 });
+
+describe("section anchor", () => {
+  // Q1 (display_order 1) and Q2 (display_order 2) share a section here --
+  // neither has one in the base fixture.
+  function graphWithSharedSection() {
+    const graph = makeGraph();
+    const sectionId = graph.sections[0]?.id;
+    if (sectionId === undefined) throw new Error("fixture has no section");
+    return makeGraph({
+      questions: graph.questions.map((question) =>
+        question.id === Q1 || question.id === Q2
+          ? { ...question, section: sectionId }
+          : question,
+      ),
+    });
+  }
+
+  it("gives a question with no section no anchor", () => {
+    expect(nodes().get(Q1)?.sectionAnchorId).toBe(null);
+  });
+
+  it("gives the section's own first (lowest display_order) question no anchor", () => {
+    expect(nodes(graphWithSharedSection()).get(Q1)?.sectionAnchorId).toBe(null);
+  });
+
+  it("anchors a later question in the same section to the first one", () => {
+    expect(nodes(graphWithSharedSection()).get(Q2)?.sectionAnchorId).toBe(Q1);
+  });
+
+  it("excludes an archived question from being an anchor, or needing one", () => {
+    const graph = makeGraph();
+    const sectionId = graph.sections[0]?.id;
+    if (sectionId === undefined) throw new Error("fixture has no section");
+    // Q1 (lowest display_order) is archived here, so Q2 -- not Q1 -- should
+    // become the section's live anchor, and Q1 itself gets none.
+    const withArchivedFirst = makeGraph({
+      questions: graph.questions.map((question) => {
+        if (question.id === Q1) {
+          return {
+            ...question,
+            section: sectionId,
+            archived_at: "2026-01-01T00:00:00Z",
+          };
+        }
+        if (question.id === Q2) return { ...question, section: sectionId };
+        return question;
+      }),
+    });
+    const built = nodes(withArchivedFirst);
+
+    expect(built.get(Q1)?.sectionAnchorId).toBe(null);
+    expect(built.get(Q2)?.sectionAnchorId).toBe(null);
+  });
+});

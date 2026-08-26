@@ -132,6 +132,14 @@ export interface NodeData {
   isUnreachable: boolean;
   hasFault: boolean;
   changeKind: ChangeKind | null;
+  /** The node id of this section's first (lowest `display_order`) live
+   * question -- `null` for that question itself (nothing to anchor to),
+   * for a question with no section, and for every synthetic node. A
+   * brand new question has no edges yet, so dagre lays it out as a
+   * disconnected node whenever the canvas re-runs layout (`Canvas.tsx`),
+   * which can land it far from the rest of its section -- this is what
+   * that reposition-after-layout step places it beside instead. */
+  sectionAnchorId: string | null;
 }
 
 export interface EdgeData {
@@ -253,6 +261,24 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
   }
 
   const sectionColor = sectionColorMap(graph.sections);
+
+  // Each section's own first (lowest `display_order`) live question --
+  // see `NodeData.sectionAnchorId`'s doc comment for why the canvas wants
+  // this.
+  const sectionAnchor = new Map<UUID, UUID>();
+  for (const question of graph.questions) {
+    if (question.archived_at !== null || question.section === null) continue;
+    const currentAnchorId = sectionAnchor.get(question.section);
+    const currentAnchor =
+      currentAnchorId !== undefined ? questionsById.get(currentAnchorId) : undefined;
+    if (
+      currentAnchor === undefined ||
+      question.display_order < currentAnchor.display_order
+    ) {
+      sectionAnchor.set(question.section, question.id);
+    }
+  }
+
   const elements: ElementDefinition[] = [];
 
   for (const question of graph.questions) {
@@ -267,6 +293,10 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
     const changeKind = archived
       ? null
       : (changeKinds.questions.get(question.id) ?? null);
+    const rawAnchorId =
+      !archived && question.section !== null
+        ? (sectionAnchor.get(question.section) ?? null)
+        : null;
     const data: NodeData = {
       id: question.id,
       // An archived question is drawn only while something still points at
@@ -288,6 +318,8 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
       isUnreachable,
       hasFault: !archived && faultedQuestions.has(question.id),
       changeKind,
+      // The anchor for its own section is nothing to anchor to.
+      sectionAnchorId: rawAnchorId !== question.id ? rawAnchorId : null,
     };
     elements.push({ data, group: "nodes" });
   }
@@ -323,6 +355,7 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
       isUnreachable: false,
       hasFault: true,
       changeKind: null,
+      sectionAnchorId: null,
     };
     elements.push({ data, group: "nodes" });
   }
@@ -342,6 +375,7 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
       isUnreachable: false,
       hasFault: false,
       changeKind: null,
+      sectionAnchorId: null,
     };
     elements.push({ data, group: "nodes" });
   }
