@@ -82,16 +82,6 @@ export function ReviewView() {
     navigate(`/versions/${versionId}?question=${questionId}`);
   }
 
-  // The route that reaches a question is part of what a preview is for
-  // (a per-question shortcut here was once removed for skipping straight
-  // to the entry point instead -- see `a79fc7d`), so this only points
-  // Preview at the change; asking the server for the actual route
-  // (`routing.path_to`) and seeding the walk with it is `PreviewView`'s
-  // own job now that it also owns stepping through every change in turn.
-  function previewFrom(questionId: string) {
-    navigate(`/versions/${versionId}/preview?question=${questionId}`);
-  }
-
   if (review.isPending) {
     return (
       <main className="page">
@@ -256,7 +246,6 @@ export function ReviewView() {
             kind={kind}
             items={items[kind]}
             onShowOnMap={showOnMap}
-            onPreviewFrom={previewFrom}
           />
         ))}
       </div>

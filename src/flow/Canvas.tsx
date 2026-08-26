@@ -256,13 +256,20 @@ export function Canvas({
     // center: true }) -- selecting a question from anywhere (sidebar,
     // search, a diagnostic chip, canvas tap itself) pans/zooms the camera
     // to it, so "select" always means "look at this" rather than leaving
-    // the node wherever it happened to land off-screen.
+    // the node wherever it happened to land off-screen. Capped at both
+    // ends -- not just floored at 0.7 -- because the current zoom can
+    // already be well past 1 the moment a fresh map lands here straight
+    // from "Show on map" (`fitToChainStart` frames just the first 10
+    // questions, not the whole graph, so it can zoom in more than this
+    // is meant to on its own): without the ceiling, centering on the
+    // target would keep whatever tight zoom that framing happened to
+    // produce instead of a normal reading distance.
     if (selectedId !== null) {
       const node = cy.getElementById(selectedId);
       if (node.nonempty()) {
         cy.animate({
           center: { eles: node },
-          zoom: Math.max(cy.zoom(), 0.7),
+          zoom: Math.min(Math.max(cy.zoom(), 0.8), 0.8),
           duration: 320,
         });
       }
@@ -274,16 +281,31 @@ export function Canvas({
     if (cy === null) return;
     let set = cy.collection();
     for (const id of highlightedIds) set = set.union(cy.getElementById(id));
-    // Ported from break-backend's focusGroup/diag-chip fit
-    // (app.js ~L2028-2032, ~L2092-2097) -- a section or diagnostic group
-    // pans/zooms to fit every question it lit up, not just the first.
-    if (set.nonempty()) {
+    if (set.empty()) return;
+
+    if (set.length === 1) {
+      // A single highlighted node ("Show on map" from the review screen
+      // is the common case) is the same "look at this one thing" the
+      // selection effect above handles -- fitting tightly to just its own
+      // bounding box + padding zooms in far more than centering on it
+      // does, so this shares that effect's center+clamp instead of `fit`.
       cy.animate({
-        fit: { eles: set, padding: 70 },
+        center: { eles: set },
+        zoom: Math.min(Math.max(cy.zoom(), 0.7), 1),
         duration: 360,
         easing: "ease-out",
       });
+      return;
     }
+
+    // Ported from break-backend's focusGroup/diag-chip fit
+    // (app.js ~L2028-2032, ~L2092-2097) -- a section or diagnostic group
+    // pans/zooms to fit every question it lit up, not just the first.
+    cy.animate({
+      fit: { eles: set, padding: 70 },
+      duration: 360,
+      easing: "ease-out",
+    });
   }, [highlightedIds]);
 
   // Ported from break-backend's global Escape handler (app.js

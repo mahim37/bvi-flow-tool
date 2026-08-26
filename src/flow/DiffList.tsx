@@ -8,11 +8,6 @@ interface DiffListProps {
    * hangs off no question, and for a removed item whose question the draft
    * no longer contains -- `question_id` is null in both cases. */
   onShowOnMap: (questionId: string) => void;
-  /** Open the Preview screen seeded with a real route to this change,
-   * instead of the entry point -- same `question_id !== null` guard as
-   * `onShowOnMap`, since there's equally nothing to walk to for those
-   * two cases. */
-  onPreviewFrom: (questionId: string) => void;
 }
 
 /**
@@ -27,7 +22,7 @@ interface DiffListProps {
  * that way, because a draft is a whole copy and an id comparison would
  * report the entire questionnaire as removed and re-added.
  */
-export function DiffList({ kind, items, onShowOnMap, onPreviewFrom }: DiffListProps) {
+export function DiffList({ kind, items, onShowOnMap }: DiffListProps) {
   if (items.length === 0) return null;
 
   return (
@@ -45,22 +40,13 @@ export function DiffList({ kind, items, onShowOnMap, onPreviewFrom }: DiffListPr
               </span>
               <code className="diff__key">{item.key}</code>
               {item.question_id !== null && (
-                <>
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => onShowOnMap(item.question_id as string)}
-                  >
-                    Show on map
-                  </button>
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => onPreviewFrom(item.question_id as string)}
-                  >
-                    Preview from here
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => onShowOnMap(item.question_id as string)}
+                >
+                  Show on map
+                </button>
               )}
             </div>
 
