@@ -68,8 +68,19 @@ export function optionLabel(
  * rather than the full `AnswerType`: a free-text/scale answer selects no
  * option at all, and `PreviewView` explains that separately instead of
  * misusing this for something it doesn't do. */
-export function previewInstruction(isMulti: boolean): string {
-  return isMulti ? "Please select all that apply." : "Please select one option.";
+/** Ported from break-backend's own `previewSubtitle` -- same four strings,
+ * one per `AnswerType`. */
+export function previewInstruction(answerType: AnswerType): string {
+  switch (answerType) {
+    case "multi_choice":
+      return "Please select all that apply.";
+    case "single_choice":
+      return "Please select one option.";
+    case "scale":
+      return "Please enter a number.";
+    case "free_text":
+      return "Please enter your response.";
+  }
 }
 
 export function formatTimestamp(value: string): string {

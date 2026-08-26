@@ -1792,6 +1792,7 @@ details[open] > summary > .chevron {
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-bottom: 10px;
 }
 
 .page__header--preview .page__title {
@@ -2057,7 +2058,7 @@ details[open] > summary > .chevron {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .preview__changebar p {
@@ -2071,7 +2072,7 @@ details[open] > summary > .chevron {
 }
 
 .preview__progress {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   font-weight: 700;
 }
 
@@ -2080,11 +2081,36 @@ details[open] > summary > .chevron {
   color: var(--text-muted);
 }
 
+/* The preview screen fits the viewport rather than scrolling as a whole:
+ * `.page`'s own scroll is turned off here, and the fixed header/toggle/
+ * change-bar chrome above `.preview__body` stays put while that one grid
+ * takes whatever height is left. A question with an unusually long
+ * option list still scrolls -- inside `.preview__current` itself, not
+ * the page -- rather than silently clipping it. */
+.page--preview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 16px;
+}
+
 .preview__body {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  /* Without an explicit row size, a grid row sizes to its tallest child's
+   * full content height regardless of `flex`/`min-height` on the grid
+   * itself -- `minmax(0, 1fr)` is what actually caps it at the space
+   * available, which `.preview__current`/`.preview__path` then need
+   * (below) in order to scroll internally instead of just overflowing. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 20px;
-  align-items: start;
+  flex: 1;
+  min-height: 0;
+}
+
+.preview__path {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* "Changes only" mode drops "The route so far" (see `PreviewView.tsx`),
@@ -2100,14 +2126,14 @@ details[open] > summary > .chevron {
  * chrome, so what an author sees here is what a respondent would
  * actually be shown, logo included. `--bg` already is break's literal
  * stage colour (`#faf5ec`), so the card needs no new colour of its own.
- * No fixed min-height, unlike break's own 620px -- that's sized for a
- * modal dialog that has to look the same regardless of content; this card
- * sits in normal page flow next to "the route so far" and should hug
- * whatever it's actually showing, not leave a slab of empty stage below a
- * short question (a free-text/scale one, or one with few options). */
+ * A flex column so `.preview__toolbar` sits pinned to the card's own
+ * bottom edge (it's the last child, `.preview__stage` is the only one
+ * that grows) rather than trailing directly under a short question. */
 .preview__current {
   position: relative;
-  padding: 56px 40px 20px;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 28px 14px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -2120,11 +2146,47 @@ details[open] > summary > .chevron {
   border-radius: var(--radius-lg);
 }
 
-.preview__logo {
+/* Fills whatever height `.preview__toolbar` leaves it and centers the
+ * logo/question group in that space -- both axes, so a short question
+ * doesn't land pinned to the top with a slab of empty card below it. Its
+ * own scrollbar (not the card's) is what keeps an unusually long option
+ * list from pushing the toolbar out of the card instead of past it. */
+.preview__stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-items: center;
+  justify-content: center;
+  /* Reserves the corner the logo sits in (see `.preview__logocol` below)
+   * so a short question's centered position never rides up underneath it,
+   * the same clearance the old absolutely-positioned logo relied on before
+   * it briefly moved into normal flow. */
+  padding-top: 56px;
+}
+
+/* Pinned to the card's own top-left corner regardless of where the
+ * question content centers -- the logo is branding chrome, not part of
+ * the thing being centered. Positioned off `.preview__current` (its
+ * nearest `position: relative` ancestor), matching that card's own
+ * padding so it lands exactly where the padding would have put it in
+ * normal flow. */
+.preview__logocol {
   position: absolute;
   top: 20px;
-  left: 24px;
-  height: 32px;
+  left: 28px;
+}
+
+.preview__content {
+  /* A fixed basis, not `flex: 1` -- growing to fill the row would leave
+   * nothing for `justify-content: center` above to center against. */
+  flex: 0 1 560px;
+  min-width: 0;
+}
+
+.preview__logo {
+  display: block;
+  height: 40px;
   width: auto;
 }
 
@@ -2149,26 +2211,26 @@ details[open] > summary > .chevron {
 }
 
 .preview__question {
-  margin: 4px 0 8px;
-  font-size: 1.7rem;
+  margin: 4px 0 6px;
+  font-size: 1.4rem;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.01em;
 }
 
 .preview__subtitle {
-  margin: 0 0 24px;
+  margin: 0 0 14px;
   color: var(--text-muted);
   font-size: 0.95rem;
 }
 
 .preview__options {
   list-style: none;
-  margin: 0 0 20px;
+  margin: 0 0 14px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* The pill itself is break's `.preview-option`; the native radio/checkbox
@@ -2180,7 +2242,7 @@ details[open] > summary > .chevron {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 14px 20px;
+  padding: 10px 18px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--surface);
@@ -2209,8 +2271,25 @@ details[open] > summary > .chevron {
   accent-color: var(--accent-2);
 }
 
+.preview__freetext {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.preview__freetext:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
 .preview__next {
-  padding: 12px 28px;
+  padding: 10px 24px;
   font-size: 0.8rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2221,17 +2300,21 @@ details[open] > summary > .chevron {
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 
 /* Break's persistent bottom bar (`.preview-toolbar`) -- Back/Restart are
  * navigation chrome, not something tied to the current question, so they
- * read as a separate footer rather than living inline with the answers. */
+ * read as a separate footer rather than living inline with the answers.
+ * Right-aligned and never a flex-grow target itself, so it stays a thin
+ * strip pinned under `.preview__stage` rather than sharing its height. */
 .preview__toolbar {
   display: flex;
+  flex: 0 0 auto;
   gap: 10px;
-  margin: 24px -40px -20px;
-  padding: 16px 40px;
+  justify-content: flex-end;
+  margin: 14px -28px -14px;
+  padding: 10px 28px;
   background: var(--surface);
   border-top: 1px solid var(--border);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);

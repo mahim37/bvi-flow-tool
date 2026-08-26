@@ -76,12 +76,21 @@ export function PreviewView() {
   // question's own `display_order`, not diff-kind order) -- sections
   // contribute nothing here, since a section change hangs off no single
   // question. "Changes only" mode steps through exactly this list.
+  //
+  // A *removed* question still has a `question_id` in `diff.questions`,
+  // but it no longer exists in `graph.questions` to preview a path to --
+  // stepping to one 404s server-side ("No Question matches the given
+  // query."), so it's filtered out here rather than left for the walk to
+  // fail on.
   const changedQuestionIds = useMemo(() => {
     if (review.data === undefined) return [];
     const { diff } = review.data;
+    const liveIds = new Set(graph.questions.map((question) => question.id));
     const ids = new Set<UUID>();
     for (const item of [...diff.questions, ...diff.options, ...diff.edges]) {
-      if (item.question_id !== null) ids.add(item.question_id);
+      if (item.question_id !== null && liveIds.has(item.question_id)) {
+        ids.add(item.question_id);
+      }
     }
     return [...ids].sort((a, b) => {
       const orderOf = (id: UUID) =>
@@ -90,7 +99,17 @@ export function PreviewView() {
     });
   }, [review.data, graph.questions]);
 
-  const hasChanges = changedQuestionIds.length > 0;
+  // A published version keeps its historical diff forever (that's what
+  // "What changed" shows), but by the time it's live those changes are
+  // just what the questionnaire already is -- there is nothing left to
+  // step through as a "change," so this mode only applies to a proposal
+  // that hasn't published yet. Reads `graph.change_request` too: it goes
+  // null the moment a version stops being a draft, before `review.data`
+  // itself would necessarily reflect that.
+  const changeRequestStatus =
+    (review.data?.change_request ?? graph.change_request)?.status ?? null;
+  const hasChanges =
+    changedQuestionIds.length > 0 && changeRequestStatus !== "published";
   // Defaults to "changes" the moment there is anything to show -- explicit
   // requirement, not just a convenience: a reviewer opening Preview should
   // land on what this draft actually touches, not have to know to ask for
@@ -222,8 +241,8 @@ export function PreviewView() {
       {mode === "changes" && currentChange !== null && (
         <div className="banner banner--info preview__changebar" role="status">
           <p>
-            Change {changeIndex + 1} of {changedQuestionIds.length} — previewing
-            question id <strong>{currentChange.code}</strong>
+            Change {changeIndex + 1} of {changedQuestionIds.length} — previewing{" "}
+            <strong>QID {currentChange.code}</strong>
           </p>
           <div className="preview__changenav">
             <button
@@ -246,7 +265,11 @@ export function PreviewView() {
         </div>
       )}
 
-      {pathError !== null && (
+      {/* `mode === "changes"` too: `pathTo` is only ever called from the
+          seeding effect in that mode, so a failure it left behind must not
+          keep showing once the reviewer switches to Full preview -- that
+          mutation's own state isn't reset just because the mode changed. */}
+      {mode === "changes" && pathError !== null && (
         <p className="banner banner--error" role="alert">
           {pathError}
         </p>
@@ -291,94 +314,114 @@ export function PreviewView() {
         }
       >
         <section className="preview__current" aria-labelledby="preview-question">
-          {/* Ported from break-backend's own preview walkthrough
-              (question_graph_editor's `.preview-stage`/`.preview-logo`) --
-              the respondent's own logo, not this tool's admin chrome, so
-              this reads as what a respondent would actually be shown. */}
-          <img className="preview__logo" src={predmindLogo} alt="Predmind" />
+          <div className="preview__stage">
+            {/* Ported from break-backend's own preview walkthrough
+                (question_graph_editor's `.preview-stage`/`.preview-logo`) --
+                the respondent's own logo, not this tool's admin chrome, so
+                this reads as what a respondent would actually be shown. Its
+                own column rather than a stacked line above the question, so
+                it reads as branding beside the content, not a header on top
+                of it. */}
+            <div className="preview__logocol">
+              <img className="preview__logo" src={predmindLogo} alt="Predmind" />
+            </div>
 
-          {state === null && walk.isPending && <p className="empty">Starting…</p>}
+            <div className="preview__content">
+              {state === null && walk.isPending && <p className="empty">Starting…</p>}
 
-          {state?.is_complete === true && (
-            <>
-              <h3 id="preview-question" className="preview__question">
-                The questionnaire ends here
-              </h3>
-              <p className="preview__subtitle">
-                {steps.length === 0
-                  ? "No question is served at all: this version has no live entry point."
-                  : "Nothing routes onward from the last answer, so a respondent would be finished."}
-              </p>
-            </>
-          )}
-
-          {question !== null && (
-            <>
-              <p className="preview__question-code">{question.code}</p>
-              <h3 id="preview-question" className="preview__question">
-                {question.prompt}
-              </h3>
-
-              {isChoice ? (
+              {state?.is_complete === true && (
                 <>
+                  <h3 id="preview-question" className="preview__question">
+                    The questionnaire ends here
+                  </h3>
                   <p className="preview__subtitle">
-                    {previewInstruction(isMulti)}
-                    {question.is_required
-                      ? ""
-                      : " Optional — you can continue without picking one."}
+                    {steps.length === 0
+                      ? "No question is served at all: this version has no live entry point."
+                      : "Nothing routes onward from the last answer, so a respondent would be finished."}
                   </p>
-                  <ul className="preview__options">
-                    {question.options.map((option) => {
-                      const selected = chosen.includes(option.id);
-                      return (
-                        <li key={option.id}>
-                          <label
-                            className={`preview__option${selected ? " preview__option--selected" : ""}`}
-                          >
-                            <input
-                              type={isMulti ? "checkbox" : "radio"}
-                              name="preview-answer"
-                              checked={selected}
-                              onChange={() => toggle(option.id)}
-                            />
-                            <span>{option.label}</span>
-                            <code className="options__code">{option.code}</code>
-                          </label>
-                        </li>
-                      );
-                    })}
-                    {question.options.length === 0 && (
-                      <li className="empty">
-                        This question offers no options, so nothing can be selected and
-                        only a question-level edge can fire.
-                      </li>
-                    )}
-                  </ul>
                 </>
-              ) : (
-                // A free-text or scale answer selects no option at all, so
-                // there is nothing to type here that could change the
-                // route. Saying so is more honest than a text box whose
-                // contents the resolver would ignore.
-                <p className="preview__subtitle">
-                  Answers to this question select no option, so only a question-level
-                  edge can fire. What a respondent writes does not change where the flow
-                  goes.
-                </p>
               )}
 
-              <div className="preview__actions">
-                <button
-                  className="button button--primary preview__next"
-                  type="button"
-                  disabled={walk.isPending || (isChoice && chosen.length === 0)}
-                  onClick={answer}
-                >
-                  {walk.isPending ? "Walking…" : "Answer and continue"}
-                </button>
-              </div>
-            </>
-          )}
+              {question !== null && (
+                <>
+                  <p className="preview__question-code">{question.code}</p>
+                  <h3 id="preview-question" className="preview__question">
+                    {question.prompt}
+                  </h3>
+
+                  {isChoice ? (
+                    <>
+                      <p className="preview__subtitle">
+                        {previewInstruction(question.answer_type)}
+                        {question.is_required
+                          ? ""
+                          : " Optional — you can continue without picking one."}
+                      </p>
+                      <ul className="preview__options">
+                        {question.options.map((option) => {
+                          const selected = chosen.includes(option.id);
+                          return (
+                            <li key={option.id}>
+                              <label
+                                className={`preview__option${selected ? " preview__option--selected" : ""}`}
+                              >
+                                <input
+                                  type={isMulti ? "checkbox" : "radio"}
+                                  name="preview-answer"
+                                  checked={selected}
+                                  onChange={() => toggle(option.id)}
+                                />
+                                <span>{option.label}</span>
+                                <code className="options__code">{option.code}</code>
+                              </label>
+                            </li>
+                          );
+                        })}
+                        {question.options.length === 0 && (
+                          <li className="empty">
+                            This question offers no options, so nothing can be selected
+                            and only a question-level edge can fire.
+                          </li>
+                        )}
+                      </ul>
+                    </>
+                  ) : (
+                    // Ported from break-backend's own preview (NUMBER vs
+                    // everything else gets `type="number"`/`"text"`) --
+                    // shown for realism only, same as there: a free-text or
+                    // scale answer selects no option, so nothing typed here
+                    // is read back or changes the route.
+                    <>
+                      <p className="preview__subtitle">
+                        {previewInstruction(question.answer_type)}
+                      </p>
+                      <input
+                        key={question.id}
+                        className="preview__freetext"
+                        type={question.answer_type === "scale" ? "number" : "text"}
+                        placeholder={
+                          question.answer_type === "scale"
+                            ? "Enter a number"
+                            : "Enter your response"
+                        }
+                      />
+                    </>
+                  )}
+
+                  <div className="preview__actions">
+                    <button
+                      className="button button--primary preview__next"
+                      type="button"
+                      disabled={walk.isPending || (isChoice && chosen.length === 0)}
+                      onClick={answer}
+                    >
+                      {walk.isPending ? "Walking…" : "Answer and continue"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
 
           <div className="preview__toolbar">
             <button
