@@ -48,7 +48,9 @@ interface OptionsProps {
  * second badge language for the same two states. */
 function ChangeBadge({ kind }: { kind: ChangeKind }) {
   return (
-    <span className={`diff__badge diff__badge--${kind}`}>{diffChangeLabel(kind)}</span>
+    <span className={`diff__badge diff__badge--${kind} opt-change-badge`}>
+      {diffChangeLabel(kind)}
+    </span>
   );
 }
 

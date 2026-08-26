@@ -1890,6 +1890,15 @@ details[open] > summary > .chevron {
   border: 1px solid var(--border-strong);
 }
 
+/* `Options.tsx`'s two inline uses (an option's own header, a route's
+   destination chip) aren't in `.diff__head`'s flex+gap row like
+   `ReviewView`'s -- one is plain inline text, the other a tightly-padded
+   pill -- so the badge carries its own left margin instead of touching
+   whatever it follows. */
+.opt-change-badge {
+  margin-left: 6px;
+}
+
 .diff__badge--added {
   background: #e8f2e8;
   border-color: var(--green);
@@ -2127,7 +2136,7 @@ details[open] > summary > .chevron {
  * centered instead, since a single question in a full-width card reads
  * as too wide once "The route so far" isn't there to balance it. */
 .preview__body--solo .preview__current {
-  max-width: 60%;
+  max-width: 80%;
   margin: 0 auto;
 }
 
