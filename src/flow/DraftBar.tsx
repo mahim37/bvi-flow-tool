@@ -62,11 +62,12 @@ function VersionTabs({ versionId, isDraft }: { versionId: UUID; isDraft: boolean
   );
 }
 
-/** A button that carries its own explanation, title and description
- * stacked inside the one element, rather than a plain button beside a
- * separate note span -- so on a narrow row the description can never wrap
- * away from the button it belongs to and land somewhere else looking
- * orphaned. */
+/** A plain, single-line button whose longer explanation surfaces as a
+ * native tooltip (`title`) rather than a second line of text under the
+ * label -- keeps the button itself compact; used where the click itself
+ * doesn't already open some other popup that could carry the same text
+ * (see `ConfirmAction`/`EditorDropdown` call sites, which fold it in
+ * there instead). */
 function Cta({
   primary = false,
   title,
@@ -76,19 +77,19 @@ function Cta({
 }: {
   primary?: boolean;
   title: string;
-  description: string;
+  description?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
-      className={`button draftbar__cta${primary ? " button--primary" : ""}`}
+      className={`button${primary ? " button--primary" : ""}`}
       type="button"
+      title={description}
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="draftbar__cta-title">{title}</span>
-      <span className="draftbar__cta-desc">{description}</span>
+      {title}
     </button>
   );
 }
@@ -241,7 +242,6 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                       title={
                         activate.isPending ? "Activating…" : "Activate this version"
                       }
-                      description="Puts this exact version back in front of respondents. No new review needed."
                       disabled={activate.isPending}
                       onClick={open}
                     />
@@ -273,13 +273,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
             ) : (
               <EditorDropdown
                 trigger={
-                  <span className="button draftbar__cta button--primary">
-                    <span className="draftbar__cta-title">Propose a change</span>
-                    <span className="draftbar__cta-desc">
-                      A draft is a whole copy of this version. Only one may be open at a
-                      time.
-                    </span>
-                  </span>
+                  <span className="button button--primary">Propose a change</span>
                 }
               >
                 {(close) => (
@@ -287,6 +281,10 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                     className="editor"
                     onSubmit={(event) => startProposal(event, close)}
                   >
+                    <p className="panel__hint">
+                      A draft is a whole copy of this version. Only one may be open at a
+                      time.
+                    </p>
                     <div className="field">
                       <label htmlFor={labelId}>Name</label>
                       <input
@@ -322,22 +320,16 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 Your account can view the flow tool but not spawn a product from it.
               </p>
             ) : (
-              <EditorDropdown
-                trigger={
-                  <span className="draftbar__cta">
-                    <span className="draftbar__cta-title">Spawn a product</span>
-                    <span className="draftbar__cta-desc">
-                      Copies this version into a brand-new questionnaire, live
-                      immediately.
-                    </span>
-                  </span>
-                }
-              >
+              <EditorDropdown trigger="Spawn a product">
                 {(close) => (
                   <form
                     className="editor"
                     onSubmit={(event) => startSpawn(event, close)}
                   >
+                    <p className="panel__hint">
+                      Copies this version into a brand-new questionnaire, live
+                      immediately.
+                    </p>
                     <div className="field">
                       <label htmlFor={spawnNameId}>Name</label>
                       <input

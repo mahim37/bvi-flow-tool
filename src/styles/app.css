@@ -1309,8 +1309,8 @@ details[open] > summary > .chevron {
 .draftbar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 20px;
+  gap: 5px;
+  padding: 5px 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -1422,51 +1422,6 @@ details[open] > summary > .chevron {
   max-width: 100%;
 }
 
-/* Self-describing buttons: the explanation lives inside the button it
- * belongs to (a title line plus a smaller description line), rather than
- * beside it as a separate element -- so nothing can wrap away from the
- * control it describes on a narrow row. */
-/* Capped rather than left to size to its longest description on one
- * line -- three of these can share a row (a superseded version offers
- * Activate alongside Propose/Spawn), and a couple of the descriptions
- * are full sentences. Wrapping the description onto two lines trades
- * width for height, which is what actually lets three fit. */
-.draftbar__cta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 1px;
-  padding: 5px 16px;
-  border-radius: var(--radius-lg);
-  max-width: 210px;
-  text-align: left;
-  white-space: normal;
-}
-
-.draftbar__cta-title {
-  font-weight: 700;
-  font-size: 0.88rem;
-}
-
-.draftbar__cta-desc {
-  font-size: 0.68rem;
-  font-weight: 500;
-  line-height: 1.2;
-  color: var(--text-muted);
-}
-
-.draftbar__cta.button--primary .draftbar__cta-desc {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-/* The hover inversion above (white background, dark title) would leave
-   this translucent-white if left alone -- unreadable the moment the
-   background it was tuned against turns white too. */
-.draftbar__cta.button--primary:hover:not(:disabled) .draftbar__cta-desc {
-  color: var(--text-muted);
-}
-
 /* ---------- shared ---------- */
 
 .field {
@@ -1498,6 +1453,7 @@ details[open] > summary > .chevron {
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
+  text-decoration: none;
   cursor: pointer;
   transition:
     background-color 0.12s ease,
@@ -2461,9 +2417,9 @@ textarea:focus-visible {
 
 /* `ConfirmAction`'s wrapper -- same positioning role as `.editor-dropdown`
    above, for a trigger that isn't a `<details>` (a plain button, or `Cta`'s
-   title+description one). `inline-flex` so it hugs its child instead of
-   stretching to fill the flex row it sits in (`.draftbar__right`,
-   `.danger-zone`, `.review__publish`). */
+   own). `inline-flex` so it hugs its child instead of stretching to fill
+   the flex row it sits in (`.draftbar__right`, `.danger-zone`,
+   `.review__publish`). */
 .confirm-trigger {
   position: relative;
   display: inline-flex;
@@ -2481,20 +2437,13 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-/* A `Cta`-style two-line trigger (title + description, e.g. "Spawn a
-   product") supplies its own padding via `.draftbar__cta` -- drop the
-   summary's own so the two do not stack. */
-.editor-dropdown > summary:has(.draftbar__cta) {
+/* A trigger styled as its own `.button` (e.g. "Propose a change", primary)
+   supplies its own padding/border/background (including the hover
+   inversion) -- drop the summary's own so two borders/backgrounds don't
+   sit on top of each other. A plain-text trigger still gets the
+   summary's own chrome, which is the only border/background it has. */
+.editor-dropdown > summary:has(.button) {
   padding: 0;
-}
-
-/* A `primary` `Cta` trigger (e.g. "Propose a change") additionally
-   carries `.button`/`.button--primary`, which supplies its own border and
-   background too (including the hover inversion) -- drop the summary's
-   own so two borders/backgrounds do not sit on top of each other. Plain
-   (non-`.button`) `.draftbar__cta` triggers still get the summary's own
-   chrome, which is the only border/background they have. */
-.editor-dropdown > summary:has(.draftbar__cta.button) {
   border: none;
   background: transparent;
 }
