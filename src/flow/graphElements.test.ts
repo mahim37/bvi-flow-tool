@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import type { EdgeData, NodeData } from "./graphElements";
-import { END_NODE_ID, buildElements, missingNodeId } from "./graphElements";
+import {
+  END_NODE_ID,
+  buildElements,
+  changeKindsFromDiff,
+  missingNodeId,
+} from "./graphElements";
 import {
   E_FOREIGN_TO_Q2,
   E_NO_TO_END,
   E_Q2_DEAD,
   E_Q2_TO_ARCHIVED,
   E_Q4_TO_MISSING,
+  E_YES_TO_Q2,
   FOREIGN_QUESTION,
   OPTION_YES,
   Q1,
@@ -16,10 +22,11 @@ import {
   Q4_UNREACHABLE,
   makeGraph,
 } from "../test/fixtures";
+import type { ItemDiff, VersionDiff } from "../api/types";
 
-function nodes(graph = makeGraph()) {
+function nodes(graph = makeGraph(), diff?: VersionDiff) {
   return new Map(
-    buildElements(graph)
+    buildElements(graph, diff)
       .filter((element) => element.group === "nodes")
       .map((element) => [
         element.data.id as string,
@@ -28,15 +35,39 @@ function nodes(graph = makeGraph()) {
   );
 }
 
-function edges(graph = makeGraph()) {
+function edges(graph = makeGraph(), diff?: VersionDiff) {
   return new Map(
-    buildElements(graph)
+    buildElements(graph, diff)
       .filter((element) => element.group === "edges")
       .map((element) => [
         element.data.id as string,
         element.data as unknown as EdgeData,
       ]),
   );
+}
+
+function itemDiff(
+  overrides: Partial<ItemDiff> & Pick<ItemDiff, "kind" | "change">,
+): ItemDiff {
+  return {
+    key: "x",
+    base_id: null,
+    draft_id: null,
+    question_id: null,
+    fields: [],
+    ...overrides,
+  };
+}
+
+function makeDiff(overrides: Partial<VersionDiff> = {}): VersionDiff {
+  return {
+    is_empty: false,
+    sections: [],
+    questions: [],
+    options: [],
+    edges: [],
+    ...overrides,
+  };
 }
 
 describe("nodes", () => {
@@ -172,5 +203,100 @@ describe("edges", () => {
   it("carries the broken flag through from the audit", () => {
     expect(edges().get(E_Q2_TO_ARCHIVED)?.isBroken).toBe(true);
     expect(edges().get(E_NO_TO_END)?.isBroken).toBe(false);
+  });
+});
+
+describe("change highlighting", () => {
+  it("leaves changeKind null everywhere with no diff passed", () => {
+    expect(nodes().get(Q1)?.changeKind).toBe(null);
+    expect(edges().get(E_YES_TO_Q2)?.changeKind).toBe(null);
+  });
+
+  it("marks a brand-new question added, not changed, and badges it to match", () => {
+    const diff = makeDiff({
+      questions: [itemDiff({ kind: "question", change: "added", question_id: Q1 })],
+    });
+    const built = nodes(makeGraph(), diff).get(Q1);
+
+    expect(built?.changeKind).toBe("added");
+    expect(built?.badgeKind).toBe("added");
+  });
+
+  it("marks an existing question changed when its own fields changed", () => {
+    const diff = makeDiff({
+      questions: [itemDiff({ kind: "question", change: "changed", question_id: Q1 })],
+    });
+
+    expect(nodes(makeGraph(), diff).get(Q1)?.changeKind).toBe("changed");
+  });
+
+  it("marks an existing question changed when one of its options changed, even though the question itself didn't", () => {
+    const diff = makeDiff({
+      options: [
+        itemDiff({ kind: "option", change: "added", question_id: Q1, key: "new-opt" }),
+      ],
+    });
+
+    expect(nodes(makeGraph(), diff).get(Q1)?.changeKind).toBe("changed");
+  });
+
+  it("leaves an archived question's changeKind null even when the diff names it", () => {
+    // Archiving is exactly what put it in the diff -- it already has its
+    // own "this is gone" treatment (`kind: "archived"`), so it doesn't
+    // also need "changed".
+    const diff = makeDiff({
+      questions: [
+        itemDiff({ kind: "question", change: "changed", question_id: Q3_ARCHIVED }),
+      ],
+    });
+
+    expect(nodes(makeGraph(), diff).get(Q3_ARCHIVED)?.changeKind).toBe(null);
+  });
+
+  it("marks an added edge green and a changed edge gold", () => {
+    const added = makeDiff({
+      edges: [
+        itemDiff({
+          kind: "edge",
+          change: "added",
+          draft_id: E_YES_TO_Q2,
+          question_id: Q1,
+        }),
+      ],
+    });
+    const changed = makeDiff({
+      edges: [
+        itemDiff({
+          kind: "edge",
+          change: "changed",
+          draft_id: E_YES_TO_Q2,
+          question_id: Q1,
+        }),
+      ],
+    });
+
+    expect(edges(makeGraph(), added).get(E_YES_TO_Q2)?.changeKind).toBe("added");
+    expect(edges(makeGraph(), changed).get(E_YES_TO_Q2)?.changeKind).toBe("changed");
+  });
+
+  it("marks an added option green and a changed option gold", () => {
+    const added = makeDiff({
+      options: [
+        itemDiff({ kind: "option", change: "added", draft_id: OPTION_YES, key: "yes" }),
+      ],
+    });
+    const changed = makeDiff({
+      options: [
+        itemDiff({
+          kind: "option",
+          change: "changed",
+          draft_id: OPTION_YES,
+          key: "yes",
+        }),
+      ],
+    });
+
+    expect(changeKindsFromDiff(added).options.get(OPTION_YES)).toBe("added");
+    expect(changeKindsFromDiff(changed).options.get(OPTION_YES)).toBe("changed");
   });
 });

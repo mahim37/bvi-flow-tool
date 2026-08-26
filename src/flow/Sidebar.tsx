@@ -139,11 +139,11 @@ function Chevron() {
 function BadgeIcon({
   kind,
 }: {
-  kind: "entry" | "terminal" | "branch" | "unreachable";
+  kind: "entry" | "terminal" | "branch" | "unreachable" | "added" | "changed";
 }) {
   return (
     <svg
-      className="node-key-icon"
+      className={`node-key-icon node-key-icon--${kind}`}
       width="13"
       height="13"
       viewBox="0 0 24 24"
@@ -173,6 +173,13 @@ function BadgeIcon({
         <>
           <path d="M12 3L2 21h20L12 3z" />
           <path d="M12 10v4" />
+        </>
+      )}
+      {kind === "added" && <path d="M12 6v12M6 12h12" strokeWidth={4} />}
+      {kind === "changed" && (
+        <>
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
         </>
       )}
     </svg>
@@ -490,20 +497,30 @@ export function Sidebar({
               <span className="sidebar__heading">What do the colors mean?</span>
             </summary>
             {/* Ported from break-backend's `.node-key` (index.html
-                ~L307-330) -- same four badge icons (this canvas draws
-                exactly these, not a circle/diamond stand-in), same
-                "Border color" line first. What follows the fourth badge
-                has no break equivalent: this app's own archived/missing/
-                dead/broken diagnostics (see canvasStyle.ts's docstring),
-                not something break's model has a mark for, so there is
-                nothing to port for those beyond describing them
-                accurately -- spelled out because the canvas signals state
-                by shape as well as colour, and a shape vocabulary nobody
-                can look up is not much better than colour alone. */}
+                ~L307-330) -- same badge icons (this canvas draws exactly
+                these, not a circle/diamond stand-in), same "Border color"
+                line first. Added/changed are break's own pending-new/
+                -modified badges, ported the same way -- see `changeKind`'s
+                doc comment in graphElements.ts. What follows has no break
+                equivalent: this app's own archived/missing/dead/broken
+                diagnostics (see canvasStyle.ts's docstring), not something
+                break's model has a mark for, so there is nothing to port
+                for those beyond describing them accurately -- spelled out
+                because the canvas signals state by shape as well as
+                colour, and a shape vocabulary nobody can look up is not
+                much better than colour alone. */}
             <div className="disclosure-body">
               <ul className="node-key">
                 <li>
                   <b>Border color</b> — the question's section
+                </li>
+                <li>
+                  <BadgeIcon kind="added" />
+                  Added by this draft, not yet published (corner badge, green tint)
+                </li>
+                <li>
+                  <BadgeIcon kind="changed" />
+                  Changed by this draft, not yet published (corner badge, gold tint)
                 </li>
                 <li>
                   <BadgeIcon kind="entry" />

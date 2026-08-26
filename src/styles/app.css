@@ -724,6 +724,17 @@ details[open] > summary > .chevron {
   color: var(--text-dim);
 }
 
+/* Unlike the neutral entry/terminal/branch/unreachable badges, added/
+   changed draw in colour on the canvas too (canvasStyle.ts's BADGE_BG) --
+   the legend matches rather than flattening them to the same grey. */
+.node-key-icon--added {
+  color: var(--green);
+}
+
+.node-key-icon--changed {
+  color: var(--gold);
+}
+
 /* This app's own diagnostics (archived/end/missing/fault/dead/broken) --
  * break's `.node-key-swatch` variants are its pending-new/-delete/-modified
  * cases, which have no equivalent here (see the comment above this list in
@@ -904,6 +915,22 @@ details[open] > summary > .chevron {
   color: var(--emphasis);
   border-color: rgba(240, 148, 77, 0.4);
   background: rgba(240, 148, 77, 0.1);
+}
+
+/* An open draft's own pending state, not a routing fact -- reuses
+   `.flag--entry`/`.flag--branch`'s exact green/gold rather than a third
+   colour pair, matching the same tint the canvas and the Review tab's
+   diff badges already use for "added"/"changed". */
+.flag--added {
+  color: var(--green);
+  border-color: rgba(87, 211, 140, 0.4);
+  background: rgba(87, 211, 140, 0.1);
+}
+
+.flag--changed {
+  color: var(--gold);
+  border-color: rgba(242, 193, 78, 0.4);
+  background: rgba(242, 193, 78, 0.1);
 }
 
 /* This app's own addition -- break has no "nothing to report" flag --

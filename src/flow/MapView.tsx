@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
-import { useAddEdge, useUpdateEdge } from "../api/queries";
+import { useAddEdge, useReview, useUpdateEdge } from "../api/queries";
 import type { UUID } from "../api/types";
 import { Canvas } from "./Canvas";
 import { DetailPanel } from "./DetailPanel";
 import { Sidebar } from "./Sidebar";
 import { useVersionContext } from "./versionContext";
 import { useWriteErrorHandler } from "./useWriteError";
-import { buildElements, isSyntheticNode } from "./graphElements";
+import { buildElements, changeKindsFromDiff, isSyntheticNode } from "./graphElements";
 
 /** A pending canvas click-to-pick, one of two shapes: retargeting an
  * existing edge, or adding a new one for a question/option that doesn't
@@ -40,7 +40,21 @@ export function MapView() {
     setHighlightedIds(focusId === null ? [] : [focusId]);
   }, [versionId, focusId]);
 
-  const elements = useMemo(() => buildElements(graph), [graph]);
+  // Only a draft has anything "pending" to highlight -- a published
+  // version's own diff (`ReviewView`'s "What changed" tab) is history, not
+  // work still to publish, so there's nothing to fetch for one.
+  const review = useReview(graph.version.is_draft ? graph.version.id : null);
+  const elements = useMemo(
+    () => buildElements(graph, review.data?.diff),
+    [graph, review.data],
+  );
+  // Computed once here rather than separately in `DetailPanel`/`Options`
+  // too -- both the canvas and the detail panel highlight the same
+  // draft's diff, just in different places.
+  const changeKinds = useMemo(
+    () => changeKindsFromDiff(review.data?.diff),
+    [review.data],
+  );
 
   // Synthetic ids (the shared end-of-flow node, a cross-version target
   // this version doesn't contain) and archived questions aren't valid
@@ -142,6 +156,7 @@ export function MapView() {
         graph={graph}
         question={selectedQuestion}
         editable={editable}
+        changeKinds={changeKinds}
         retargetingEdgeId={pick?.kind === "retarget" ? pick.edgeId : null}
         addingRouteOptionId={pick?.kind === "add" ? pick.optionId : null}
         onSelectQuestion={setSelectedQuestionId}

@@ -40,8 +40,25 @@ const BADGE_ICON: Record<string, string> = {
   branch:
     '<circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v1a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V9"/>',
   unreachable: '<path d="M12 3L2 21h20L12 3z"/><path d="M12 10v4"/>',
+  // "added"/"changed" icon paths ported from break's own BADGE_ICON
+  // (a plus, and a pencil) -- see `changeKind`'s doc comment in
+  // graphElements.ts for what these mean.
+  added: '<path d="M12 6v12M6 12h12" stroke-width="4"/>',
+  changed:
+    '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
 };
-const BADGE_BG = "#4a473f";
+// Structural badges share one neutral background; "added"/"changed" get
+// this app's own green/gold tokens instead (`--green`/`--gold` in
+// app.css) -- the same two colors `ReviewView`'s diff badges already use
+// for "added"/"changed", not a fresh pair of hues.
+const BADGE_BG: Record<string, string> = {
+  entry: "#4a473f",
+  terminal: "#4a473f",
+  branch: "#4a473f",
+  unreachable: "#4a473f",
+  added: "#166534",
+  changed: "#9a5209",
+};
 
 function badgeDataUri(kind: string): string {
   // width/height MUST be explicit -- without them an <img> defaults an
@@ -49,7 +66,7 @@ function badgeDataUri(kind: string): string {
   // which squishes a forced render into a distorted, non-circular badge.
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">` +
-    `<circle cx="12" cy="12" r="11" fill="${BADGE_BG}"/>` +
+    `<circle cx="12" cy="12" r="11" fill="${BADGE_BG[kind] ?? BADGE_BG.entry}"/>` +
     // Icon paths nearly fill the 24x24 viewBox on their own -- scaled
     // down and re-centered so the badge circle stays dominant instead of
     // looking like the icon overflows it.
@@ -118,6 +135,42 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
   {
     selector: "node[badgeKind = 'unreachable']",
     css: badgeStyle("unreachable"),
+  },
+  {
+    selector: "node[badgeKind = 'added']",
+    css: badgeStyle("added"),
+  },
+  {
+    selector: "node[badgeKind = 'changed']",
+    css: badgeStyle("changed"),
+  },
+  {
+    // An open draft's own pending changes -- ported in spirit from
+    // break's node.pending-new/.modified (a light tint fill plus a
+    // coloured underlay glow, border left alone rather than fighting
+    // section's own use of border-color). Archived questions never reach
+    // this (see `buildElements`), so there's no clash with that state's
+    // own tan/dashed treatment.
+    selector: "node[changeKind = 'added']",
+    css: {
+      "border-style": "dashed",
+      "background-color": "#e8f2e8",
+      "underlay-color": "#166534",
+      "underlay-opacity": 0.3,
+      "underlay-padding": 8,
+      "underlay-shape": "round-rectangle",
+    } as unknown as Record<string, string>,
+  },
+  {
+    selector: "node[changeKind = 'changed']",
+    css: {
+      "border-style": "dashed",
+      "background-color": "#fbf0dd",
+      "underlay-color": "#9a5209",
+      "underlay-opacity": 0.3,
+      "underlay-padding": 8,
+      "underlay-shape": "round-rectangle",
+    } as unknown as Record<string, string>,
   },
   {
     // This app's own fault diagnostic (dead/broken edges leaving this
@@ -197,6 +250,30 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "curve-style": "unbundled-bezier",
       "control-point-distances": [40],
       "control-point-weights": [0.5],
+    },
+  },
+  {
+    // An open draft's own added/retargeted route -- break's single
+    // dashed-gold "edge.pending" split into this app's own two-colour
+    // added/changed language instead of one, matching the node treatment
+    // above. Placed ahead of isDead/isBroken below so those diagnostics
+    // (real problems, not just "not live yet") still win when both apply
+    // to the same edge.
+    selector: "edge[changeKind = 'added']",
+    css: {
+      "line-style": "dashed",
+      "line-color": "#166534",
+      "target-arrow-color": "#166534",
+      opacity: 0.95,
+    },
+  },
+  {
+    selector: "edge[changeKind = 'changed']",
+    css: {
+      "line-style": "dashed",
+      "line-color": "#9a5209",
+      "target-arrow-color": "#9a5209",
+      opacity: 0.95,
     },
   },
   {

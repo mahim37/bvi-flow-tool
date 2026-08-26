@@ -13,12 +13,18 @@ import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { Edge, Graph, Question, QuestionOption, UUID } from "../api/types";
 import { BlockingList } from "./BlockingList";
 import { EditorDropdown } from "./EditorDropdown";
+import type { ChangeKind, ChangeKinds } from "./graphElements";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
-import { targetLabel } from "./labels";
+import { diffChangeLabel, targetLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const END_OF_FLOW = "__end__";
 const ANY_ANSWER = "__any__";
+const EMPTY_CHANGE_KINDS: ChangeKinds = {
+  questions: new Map(),
+  options: new Map(),
+  edges: new Map(),
+};
 
 interface OptionsProps {
   graph: Graph;
@@ -30,6 +36,20 @@ interface OptionsProps {
   onStartRetarget: (edgeId: UUID, label: string) => void;
   onStartAddRoute: (questionId: UUID, optionId: UUID | null, label: string) => void;
   onCancelPick: () => void;
+  /** The open draft's own diff, bucketed by `changeKindsFromDiff` --
+   * same data the canvas highlights with (`MapView`). Optional so a
+   * direct test render (no draft, or no diff fetched yet) doesn't need
+   * to pass one. */
+  changeKinds?: ChangeKinds;
+}
+
+/** A small "Added"/"Changed" pill, reusing `ReviewView`'s own
+ * `.diff__badge` styling and wording (`diffChangeLabel`) rather than a
+ * second badge language for the same two states. */
+function ChangeBadge({ kind }: { kind: ChangeKind }) {
+  return (
+    <span className={`diff__badge diff__badge--${kind}`}>{diffChangeLabel(kind)}</span>
+  );
 }
 
 /** Read-only data every route row needs, bundled so it isn't six separate
@@ -41,6 +61,8 @@ interface EdgeContext {
   targets: Question[];
   deadEdges: ReadonlySet<UUID>;
   brokenEdges: ReadonlySet<UUID>;
+  edgeChangeKinds: ReadonlyMap<UUID, ChangeKind>;
+  optionChangeKinds: ReadonlyMap<UUID, ChangeKind>;
 }
 
 /** One route's destination chip and its "Change destination" popup
@@ -116,6 +138,7 @@ function EdgeRow({
     targetQuestion?.section != null
       ? (ctx.sectionColors.get(targetQuestion.section) ?? NO_SECTION_COLOR)
       : NO_SECTION_COLOR;
+  const edgeChange = ctx.edgeChangeKinds.get(edge.id);
 
   return (
     <div className="edge-row">
@@ -141,6 +164,7 @@ function EdgeRow({
             targetLabel(edge, ctx.questionsById)
           )}
         </span>
+        {edgeChange !== undefined && <ChangeBadge kind={edgeChange} />}
       </div>
 
       {isBroken && (
@@ -558,6 +582,7 @@ function OptionCard({
   const [label, setLabel] = useState(option.label);
   const [code, setCode] = useState(option.code);
   const isAddingRoute = addingRouteOptionId === option.id;
+  const optionChange = ctx.optionChangeKinds.get(option.id);
 
   const dirty = label !== option.label || code !== option.code;
   const pending = updateOption.isPending || removeOption.isPending || disabled;
@@ -602,6 +627,7 @@ function OptionCard({
         <div className="opt-label">
           <span>{option.label}</span>{" "}
           <code className="options__code">{option.code}</code>
+          {optionChange !== undefined && <ChangeBadge kind={optionChange} />}
         </div>
       )}
 
@@ -770,6 +796,7 @@ export function Options({
   onStartRetarget,
   onStartAddRoute,
   onCancelPick,
+  changeKinds = EMPTY_CHANGE_KINDS,
 }: OptionsProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
@@ -842,6 +869,8 @@ export function Options({
     targets,
     deadEdges,
     brokenEdges,
+    edgeChangeKinds: changeKinds.edges,
+    optionChangeKinds: changeKinds.options,
   };
 
   const edges = useMemo(

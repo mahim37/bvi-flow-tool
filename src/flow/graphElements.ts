@@ -1,6 +1,14 @@
 import type { ElementDefinition } from "cytoscape";
 
-import type { AnswerType, Edge, Graph, Question, Section, UUID } from "../api/types";
+import type {
+  AnswerType,
+  Edge,
+  Graph,
+  Question,
+  Section,
+  UUID,
+  VersionDiff,
+} from "../api/types";
 
 /**
  * Ported from break-backend's question_graph_editor (static/question_graph_editor/app.js)
@@ -85,12 +93,24 @@ export const isSyntheticNode = (id: string) =>
 
 export type NodeKind = "question" | "archived" | "end" | "missing";
 
+/** What an open draft's own diff says about a node/edge/option -- "added"
+ * for a brand new question, option or edge, "changed" for an existing
+ * one with a changed field of its own, or (a question only) a changed/
+ * added/removed option or edge underneath it. `null` off a live/
+ * published version, which has nothing pending to show, and for
+ * anything the diff doesn't mention. Same two values `DiffChange` itself
+ * uses for "added"/"changed" (`labels.ts`'s `diffChangeLabel`), minus
+ * "removed" -- nothing removed is drawn to badge in the first place. */
+export type ChangeKind = "added" | "changed";
+
 /** Exactly one badge per node (break's `badgeClassFor`) -- a node is never
  * asked to carry two structural facts as two icons, so the corner stays
- * legible. Priority order matches break's: a branch is the more
- * actionable fact than "unreachable," which in turn outranks entry/
- * terminal. */
-export type BadgeKind = "entry" | "terminal" | "branch" | "unreachable";
+ * legible. Priority order matches break's: a pending add/edit outranks
+ * every structural fact (it is the more urgent, actionable one -- not
+ * live yet), and within those, a branch outranks "unreachable," which in
+ * turn outranks entry/terminal. */
+export type BadgeKind =
+  "added" | "changed" | "entry" | "terminal" | "branch" | "unreachable";
 
 export interface NodeData {
   id: string;
@@ -111,6 +131,7 @@ export interface NodeData {
   isDecision: boolean;
   isUnreachable: boolean;
   hasFault: boolean;
+  changeKind: ChangeKind | null;
 }
 
 export interface EdgeData {
@@ -125,26 +146,80 @@ export interface EdgeData {
   isDead: boolean;
   isBroken: boolean;
   isBack: boolean;
+  changeKind: ChangeKind | null;
 }
 
 export function questionLabel(question: Question): string {
   return `${trunc(question.prompt, 60)}\n${TYPE_GLYPH[question.answer_type]} ${question.code}`;
 }
 
-/** Break's `badgeClassFor`, minus the pending-new/-delete/-modified cases
- * this app doesn't (yet) compute on the canvas -- see ReviewView/DiffList
- * for where that data already lives. */
+/** Break's `badgeClassFor`, `changeKind` standing in for its pending-new/
+ * -delete/-modified cases (this app's "deleted" is the existing
+ * `archived` node kind instead, which never reaches this function --
+ * see `buildElements`). */
 function badgeKindFor(
+  changeKind: ChangeKind | null,
   isDecision: boolean,
   isUnreachable: boolean,
   isEntry: boolean,
   isTerminal: boolean,
 ): BadgeKind | null {
+  if (changeKind !== null) return changeKind;
   if (isDecision) return "branch";
   if (isUnreachable) return "unreachable";
   if (isEntry) return "entry";
   if (isTerminal) return "terminal";
   return null;
+}
+
+export interface ChangeKinds {
+  questions: ReadonlyMap<UUID, ChangeKind>;
+  options: ReadonlyMap<UUID, ChangeKind>;
+  edges: ReadonlyMap<UUID, ChangeKind>;
+}
+
+/** Which questions/options/edges an open draft's diff touches, and how --
+ * purely a presentational bucketing of the diff the server already
+ * computed (`ReviewView`/`DiffList`'s own data), keyed by whatever id
+ * each row already carries. Not a second diff engine: nothing here
+ * recomputes what changed, only where an already-computed row points --
+ * on the canvas (`buildElements`) and in the detail panel
+ * (`DetailPanel`/`Options`), which both call this rather than each
+ * keeping their own copy. */
+export function changeKindsFromDiff(diff: VersionDiff | undefined): ChangeKinds {
+  const questions = new Map<UUID, ChangeKind>();
+  const options = new Map<UUID, ChangeKind>();
+  const edges = new Map<UUID, ChangeKind>();
+  if (diff === undefined) return { questions, options, edges };
+
+  for (const item of diff.questions) {
+    if (item.change === "added" && item.question_id !== null) {
+      questions.set(item.question_id, "added");
+    }
+  }
+  // Anything else naming a question -- its own changed fields, or one of
+  // its options/edges added, changed or removed -- makes it "changed",
+  // unless it's the brand-new question those rows belong to in the first
+  // place.
+  for (const item of [...diff.questions, ...diff.options, ...diff.edges]) {
+    if (item.question_id === null) continue;
+    if (questions.get(item.question_id) === "added") continue;
+    questions.set(item.question_id, "changed");
+  }
+
+  for (const item of diff.options) {
+    if (item.draft_id === null) continue;
+    if (item.change === "added") options.set(item.draft_id, "added");
+    else if (item.change === "changed") options.set(item.draft_id, "changed");
+  }
+
+  for (const item of diff.edges) {
+    if (item.draft_id === null) continue;
+    if (item.change === "added") edges.set(item.draft_id, "added");
+    else if (item.change === "changed") edges.set(item.draft_id, "changed");
+  }
+
+  return { questions, options, edges };
 }
 
 export function guardLabel(edge: Edge, question: Question | undefined): string {
@@ -158,7 +233,7 @@ export function guardLabel(edge: Edge, question: Question | undefined): string {
   return option ? option.label : "unknown option";
 }
 
-export function buildElements(graph: Graph): ElementDefinition[] {
+export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefinition[] {
   const questionsById = new Map(graph.questions.map((item) => [item.id, item]));
   const entryId = graph.diagnostics.entry_question_id;
   const decisions = new Set(graph.diagnostics.decision_point_question_ids);
@@ -168,6 +243,7 @@ export function buildElements(graph: Graph): ElementDefinition[] {
   const deadEdges = new Set(graph.diagnostics.dead_edge_ids);
   const brokenEdges = new Set(graph.diagnostics.broken_edge_ids);
   const backEdges = new Set(graph.diagnostics.back_edge_ids);
+  const changeKinds = changeKindsFromDiff(diff);
 
   const faultedQuestions = new Set(uncovered);
   for (const edge of graph.edges) {
@@ -185,6 +261,12 @@ export function buildElements(graph: Graph): ElementDefinition[] {
     const isTerminal = !archived && terminals.has(question.id);
     const isDecision = !archived && decisions.has(question.id);
     const isUnreachable = !archived && unreachable.has(question.id);
+    // An archived question already has its own "this is gone" treatment
+    // (`kind: "archived"` below) -- it doesn't also need "changed" from
+    // the very diff row that archived it.
+    const changeKind = archived
+      ? null
+      : (changeKinds.questions.get(question.id) ?? null);
     const data: NodeData = {
       id: question.id,
       // An archived question is drawn only while something still points at
@@ -199,12 +281,13 @@ export function buildElements(graph: Graph): ElementDefinition[] {
         : NO_SECTION_COLOR,
       badgeKind: archived
         ? null
-        : badgeKindFor(isDecision, isUnreachable, isEntry, isTerminal),
+        : badgeKindFor(changeKind, isDecision, isUnreachable, isEntry, isTerminal),
       isEntry,
       isTerminal,
       isDecision,
       isUnreachable,
       hasFault: !archived && faultedQuestions.has(question.id),
+      changeKind,
     };
     elements.push({ data, group: "nodes" });
   }
@@ -239,6 +322,7 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       isDecision: false,
       isUnreachable: false,
       hasFault: true,
+      changeKind: null,
     };
     elements.push({ data, group: "nodes" });
   }
@@ -257,6 +341,7 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       isDecision: false,
       isUnreachable: false,
       hasFault: false,
+      changeKind: null,
     };
     elements.push({ data, group: "nodes" });
   }
@@ -293,6 +378,7 @@ export function buildElements(graph: Graph): ElementDefinition[] {
       isDead: deadEdges.has(edge.id),
       isBroken: brokenEdges.has(edge.id),
       isBack: backEdges.has(edge.id),
+      changeKind: changeKinds.edges.get(edge.id) ?? null,
     };
     elements.push({ data, group: "edges" });
   }

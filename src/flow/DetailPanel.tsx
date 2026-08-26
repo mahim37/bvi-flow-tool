@@ -3,11 +3,18 @@ import { useMemo } from "react";
 import { useArchiveQuestion } from "../api/queries";
 import type { Edge, Graph, Question, UUID } from "../api/types";
 import { ConfirmAction } from "./ConfirmAction";
+import type { ChangeKinds } from "./graphElements";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { Options } from "./Options";
 import { QuestionEditor } from "./QuestionEditor";
 import { answerTypeLabel, formatTimestamp, optionLabel, sourceLabel } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
+
+const EMPTY_CHANGE_KINDS: ChangeKinds = {
+  questions: new Map(),
+  options: new Map(),
+  edges: new Map(),
+};
 
 interface DetailPanelProps {
   graph: Graph;
@@ -30,17 +37,26 @@ interface DetailPanelProps {
    * map's selection, which is what closes the drawer (there is no
    * separate "closed" state to track). */
   onClose?: (() => void) | undefined;
+  /** The open draft's own diff, already bucketed by `changeKindsFromDiff`
+   * -- same data the canvas highlights nodes/edges with (`MapView`),
+   * shared rather than a second copy computed here. Absent off a
+   * published version (nothing pending to show) and in every existing
+   * test that renders this panel directly, so it defaults to "nothing
+   * changed" rather than requiring every call site to pass one. */
+  changeKinds?: ChangeKinds | undefined;
 }
 
 /** Ported from break-backend's `.flag` + per-kind modifiers (styles.css
  * ~L690-733) -- colour by what the flag means, not one flat pill style.
  * "neutral" is this app's own addition (break has no equivalent to
- * "nothing to report"); it borrows the muted look break gives `.flag.deleted`. */
+ * "nothing to report"); it borrows the muted look break gives `.flag.deleted`.
+ * "added"/"changed" reuse the exact green/gold `--entry`/`--branch` already
+ * use, not a third colour pair. */
 function Flag({
   kind,
   children,
 }: {
-  kind: "entry" | "branch" | "term" | "unreach" | "neutral";
+  kind: "entry" | "branch" | "term" | "unreach" | "neutral" | "added" | "changed";
   children: React.ReactNode;
 }) {
   return <span className={`flag flag--${kind}`}>{children}</span>;
@@ -131,6 +147,7 @@ export function DetailPanel({
   onStartAddRoute,
   onCancelPick,
   onClose,
+  changeKinds = EMPTY_CHANGE_KINDS,
 }: DetailPanelProps) {
   const questionsById = useMemo(
     () => new Map(graph.questions.map((item) => [item.id, item])),
@@ -181,6 +198,10 @@ export function DetailPanel({
   const sectionColor = section
     ? (sectionColors.get(section.id) ?? NO_SECTION_COLOR)
     : NO_SECTION_COLOR;
+  // Only ever set for a live question: an archived one's own diff row is
+  // exactly what put it here, and it already gets the banner below
+  // instead of this flag row at all.
+  const questionChange = changeKinds.questions.get(question.id);
 
   return (
     <aside className="panel" aria-label={`Detail for ${question.code}`}>
@@ -215,11 +236,14 @@ export function DetailPanel({
       ) : (
         audit !== null && (
           <div className="d-flags" aria-label="Diagnostics">
+            {questionChange === "added" && <Flag kind="added">New</Flag>}
+            {questionChange === "changed" && <Flag kind="changed">Changed</Flag>}
             {audit.is_entry && <Flag kind="entry">Entry point</Flag>}
             {audit.is_decision_point && <Flag kind="branch">Decision point</Flag>}
             {audit.is_terminal && <Flag kind="term">Can end the flow</Flag>}
             {!audit.is_reachable && <Flag kind="unreach">Unreachable</Flag>}
-            {!audit.is_entry &&
+            {questionChange === undefined &&
+              !audit.is_entry &&
               !audit.is_decision_point &&
               !audit.is_terminal &&
               audit.is_reachable && <Flag kind="neutral">Nothing to report</Flag>}
@@ -269,6 +293,7 @@ export function DetailPanel({
         graph={graph}
         question={question}
         editable={editable && live}
+        changeKinds={changeKinds}
         retargetingEdgeId={retargetingEdgeId}
         addingRouteOptionId={addingRouteOptionId}
         onSelectQuestion={onSelectQuestion}

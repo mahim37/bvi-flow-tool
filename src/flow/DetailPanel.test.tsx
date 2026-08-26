@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { DetailPanel } from "./DetailPanel";
+import type { ChangeKinds } from "./graphElements";
 import {
   E_Q2_TO_ARCHIVED,
   E_YES_TO_Q2,
@@ -22,7 +23,7 @@ function changeDestinationTrigger(row: HTMLElement) {
   return within(row).getByText("Change destination", { selector: "span" });
 }
 
-function panelFor(questionId: string, editable = false) {
+function panelFor(questionId: string, editable = false, changeKinds?: ChangeKinds) {
   const graph = makeGraph();
   const question = graph.questions.find((item) => item.id === questionId);
   if (question === undefined) throw new Error("no such question in the fixture");
@@ -31,6 +32,7 @@ function panelFor(questionId: string, editable = false) {
       graph={graph}
       question={question}
       editable={editable}
+      changeKinds={changeKinds}
       retargetingEdgeId={null}
       addingRouteOptionId={null}
       onSelectQuestion={vi.fn()}
@@ -472,5 +474,41 @@ describe("edit controls", () => {
     await user.click(screen.getByRole("button", { name: "+ Add a route" }));
 
     expect(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
+  });
+});
+
+describe("change highlighting", () => {
+  it("shows a New flag when this draft added the question", () => {
+    panelFor(Q1, false, {
+      questions: new Map([[Q1, "added"]]),
+      options: new Map(),
+      edges: new Map(),
+    });
+
+    expect(screen.getByText("New")).toBeInTheDocument();
+    expect(screen.queryByText("Changed")).not.toBeInTheDocument();
+  });
+
+  it("shows a Changed flag instead of 'Nothing to report' when this draft changed the question", () => {
+    panelFor(Q2, false, {
+      questions: new Map([[Q2, "changed"]]),
+      options: new Map(),
+      edges: new Map(),
+    });
+
+    expect(screen.getByText("Changed")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing to report")).not.toBeInTheDocument();
+  });
+
+  it("badges an added option and a changed route", () => {
+    panelFor(Q1, false, {
+      questions: new Map(),
+      options: new Map([[OPTION_YES, "added"]]),
+      edges: new Map([[E_YES_TO_Q2, "changed"]]),
+    });
+
+    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    expect(within(yesRow).getByText("Added")).toBeInTheDocument();
+    expect(within(yesRow).getByText("Changed")).toBeInTheDocument();
   });
 });
