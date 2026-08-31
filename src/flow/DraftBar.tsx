@@ -268,7 +268,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 title={`${versionLabel(existingDraft)} is already open. Only one draft may exist per product at a time.`}
                 onClick={() => onOpenVersion(existingDraft.id)}
               >
-                Already a draft exists
+                Open the existing draft
               </button>
             ) : (
               <EditorDropdown
@@ -518,7 +518,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                       onChange={(event) => setReviewer1(event.target.value)}
                     >
                       <option value="" disabled>
-                        Choose somebody
+                        Choose a reviewer
                       </option>
                       {(reviewers.data ?? [])
                         .filter(
@@ -542,7 +542,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                       onChange={(event) => setReviewer2(event.target.value)}
                     >
                       <option value="" disabled>
-                        Choose somebody
+                        Choose a reviewer
                       </option>
                       {(reviewers.data ?? [])
                         .filter(
