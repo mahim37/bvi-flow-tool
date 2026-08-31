@@ -92,8 +92,10 @@ describe("a live question", () => {
   it("explains a dead edge in terms of the answer, not the target", () => {
     panelFor(Q2);
 
+    // The group card carries the explanation once, not once more per row --
+    // see `Options.tsx`'s `hideDeadNote`.
     expect(
-      screen.getByText(/not one of this question's options anymore/),
+      screen.getByText(/tied to an answer this question doesn't have anymore/i),
     ).toBeInTheDocument();
   });
 
@@ -468,7 +470,7 @@ describe("edit controls", () => {
       screen.queryByRole("button", { name: "Add a specific route" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText("This route applies no matter what's answered."),
+      screen.getByRole("button", { name: "This route applies no matter what's answered." }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "+ Add a route" }));

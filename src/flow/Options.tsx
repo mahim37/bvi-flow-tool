@@ -54,6 +54,22 @@ function ChangeBadge({ kind }: { kind: ChangeKind }) {
   );
 }
 
+/** A "?" badge beside a heading, holding what used to be a permanently
+ * visible `panel__hint` paragraph under it -- same information, shown on
+ * hover/focus in a small custom popup (`.help-hint__bubble`, CSS-only)
+ * instead of taking up space on every render. Deliberately not the
+ * native `title` tooltip: that renders as the browser's own plain black
+ * box, out of step with the rest of this app's styling. `aria-label`
+ * still carries the text for a screen reader, since the bubble itself
+ * isn't announced on focus. */
+function HelpHint({ text }: { text: string }) {
+  return (
+    <button type="button" className="help-hint" aria-label={text}>
+      ?<span className="help-hint__bubble" aria-hidden="true">{text}</span>
+    </button>
+  );
+}
+
 /** Read-only data every route row needs, bundled so it isn't six separate
  * props on every card. Computed once per render in `Options`, not per
  * card. */
@@ -87,6 +103,7 @@ function EdgeRow({
   disabled,
   retargetingEdgeId,
   hasFallback,
+  hideDeadNote,
   onEditText,
   onSelectQuestion,
   onStartRetarget,
@@ -115,6 +132,10 @@ function EdgeRow({
    * empty card does. `false` for `EdgeGroupCard`'s rows: removing the
    * default route itself doesn't fall through to itself. */
   hasFallback: boolean;
+  /** Set by `EdgeGroupCard`: every row it renders is dead for the same
+   * reason its own card-level note already states, so the row doesn't
+   * repeat it a second time per route. */
+  hideDeadNote?: boolean;
   /** Present only for an answer's own row (`OptionCard`) -- there's no
    * text to rename on the default-route or dead-guard groups, so those
    * callers leave it out and "Edit text" doesn't render. */
@@ -175,7 +196,7 @@ function EdgeRow({
           fail instead of continuing.
         </p>
       )}
-      {isDead && (
+      {isDead && !hideDeadNote && (
         <p className="edges__fault">
           This route is tied to an answer that is not one of this question's options
           anymore, so it can never happen.
@@ -344,6 +365,7 @@ function EdgeGroupCard({
             disabled={disabled}
             retargetingEdgeId={retargetingEdgeId}
             hasFallback={false}
+            hideDeadNote={note !== undefined}
             onSelectQuestion={onSelectQuestion}
             onStartRetarget={onStartRetarget}
             onCancelPick={onCancelPick}
@@ -406,6 +428,13 @@ function DefaultRouteSection({
           </span>{" "}
           Default route
         </span>
+        <HelpHint
+          text={
+            takesOptions
+              ? "Used when an answer has no route of its own. An answer's own route always wins over this."
+              : "This route applies no matter what's answered."
+          }
+        />
         {editable && edges.length > 0 && (
           <button
             type="button"
@@ -416,11 +445,6 @@ function DefaultRouteSection({
           </button>
         )}
       </div>
-      <p className="panel__hint">
-        {takesOptions
-          ? "The route used by any answer without one of its own -- an answer with an explicit route configured above always takes that instead."
-          : "This route applies no matter what's answered."}
-      </p>
 
       {edges.length > 0 && (
         <div className="opt-edges">
@@ -931,14 +955,12 @@ export function Options({
     <section className="panel__section" aria-labelledby="options-heading">
       <h3 id="options-heading" className="d-sub">
         Options <span className="count">{cardCount}</span>
+        <HelpHint
+          text={
+            "Where each answer leads. Ties go to the first route listed. To send an answer somewhere specific, click a button below, then pick the destination on the canvas."
+          }
+        />
       </h3>
-      <p className="panel__hint">
-        Where each answer leads. If more than one route could apply, the first one
-        listed wins; otherwise the flow ends there. Jumping a route to a specific
-        question, or adding one for a specific answer, happens on the canvas: click
-        "Change destination" → "Jump to a specific question", or "Add a specific route"
-        below, then click the destination question.
-      </p>
 
       {(anyAnswerEdges.length > 0 || editable) && (
         <DefaultRouteSection

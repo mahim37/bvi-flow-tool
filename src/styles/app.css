@@ -1014,6 +1014,79 @@ details[open] > summary > .chevron {
   letter-spacing: 0;
 }
 
+/* A "?" badge beside a heading, holding on hover/focus what used to be a
+ * permanently visible `panel__hint` paragraph under it -- `Options.tsx`'s
+ * `HelpHint`. Sized to sit inline in a `.d-sub`/`.opt-label` flex row
+ * without pushing it taller. A custom popup (`.help-hint__bubble` below)
+ * rather than the native `title` tooltip, which renders as the browser's
+ * own plain box, out of step with the rest of this app. */
+.help-hint {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  font-family: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: help;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+.help-hint:hover,
+.help-hint:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* The popup itself -- hidden until the badge is hovered/focused. Matches
+ * `.panel .editor-panel`'s own left-anchored, panel-scoped width cap
+ * (app.css, "narrower and left-anchored... stays inside it") rather than
+ * a fresh set of position rules, since a `.help-hint` lives in the same
+ * narrow (380px) detail-panel column that popup was fixed for. */
+.help-hint__bubble {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 220px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  pointer-events: none;
+}
+
+.help-hint:hover .help-hint__bubble,
+.help-hint:focus-visible .help-hint__bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 /* ---------- answer/edge cards ----------
  * Ported from break-backend's `.opt-list`/`.opt`/`.opt-label`/`.opt-dest`
  * (styles.css ~L797-891) -- a raised card per row instead of a flat list
