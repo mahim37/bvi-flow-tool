@@ -37,10 +37,10 @@ function groupByQuestionnaire(versions: VersionListItem[]) {
 
 function versionOptionLabel(version: VersionListItem): string {
   const state = version.is_active
-    ? " (live)"
+    ? " (latest)"
     : version.is_draft
       ? version.is_stale
-        ? " (draft — behind live)"
+        ? " (draft — behind latest)"
         : " (draft)"
       : "";
   return `${versionLabel(version)}${state} — ${version.question_count} questions`;
@@ -191,7 +191,11 @@ export function VersionLayout() {
             {graphData !== undefined && (
               <p className="topbar__subtitle">
                 {graphData.version.questionnaire_name} ·{" "}
-                {graphData.version.is_draft ? "draft" : "live"}
+                {graphData.version.is_draft
+                  ? "draft"
+                  : graphData.version.is_active
+                    ? "latest"
+                    : "published"}
               </p>
             )}
           </div>

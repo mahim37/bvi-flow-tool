@@ -200,7 +200,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 <strong>{versionLabel(graph.version)}</strong>
               </div>
               <span className="draftbar__note">
-                {graph.version.is_active ? "Live version" : "Published version"} — read
+                {graph.version.is_active ? "Latest version" : "Published version"} — read
                 only. Edits are made on a proposal.
                 {changeRequest !== null && changeRequest.published_at !== null && (
                   <>
@@ -230,7 +230,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 </p>
               ) : (
                 <ConfirmAction
-                  message={`Activate ${versionLabel(graph.version)}? It goes live immediately, replacing whatever is live now, with no new review round.`}
+                  message={`Activate ${versionLabel(graph.version)}? It becomes the latest version immediately, replacing whatever is latest now, with no new review round.`}
                   confirmLabel="Activate"
                   onConfirm={() =>
                     activate.mutate(undefined, { onError: onReviewError })
@@ -668,9 +668,9 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
         // through the same function the publish refusal reads, so this
         // cannot promise a publish the backend then declines.
         <p className="banner banner--warn">
-          Behind the live version: something was published after this draft was copied,
-          so publishing it is refused rather than silently reinstating whatever landed
-          in between. There is no automatic rebase — draft again from the current live
+          Behind the latest version: something was published after this draft was
+          copied, so publishing it is refused rather than silently reinstating whatever
+          landed in between. There is no automatic rebase — draft again from the latest
           version and re-apply.
         </p>
       )}

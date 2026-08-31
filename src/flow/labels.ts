@@ -115,8 +115,8 @@ const STATUS_MEANINGS: Record<ChangeRequestStatus, string> = {
   submitted:
     "Frozen while it is read. A reviewer approves it, or sends it back to open with their reasons.",
   approved:
-    "Cleared by a reviewer and still frozen. Publishing is what makes it the live questionnaire.",
-  published: "Live. This version is what respondents are now asked.",
+    "Cleared by a reviewer and still frozen. Publishing is what makes it the latest questionnaire.",
+  published: "Latest. This version is what respondents are now asked.",
 };
 
 export function statusMeaning(status: ChangeRequestStatus): string {

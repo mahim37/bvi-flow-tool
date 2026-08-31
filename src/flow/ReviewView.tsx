@@ -200,8 +200,8 @@ export function ReviewView() {
         // round trip through a second person the whole workflow is for.
         <p className="banner banner--warn" role="alert">
           Somebody published underneath this draft: the version it was copied from is no
-          longer the live one. Publishing is refused rather than silently reinstating
-          whatever landed in between. Open a new draft from the current live version and
+          longer the latest one. Publishing is refused rather than silently reinstating
+          whatever landed in between. Open a new draft from the latest version and
           re-apply these changes.
         </p>
       )}
@@ -400,10 +400,10 @@ export function ReviewView() {
                 {changeRequest !== null && changeRequest.reviews[0] !== undefined
                   ? ` by ${changeRequest.reviews[0].reviewer_email}`
                   : ""}
-                . Publishing makes this the live questionnaire.
+                . Publishing makes this the latest questionnaire.
               </p>
               <ConfirmAction
-                message="Publish this version? It becomes the live questionnaire, and every new assessment is served from it."
+                message="Publish this version? It becomes the latest questionnaire, and every new assessment is served from it."
                 confirmLabel="Publish"
                 onConfirm={() => publish.mutate(undefined, { onError: onReviewError })}
               >
