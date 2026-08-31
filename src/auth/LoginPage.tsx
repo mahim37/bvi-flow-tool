@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 
 import { ApiError } from "../api/client";
+import croppedLogo from "../assets/predmind-logo - cropped.webp";
 import { useAuth } from "./useAuth";
 
 export function LoginPage() {
@@ -35,8 +36,13 @@ export function LoginPage() {
   return (
     <main className="login">
       <form className="login__card" onSubmit={onSubmit} noValidate>
-        <h1 className="login__title">Questionnaire flow tool</h1>
-        <p className="login__subtitle">Internal tool. Staff sign-in required.</p>
+        <div className="login__brand">
+          <img className="login__logo" src={croppedLogo} alt="" />
+          <div>
+            <h1 className="login__title">Flow Tool</h1>
+            <p className="login__subtitle">Internal tool. Staff sign-in required.</p>
+          </div>
+        </div>
 
         <div className="field">
           <label htmlFor={emailId}>Email</label>

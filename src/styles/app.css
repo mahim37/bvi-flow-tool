@@ -1716,6 +1716,22 @@ details[open] > summary > .chevron {
   box-shadow: var(--shadow-md);
 }
 
+/* Same logo-beside-title shape as `.topbar__brand`, so the login screen
+ * (the first thing anyone sees) and the topbar (the second) name this
+ * tool the same way. */
+.login__brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.login__logo {
+  display: block;
+  height: 32px;
+  width: auto;
+  flex-shrink: 0;
+}
+
 .login__title {
   margin: 0;
   font-size: 1.2rem;

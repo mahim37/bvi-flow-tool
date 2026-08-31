@@ -1,4 +1,4 @@
-# Questionnaire flow tool
+# Flow Tool
 
 Internal, admin-only UI for viewing and proposing changes to questionnaire
 branching logic. It is the frontend for the `staff/flow-tool/` API in
