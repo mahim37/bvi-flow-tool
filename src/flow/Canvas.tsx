@@ -450,14 +450,6 @@ export function Canvas({
         <button
           type="button"
           className="icon-btn"
-          title="Fit to screen"
-          onClick={fitToScreen}
-        >
-          ⤢
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
           title="Reset view"
           onClick={fitToScreen}
         >
