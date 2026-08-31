@@ -25,10 +25,10 @@ export function answerTypeLabel(type: AnswerType): string {
 
 /** "{code} · {prompt, truncated}" -- the code alone ("Q2") means little
  * without opening that question, so anywhere a question is named away
- * from its own card (a route's destination, an incoming source) gets the
- * prompt alongside it too, same idea as the canvas's own node labels
- * (`graphElements.ts`). */
-function questionRefLabel(question: Question): string {
+ * from its own card (a route's destination, an incoming source, the
+ * Preview screen's "QID" step header) gets the prompt alongside it too,
+ * same idea as the canvas's own node labels (`graphElements.ts`). */
+export function questionRefLabel(question: Question): string {
   return `${question.code} · ${trunc(question.prompt, 40)}`;
 }
 

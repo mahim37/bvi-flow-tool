@@ -8,7 +8,7 @@ import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { PreviewAnswer, PreviewState, QuestionRecord, UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { useVersionContext } from "./versionContext";
-import { previewInstruction } from "./labels";
+import { previewInstruction, questionRefLabel } from "./labels";
 import { writeErrorMessage } from "./useWriteError";
 
 type PreviewMode = "full" | "changes";
@@ -260,7 +260,7 @@ export function PreviewView() {
         <div className="banner banner--info preview__changebar" role="status">
           <p>
             Change {changeIndex + 1} of {changedQuestionIds.length} — previewing{" "}
-            <strong>QID {currentChange.code}</strong>
+            <strong>QID {questionRefLabel(currentChange)}</strong>
           </p>
           <div className="preview__changenav">
             <button
