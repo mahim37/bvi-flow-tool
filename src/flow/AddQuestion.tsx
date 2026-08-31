@@ -97,7 +97,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
             </div>
 
             <div className="field">
-              <label htmlFor={promptId}>Prompt</label>
+              <label htmlFor={promptId}>Question text</label>
               <textarea
                 id={promptId}
                 rows={3}
