@@ -435,6 +435,7 @@ export function Canvas({
           type="button"
           className="icon-btn"
           title="Zoom in"
+          aria-label="Zoom in"
           onClick={() => zoomBy(1.3)}
         >
           ＋
@@ -443,6 +444,7 @@ export function Canvas({
           type="button"
           className="icon-btn"
           title="Zoom out"
+          aria-label="Zoom out"
           onClick={() => zoomBy(1 / 1.3)}
         >
           －
@@ -451,6 +453,7 @@ export function Canvas({
           type="button"
           className="icon-btn"
           title="Reset view"
+          aria-label="Reset view"
           onClick={fitToScreen}
         >
           ⟲
