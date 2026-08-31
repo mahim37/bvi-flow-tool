@@ -197,11 +197,11 @@ const FIELD_LABELS: Record<string, string> = {
   archived: "Archived",
   archived_at: "Archived",
   label: "Label",
-  guard: "Guard",
+  guard: "Answer",
   target: "Goes to",
   to_question: "Goes to",
   priority: "Priority",
-  from_option: "Guard",
+  from_option: "Answer",
 };
 
 export function fieldLabel(field: string): string {

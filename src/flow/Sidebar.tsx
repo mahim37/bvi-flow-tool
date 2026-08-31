@@ -16,8 +16,8 @@ interface DiagnosticGroup {
   key: string;
   label: string;
   /** What a non-zero count means, in one line. The counts are useless
-   * without it: "3 dead edges" is only actionable next to "guarded by an
-   * option the question does not offer". */
+   * without it: "3 dead routes" is only actionable next to "tied to an
+   * answer that isn't one of this question's options anymore". */
   meaning: string;
   questionIds: UUID[];
   /** Ids to light up on the canvas. Usually the same as `questionIds`, but
@@ -77,25 +77,24 @@ function useDiagnosticGroups(graph: Graph): DiagnosticGroup[] {
       },
       {
         key: "dead",
-        label: "Dead edges",
+        label: "Dead routes",
         meaning:
-          "Guarded by an option the question does not offer, so the guard can never match.",
+          "Tied to an answer that isn't one of this question's options anymore, so it can never happen.",
         questionIds: sources(audit.dead_edge_ids),
         highlightIds: audit.dead_edge_ids,
       },
       {
         key: "broken",
-        label: "Broken edges",
+        label: "Broken routes",
         meaning:
-          "Point at an archived or out-of-version question: the resolver raises rather than routing.",
+          "Leads to a question that has been archived or removed, so it would fail instead of continuing.",
         questionIds: sources(audit.broken_edge_ids),
         highlightIds: audit.broken_edge_ids,
       },
       {
         key: "loops",
         label: "Loops",
-        meaning:
-          "An edge that routes back into a question already on the path. Blocks publishing.",
+        meaning: "A route that goes back into a question already on the path. Blocks publishing.",
         questionIds: sources(audit.back_edge_ids),
         highlightIds: audit.back_edge_ids,
       },
@@ -553,15 +552,16 @@ export function Sidebar({
                 </li>
                 <li>
                   <span className="node-key-swatch node-key-swatch--fault" />
-                  Red border — this question has a dead or broken edge leaving it
+                  Red border — this question has a dead or broken route leaving it
                 </li>
                 <li>
                   <span className="node-key-swatch node-key-swatch--dead" />
-                  Dashed arrow — dead edge, the guard can never match
+                  Dashed arrow — dead route, tied to an answer this question doesn't offer
+                  anymore
                 </li>
                 <li>
                   <span className="node-key-swatch node-key-swatch--broken" />
-                  Dotted arrow — broken edge, the resolver raises on it
+                  Dotted arrow — broken route, leads to a question that's archived or removed
                 </li>
               </ul>
             </div>
