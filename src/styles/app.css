@@ -2515,22 +2515,10 @@ textarea:focus-visible {
   margin-right: auto;
 }
 
-.optedits,
-.sectionedits {
+.optedits {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-.sectionedit {
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg);
-}
-
-.sectionedit + .sectionedit {
-  margin-top: 8px;
 }
 
 /* `.opt` (the answer card, styles ~L1013 or so) is the outer wrapper now
@@ -2543,27 +2531,17 @@ textarea:focus-visible {
   margin-bottom: 7px;
 }
 
-.optedit__controls,
-.sectionedit__controls {
+.optedit__controls {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 8px;
 }
 
-.sectionedit__controls .button {
-  padding: 5px 12px;
-  font-size: 0.82rem;
-}
-
-.sectionedit .field--inline {
-  margin-bottom: 6px;
-}
-
-/* `<details>` used as a dropdown trigger -- "Add a question" / "Edit
-   sections" in the topbar (VersionLayout). Positioned relative so
-   `.editor-panel` (the one wrapper element after `<summary>` in each) can
-   float under the button instead of pushing the rest of the topbar down. */
+/* `<details>` used as a dropdown trigger -- "Add a question" in the
+   topbar (VersionLayout). Positioned relative so `.editor-panel` (the
+   one wrapper element after `<summary>` in each) can float under the
+   button instead of pushing the rest of the topbar down. */
 .editor-dropdown {
   position: relative;
 }

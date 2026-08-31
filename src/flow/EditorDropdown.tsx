@@ -15,17 +15,15 @@ interface EditorDropdownProps {
   disabled?: boolean;
   /** Either the panel's contents, or a function receiving `close` to
    * dismiss itself on a successful submit (`DraftBar`'s forms,
-   * `AddQuestion`) -- `SectionEditor` ignores it and stays open instead,
-   * since adding one section and immediately wanting to add another is
-   * the point of that one. */
+   * `AddQuestion`). */
   children: ReactNode | ((close: () => void) => ReactNode);
 }
 
 /**
  * The one place this app's floating "click a button, a form pops up"
- * popup is built -- Add a question, Edit sections, Submit for review, and
- * anything added after them all get the same behaviour for free instead
- * of each hand-rolling its own `<details>`/open-state/dismiss logic:
+ * popup is built -- Add a question, Submit for review, and anything added
+ * after them all get the same behaviour for free instead of each
+ * hand-rolling its own `<details>`/open-state/dismiss logic:
  * closed by clicking the trigger again, by Escape, or by clicking
  * anywhere outside the panel.
  *

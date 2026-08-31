@@ -15,7 +15,6 @@ import { useAuth } from "../auth/useAuth";
 import { AddQuestion } from "./AddQuestion";
 import { DraftBar } from "./DraftBar";
 import { versionLabel } from "./labels";
-import { SectionEditor } from "./SectionEditor";
 import type { VersionContext } from "./versionContext";
 
 /** Versions arrive grouped by questionnaire, so the picker keeps the
@@ -259,22 +258,16 @@ export function VersionLayout() {
 
         {graphData !== undefined && editable && (
           // Always reachable rather than buried in a collapsed sidebar
-          // section: the version this bar names is exactly the draft these
-          // verbs write to, so this is the one place both belong regardless
-          // of which tab (Map/Review/Preview) is open. A jump to the new or
-          // refiled question goes through `?question=`, the same URL param
+          // section: the version this bar names is exactly the draft
+          // Add-question writes to, so this is the one place it belongs
+          // regardless of which tab (Map/Review/Preview) is open. A jump to
+          // the new question goes through `?question=`, the same URL param
           // the review screen already uses to point the map at a question --
           // no local selection state to thread down from here.
           <div className="topbar__editors">
             <AddQuestion
               graph={graphData}
               onAdded={(id) =>
-                navigate(`/versions/${graphData.version.id}?question=${id}`)
-              }
-            />
-            <SectionEditor
-              graph={graphData}
-              onSelectQuestion={(id) =>
                 navigate(`/versions/${graphData.version.id}?question=${id}`)
               }
             />
