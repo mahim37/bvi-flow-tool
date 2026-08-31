@@ -272,7 +272,7 @@ export function DetailPanel({
       </div>
 
       <header className="panel__header">
-        <div className="d-id">{question.code}</div>
+        <div className="d-id">QID {question.code}</div>
         {editable && live ? (
           <QuestionEditor graph={graph} question={question} />
         ) : (

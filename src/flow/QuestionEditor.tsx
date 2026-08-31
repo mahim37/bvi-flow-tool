@@ -132,7 +132,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
           </div>
 
           <div className="field">
-            <label htmlFor={codeId}>Code</label>
+            <label htmlFor={codeId}>QID</label>
             <input
               id={codeId}
               value={draft.code}

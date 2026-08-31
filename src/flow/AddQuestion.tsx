@@ -85,7 +85,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
             }}
           >
             <div className="field">
-              <label htmlFor={codeId}>Code</label>
+              <label htmlFor={codeId}>QID</label>
               <input
                 id={codeId}
                 value={code}
