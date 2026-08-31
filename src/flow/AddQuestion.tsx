@@ -90,7 +90,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
                 id={codeId}
                 value={code}
                 required
-                placeholder="The label people write down"
+                placeholder="Stable identifier"
                 disabled={addQuestion.isPending}
                 onChange={(event) => setCode(event.target.value)}
               />
