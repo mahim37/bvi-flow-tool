@@ -11,6 +11,13 @@ const LAYOUT = {
   name: "dagre",
   rankDir: "TB",
   nodeSep: 45,
+  // Default (dagre's internal 20) crowds a node that shares a rank with a
+  // longer edge skipping past it -- e.g. a question with both an incoming
+  // and outgoing edge, ranked between two ends of a direct fallback edge
+  // that skips it. edgeSep only spaces routed edges away from nodes/each
+  // other, unlike nodeSep, so it doesn't also widen every sibling-node gap
+  // on the canvas.
+  edgeSep: 200,
   rankSep: 80,
   animate: false,
   // Framing the opening view is done by hand below (`fitToChainStart`),
