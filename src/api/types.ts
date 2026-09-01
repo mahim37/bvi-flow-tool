@@ -415,9 +415,12 @@ export interface PreviewAnswer {
 }
 
 export interface PreviewState {
-  /** Null once the walk is over. Carries its own options, so nothing here
-   * has to be joined against the map. */
-  next_question: QuestionRecord | null;
+  /** Empty once the walk is over. Carries its own options, so nothing here
+   * has to be joined against the map. More than one element only for a
+   * batched section (see `is_new_section` below) -- this view still walks
+   * one question at a time, so only `[0]` is read. */
+  next_questions: QuestionRecord[];
+  is_new_section: boolean;
   is_complete: boolean;
   answered_count: number;
   /** The reachability denominator -- questions reachable from the entry
@@ -427,7 +430,7 @@ export interface PreviewState {
 
 /** One valid route from the entry point to a specific question --
  * `answers` excludes the target itself, since replaying them through
- * `previewWalk` is what makes it come back as `next_question`. Computed
+ * `previewWalk` is what makes it come back as `next_questions[0]`. Computed
  * server-side (`routing.path_to`) so a reviewer's "Preview from here"
  * seeds a real walk instead of guessing at one. */
 export interface PreviewPath {
