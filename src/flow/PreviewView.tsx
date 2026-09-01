@@ -192,7 +192,7 @@ export function PreviewView() {
         null)
       : null;
 
-  const question = state?.next_question ?? null;
+  const question = state?.next_questions[0] ?? null;
   const isChoice = question !== null && CHOICE_ANSWER_TYPES.has(question.answer_type);
   const isMulti = question?.answer_type === "multi_choice";
 
