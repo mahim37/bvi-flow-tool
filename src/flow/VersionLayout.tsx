@@ -35,6 +35,29 @@ function groupByQuestionnaire(versions: VersionListItem[]) {
   return [...groups.entries()];
 }
 
+/** Same wrapper attributes as Sidebar's `Chevron`/`BadgeIcon` -- a real
+ * icon instead of a "↗" glyph, which renders at a different weight per
+ * font/platform. */
+function ExternalLinkIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+    </svg>
+  );
+}
+
 function versionOptionLabel(version: VersionListItem): string {
   const state = version.is_active
     ? " (latest)"
@@ -276,6 +299,18 @@ export function VersionLayout() {
               }
             />
           </div>
+        )}
+
+        {graphData !== undefined && graphData.version.is_active && (
+          <a
+            className="topbar__preview-link"
+            href="https://bvi-product-preview.vercel.app/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Product preview
+            <ExternalLinkIcon />
+          </a>
         )}
 
         <div className="topbar__identity">
