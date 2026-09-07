@@ -1,7 +1,14 @@
 import { useId, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import type { Graph, UUID, VersionListItem } from "../api/types";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Field, nativeSelectClassName } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { TabsLink, TabsNav } from "@/components/ui/nav-tabs";
+import { editorBox, mutedHint } from "@/lib/chrome";
+import { Separator } from "@/components/ui/separator";
 import {
   useActivateVersion,
   useCreateDraft,
@@ -44,21 +51,15 @@ interface DraftBarProps {
  * bars. */
 function VersionTabs({ versionId, isDraft }: { versionId: UUID; isDraft: boolean }) {
   return (
-    <nav className="tabs" aria-label="Version views">
-      <NavLink end to={`/versions/${versionId}`} className="tabs__tab">
+    <TabsNav label="Version views">
+      <TabsLink end to={`/versions/${versionId}`}>
         Map
-      </NavLink>
-      {/* Shown for a published version too, where the same diff answers
-          "what did this release change" against the version it superseded.
-          That is the history half of spec 4.10, and it needs no endpoint
-          the review screen does not already call. */}
-      <NavLink to={`/versions/${versionId}/review`} className="tabs__tab">
+      </TabsLink>
+      <TabsLink to={`/versions/${versionId}/review`}>
         {isDraft ? "Review" : "What changed"}
-      </NavLink>
-      <NavLink to={`/versions/${versionId}/preview`} className="tabs__tab">
-        Preview
-      </NavLink>
-    </nav>
+      </TabsLink>
+      <TabsLink to={`/versions/${versionId}/preview`}>Preview</TabsLink>
+    </TabsNav>
   );
 }
 
@@ -82,15 +83,14 @@ function Cta({
   onClick: () => void;
 }) {
   return (
-    <button
-      className={`button${primary ? " button--primary" : ""}`}
-      type="button"
-      title={description}
-      disabled={disabled}
+    <Button
+      variant={primary ? "primary" : "default"}
       onClick={onClick}
+      {...(description !== undefined ? { title: description } : {})}
+      {...(disabled !== undefined ? { disabled } : {})}
     >
       {title}
-    </button>
+    </Button>
   );
 }
 
@@ -186,34 +186,37 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // stood `is_draft` down.
   if (!graph.version.is_draft) {
     return (
-      <div className="draftbar">
-        <div className="draftbar__row">
-          <div className="draftbar__left">
+      <div className="flex flex-col gap-2 border-t border-border bg-background px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
             <VersionTabs versionId={versionId} isDraft={false} />
-            <span className="draftbar__divider" aria-hidden="true" />
+            <Separator orientation="vertical" className="h-9" />
 
-            <div className="draftbar__status">
-              <div className="draftbar__status-name">
-                <span
-                  className={`draftbar__dot draftbar__dot--${graph.version.is_active ? "live" : "muted"}`}
-                />
-                <strong>{versionLabel(graph.version)}</strong>
+            <div className="bg-muted/70 flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-3 py-1.5">
+              <span
+                className={`inline-block size-2 shrink-0 rounded-full ${graph.version.is_active ? "bg-green" : "bg-muted-foreground"}`}
+                aria-hidden="true"
+              />
+              <div className="flex min-w-0 flex-col">
+                <strong className="truncate text-sm">
+                  {versionLabel(graph.version)}
+                </strong>
+                <span className="text-muted-foreground truncate text-xs">
+                  {graph.version.is_active ? "Latest version" : "Published version"} —
+                  read only. Edits are made on a proposal.
+                  {changeRequest !== null && changeRequest.published_at !== null && (
+                    <>
+                      {" "}
+                      Published {formatTimestamp(changeRequest.published_at)} from a
+                      proposal by {changeRequest.created_by_email}.
+                    </>
+                  )}
+                </span>
               </div>
-              <span className="draftbar__note">
-                {graph.version.is_active ? "Latest version" : "Published version"} — read
-                only. Edits are made on a proposal.
-                {changeRequest !== null && changeRequest.published_at !== null && (
-                  <>
-                    {" "}
-                    Published {formatTimestamp(changeRequest.published_at)} from a
-                    proposal by {changeRequest.created_by_email}.
-                  </>
-                )}
-              </span>
             </div>
           </div>
 
-          <div className="draftbar__right">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Rollback (spec 4.10) -- only offered on a version that was
                 live before and has since been replaced. It already went
                 through a review on the way in, so this is the one route to
@@ -225,9 +228,9 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 docstring. */}
             {!graph.version.is_active &&
               (reviewRefused ? (
-                <p className="banner banner--warn">
+                <Banner tone="warn">
                   Your account can view this version but not activate it.
-                </p>
+                </Banner>
               ) : (
                 <ConfirmAction
                   message={`Activate ${versionLabel(graph.version)}? It becomes the latest version immediately, replacing whatever is latest now, with no new review round.`}
@@ -250,9 +253,9 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               ))}
 
             {editRefused ? (
-              <p className="banner banner--warn">
+              <Banner tone="warn">
                 Your account can view the flow tool but not propose changes.
-              </p>
+              </Banner>
             ) : existingDraft !== undefined ? (
               // Only one draft may be open per questionnaire (spec:
               // `editing.DraftAlreadyExistsError`) -- offering the form
@@ -262,96 +265,91 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               // becoming a banner: it is still one click to the thing that
               // matters (the existing draft), just quieted and relabelled
               // instead of swapped for a form.
-              <button
-                className="button button--quiet"
-                type="button"
+              <Button
+                variant="ghost"
                 title={`${versionLabel(existingDraft)} is already open. Only one draft may exist per product at a time.`}
                 onClick={() => onOpenVersion(existingDraft.id)}
               >
                 Open the existing draft
-              </button>
+              </Button>
             ) : (
               <EditorDropdown
-                trigger={
-                  <span className="button button--primary">Propose a change</span>
-                }
+                trigger={<Button variant="primary">Propose a change</Button>}
               >
                 {(close) => (
                   <form
-                    className="editor"
+                    className={editorBox}
                     onSubmit={(event) => startProposal(event, close)}
                   >
-                    <p className="panel__hint">
+                    <p className={mutedHint}>
                       A draft is a whole copy of this version. Only one may be open at a
                       time.
                     </p>
-                    <div className="field">
-                      <label htmlFor={labelId}>Name</label>
-                      <input
+                    <Field label="Name" htmlFor={labelId}>
+                      <Input
                         id={labelId}
                         value={label}
                         placeholder="What this proposal is called"
                         onChange={(event) => setLabel(event.target.value)}
                       />
-                    </div>
-                    <div className="field">
-                      <label htmlFor={summaryId}>Summary</label>
-                      <input
+                    </Field>
+                    <Field label="Summary" htmlFor={summaryId}>
+                      <Input
                         id={summaryId}
                         value={summary}
                         placeholder="Why it exists"
                         onChange={(event) => setSummary(event.target.value)}
                       />
-                    </div>
-                    <button
-                      className="button button--primary"
+                    </Field>
+                    <Button
+                      variant="primary"
                       type="submit"
                       disabled={createDraft.isPending}
                     >
                       {createDraft.isPending ? "Copying…" : "Create draft"}
-                    </button>
+                    </Button>
                   </form>
                 )}
               </EditorDropdown>
             )}
 
             {reviewRefused ? (
-              <p className="banner banner--warn">
+              <Banner tone="warn">
                 Your account can view the flow tool but not spawn a product from it.
-              </p>
+              </Banner>
             ) : (
-              <EditorDropdown trigger="Spawn a product">
+              <EditorDropdown
+                trigger={<Button variant="outline">Spawn a product</Button>}
+              >
                 {(close) => (
                   <form
-                    className="editor"
+                    className={editorBox}
                     onSubmit={(event) => startSpawn(event, close)}
                   >
-                    <p className="panel__hint">
+                    <p className={mutedHint}>
                       Copies this version into a brand-new questionnaire, live
                       immediately.
                     </p>
-                    <div className="field">
-                      <label htmlFor={spawnNameId}>Name</label>
-                      <input
+                    <Field label="Name" htmlFor={spawnNameId}>
+                      <Input
                         id={spawnNameId}
                         value={spawnName}
                         required
                         placeholder="The new product's name"
                         onChange={(event) => setSpawnName(event.target.value)}
                       />
-                    </div>
-                    <div className="field">
-                      <label htmlFor={spawnCodeId}>Code</label>
-                      <input
+                    </Field>
+                    <Field label="Code" htmlFor={spawnCodeId}>
+                      <Input
                         id={spawnCodeId}
                         value={spawnCode}
                         required
                         placeholder="Stable identifier, unique across every product"
                         onChange={(event) => setSpawnCode(event.target.value)}
                       />
-                    </div>
-                    <button
-                      className="button button--primary"
+                    </Field>
+                    <Button
+                      variant="primary"
                       type="submit"
                       disabled={
                         spawnProduct.isPending ||
@@ -360,7 +358,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                       }
                     >
                       {spawnProduct.isPending ? "Spawning…" : "Spawn product"}
-                    </button>
+                    </Button>
                   </form>
                 )}
               </EditorDropdown>
@@ -369,9 +367,9 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
         </div>
 
         {error !== null && (
-          <p className="banner banner--error" role="alert">
+          <Banner tone="error" role="alert">
             {error}
-          </p>
+          </Banner>
         )}
       </div>
     );
@@ -381,17 +379,17 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // the payload types it as nullable, so this keeps the rest honest.
   if (changeRequest === null) {
     return (
-      <div className="draftbar draftbar--draft">
-        <div className="draftbar__row">
-          <div className="draftbar__left">
+      <div className="flex flex-col gap-2 border-t border-border bg-background px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <VersionTabs versionId={versionId} isDraft={true} />
           </div>
         </div>
 
-        <p className="banner banner--warn">
+        <Banner tone="warn">
           This version is a draft with no proposal attached, which should not be
           possible. Nothing here can be edited safely.
-        </p>
+        </Banner>
       </div>
     );
   }
@@ -452,47 +450,49 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
     releaseLock.isPending;
 
   return (
-    <div className="draftbar draftbar--draft">
-      <div className="draftbar__row">
-        <div className="draftbar__left">
+    <div className="flex flex-col gap-2 border-t border-border bg-cream-2 px-4 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
           <VersionTabs versionId={versionId} isDraft={true} />
-          <span className="draftbar__divider" aria-hidden="true" />
+          <Separator orientation="vertical" className="h-9" />
 
-          <div className="draftbar__status">
-            <div className="draftbar__status-name">
-              <span className="draftbar__dot draftbar__dot--draft" />
-              <strong>
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md bg-card/80 px-3 py-1.5">
+            <span
+              className="inline-block size-2 shrink-0 rounded-full bg-gold"
+              aria-hidden="true"
+            />
+            <div className="flex min-w-0 flex-col">
+              <strong className="truncate text-sm">
                 {versionLabel(graph.version)} —{" "}
                 {statusLabel(changeRequest.status).toLowerCase()}
               </strong>
+              <span className="text-muted-foreground truncate text-xs">
+                {statusMeaning(changeRequest.status)} Proposed by{" "}
+                {changeRequest.created_by_email}
+                {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
+              </span>
             </div>
-            <span className="draftbar__note">
-              {statusMeaning(changeRequest.status)} Proposed by{" "}
-              {changeRequest.created_by_email}
-              {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
-            </span>
           </div>
         </div>
 
-        <div className="draftbar__right">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Quiet while there's a more primary action beside it (Submit
               for review) or while this signed-in account cannot actually
               approve, reject or publish this proposal -- everyone with
               view access may still open it to read the diff, but only
               `canActOnReview` earns the same visual weight Submit/Publish
               get elsewhere and the wording that promises an action. */}
-          <Link
-            className={`button ${isOpen || !canActOnReview ? "button--quiet" : "button--primary"}`}
-            to={`/versions/${versionId}/review`}
-          >
-            {isOpen || !canActOnReview ? "Check the diff" : "Review and publish"}
-          </Link>
+          <Button asChild variant={isOpen || !canActOnReview ? "ghost" : "primary"}>
+            <Link to={`/versions/${versionId}/review`}>
+              {isOpen || !canActOnReview ? "Check the diff" : "Review and publish"}
+            </Link>
+          </Button>
 
           {isOpen && (
             <EditorDropdown trigger="Submit for review" disabled={busy || editRefused}>
               {(close) => (
                 <form
-                  className="editor"
+                  className={editorBox}
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (reviewer1 === "" || reviewer2 === "") return;
@@ -509,10 +509,10 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                     );
                   }}
                 >
-                  <div className="field">
-                    <label htmlFor={reviewer1Id}>First reviewer</label>
+                  <Field label="First reviewer" htmlFor={reviewer1Id}>
                     <select
                       id={reviewer1Id}
+                      className={nativeSelectClassName}
                       value={reviewer1}
                       required
                       onChange={(event) => setReviewer1(event.target.value)}
@@ -532,11 +532,11 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                           </option>
                         ))}
                     </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor={reviewer2Id}>Second reviewer</label>
+                  </Field>
+                  <Field label="Second reviewer" htmlFor={reviewer2Id}>
                     <select
                       id={reviewer2Id}
+                      className={nativeSelectClassName}
                       value={reviewer2}
                       required
                       onChange={(event) => setReviewer2(event.target.value)}
@@ -556,9 +556,9 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                           </option>
                         ))}
                     </select>
-                  </div>
-                  <button
-                    className="button button--primary"
+                  </Field>
+                  <Button
+                    variant="primary"
                     type="submit"
                     disabled={
                       submitDraft.isPending ||
@@ -568,13 +568,13 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                     }
                   >
                     {submitDraft.isPending ? "Submitting…" : "Submit for review"}
-                  </button>
+                  </Button>
                   {/* Two named reviewers are required, so a group with
                       fewer than two publish-flow-tool holders cannot
                       submit anything at all -- worth saying here rather
                       than leaving both selects empty with no explanation. */}
                   {reviewers.data !== undefined && reviewers.data.length < 2 && (
-                    <p className="panel__hint">
+                    <p className={mutedHint}>
                       Fewer than two people currently hold the publish grant, so there
                       is nobody eligible to name. Ask whoever manages staff accounts to
                       grant it before submitting.
@@ -613,9 +613,8 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               }
             >
               {(open) => (
-                <button
-                  className="button button--danger"
-                  type="button"
+                <Button
+                  variant="danger"
                   // `editRefused` only matters on the author path: a pure
                   // publisher needs no edit grant for this action at all,
                   // so an unrelated edit refusal earlier this session
@@ -625,7 +624,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                   onClick={open}
                 >
                   Discard draft
-                </button>
+                </Button>
               )}
             </ConfirmAction>
           )}
@@ -648,16 +647,14 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 }
               />
             ) : (
-              <button
-                className="button"
-                type="button"
+              <Button
                 disabled={busy || editRefused}
                 onClick={() =>
                   withdrawDraft.mutate(undefined, { onError: onWriteError })
                 }
               >
                 Withdraw
-              </button>
+              </Button>
             ))}
         </div>
       </div>
@@ -667,41 +664,40 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
         // bar somebody edits under. `is_stale` is the server's answer,
         // through the same function the publish refusal reads, so this
         // cannot promise a publish the backend then declines.
-        <p className="banner banner--warn">
+        <Banner tone="warn">
           Behind the latest version: something was published after this draft was
           copied, so publishing it is refused rather than silently reinstating whatever
           landed in between. There is no automatic rebase — draft again from the latest
           version and re-apply.
-        </p>
+        </Banner>
       )}
 
       {lock !== null &&
         (heldByMe ? (
-          <p className="banner banner--info">
+          <Banner as="div" tone="info">
             You last edited this draft at {formatTimestamp(lock.since)}. It's yours to
             keep editing until {formatTimestamp(lock.expires_at)} unless you edit again
             before then.{" "}
-            <button
-              className="link"
-              type="button"
+            <Button
+              variant="link"
               disabled={busy}
               onClick={() => releaseLock.mutate(undefined, { onError: onWriteError })}
             >
               Release it
-            </button>{" "}
+            </Button>{" "}
             so somebody else can edit sooner.
-          </p>
+          </Banner>
         ) : (
           // Not an error state: the lock is taken by the first edit and
           // released automatically once it goes idle, so the honest thing
           // to say is who to ask, not "locked". `expires_at` names the
           // moment this banner's own advice goes stale -- past it, the
           // lock is gone whether or not they ever come back to release it.
-          <p className="banner banner--warn">
+          <Banner tone="warn">
             {lock.email} last edited this at {formatTimestamp(lock.since)}. Nobody else
             can edit until {formatTimestamp(lock.expires_at)}, unless they release it
             first.
-          </p>
+          </Banner>
         ))}
 
       {/* Moved out of .draftbar__right (which is otherwise just the one
@@ -719,21 +715,21 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
           `isAuthor`'s comment above) and is the one thing left that
           Publish isn't, so its absence is worth a word. */}
       {!isAuthor && !isOpen && (
-        <p className="banner banner--info">
+        <Banner tone="info">
           Only {changeRequest.created_by_email} can discard or withdraw this proposal.
-        </p>
+        </Banner>
       )}
 
       {editRefused && (
-        <p className="banner banner--warn">
+        <Banner tone="warn">
           Your account can view this proposal but not change it.
-        </p>
+        </Banner>
       )}
 
       {error !== null && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           {error}
-        </p>
+        </Banner>
       )}
     </div>
   );

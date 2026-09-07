@@ -86,12 +86,15 @@ export const END_NODE_ID = "__end__";
  * it as broken, and the map has to draw *something* at the far end or the
  * arrow silently disappears -- taking the evidence with it. */
 const MISSING_PREFIX = "__missing__:";
+const SECTION_PREFIX = "__section__:";
 
 export const missingNodeId = (questionId: UUID) => `${MISSING_PREFIX}${questionId}`;
+export const sectionNodeId = (sectionId: UUID) => `${SECTION_PREFIX}${sectionId}`;
 export const isSyntheticNode = (id: string) =>
   id === END_NODE_ID || id.startsWith(MISSING_PREFIX);
+export const isSectionNode = (id: string) => id.startsWith(SECTION_PREFIX);
 
-export type NodeKind = "question" | "archived" | "end" | "missing";
+export type NodeKind = "question" | "archived" | "end" | "missing" | "section";
 
 /** What an open draft's own diff says about a node/edge/option -- "added"
  * for a brand new question, option or edge, "changed" for an existing
@@ -140,6 +143,14 @@ export interface NodeData {
    * which can land it far from the rest of its section -- this is what
    * that reposition-after-layout step places it beside instead. */
   sectionAnchorId: string | null;
+  /** Cytoscape compound parent -- the section box when this question's
+   * section is expanded. Absent on the section node itself, on unfiled
+   * questions, and on every synthetic node. */
+  parent?: string;
+  /** Real section uuid, only on `kind: "section"` nodes. */
+  sectionId?: UUID;
+  collapsed?: boolean;
+  questionCount?: number;
 }
 
 export interface EdgeData {
@@ -241,7 +252,11 @@ export function guardLabel(edge: Edge, question: Question | undefined): string {
   return option ? option.label : "unknown option";
 }
 
-export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefinition[] {
+export function buildElements(
+  graph: Graph,
+  diff?: VersionDiff,
+  collapsedSectionIds: ReadonlySet<UUID> = new Set(),
+): ElementDefinition[] {
   const questionsById = new Map(graph.questions.map((item) => [item.id, item]));
   const entryId = graph.diagnostics.entry_question_id;
   const decisions = new Set(graph.diagnostics.decision_point_question_ids);
@@ -281,7 +296,59 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
 
   const elements: ElementDefinition[] = [];
 
+  const questionsInSection = new Map<UUID, Question[]>();
   for (const question of graph.questions) {
+    if (question.section === null) continue;
+    const list = questionsInSection.get(question.section);
+    if (list) list.push(question);
+    else questionsInSection.set(question.section, [question]);
+  }
+
+  const sectionsById = new Map(graph.sections.map((section) => [section.id, section]));
+  for (const [sectionId, members] of questionsInSection) {
+    const section = sectionsById.get(sectionId);
+    if (section === undefined) continue;
+    const collapsed = collapsedSectionIds.has(sectionId);
+    const color = sectionColor.get(sectionId) ?? NO_SECTION_COLOR;
+    const data: NodeData = {
+      id: sectionNodeId(sectionId),
+      kind: "section",
+      label: collapsed ? `${section.name}\n${members.length} questions` : section.name,
+      prompt: section.description === "" ? section.name : section.description,
+      sectionColor: color,
+      badgeKind: null,
+      isEntry: false,
+      isTerminal: false,
+      isDecision: false,
+      isUnreachable: false,
+      hasFault: false,
+      changeKind: null,
+      sectionAnchorId: null,
+      sectionId,
+      collapsed,
+      questionCount: members.length,
+    };
+    elements.push({ data, group: "nodes" });
+  }
+
+  function endpointFor(questionId: UUID | null): string {
+    if (questionId === null) return END_NODE_ID;
+    if (!questionsById.has(questionId)) return missingNodeId(questionId);
+    const owner = questionsById.get(questionId);
+    if (
+      owner !== undefined &&
+      owner.section !== null &&
+      collapsedSectionIds.has(owner.section)
+    ) {
+      return sectionNodeId(owner.section);
+    }
+    return questionId;
+  }
+
+  for (const question of graph.questions) {
+    if (question.section !== null && collapsedSectionIds.has(question.section)) {
+      continue;
+    }
     const archived = question.archived_at !== null;
     const isEntry = !archived && question.id === entryId;
     const isTerminal = !archived && terminals.has(question.id);
@@ -320,6 +387,9 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
       changeKind,
       // The anchor for its own section is nothing to anchor to.
       sectionAnchorId: rawAnchorId !== question.id ? rawAnchorId : null,
+      ...(question.section !== null && !collapsedSectionIds.has(question.section)
+        ? { parent: sectionNodeId(question.section) }
+        : {}),
     };
     elements.push({ data, group: "nodes" });
   }
@@ -381,15 +451,12 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
   }
 
   for (const edge of graph.edges) {
-    const source = questionsById.has(edge.from_question)
-      ? edge.from_question
-      : missingNodeId(edge.from_question);
-    const target =
-      edge.to_question === null
-        ? END_NODE_ID
-        : questionsById.has(edge.to_question)
-          ? edge.to_question
-          : missingNodeId(edge.to_question);
+    const source = endpointFor(edge.from_question);
+    const target = endpointFor(edge.to_question);
+    // An edge that only existed between questions now inside the same
+    // collapsed section would be a self-loop on the box. Drop it: the
+    // box is the black-box, and those routes are internal.
+    if (source === target) continue;
     const data: EdgeData = {
       id: edge.id,
       source,
@@ -397,17 +464,15 @@ export function buildElements(graph: Graph, diff?: VersionDiff): ElementDefiniti
       // Blank for the question-level fallback rather than the literal
       // "anything else" -- every *specific* option gets a label, so the
       // one edge left unlabelled at a node already reads as "whatever
-      // wasn't one of those" without spelling it out. Truncated hard for
-      // everything else: this text runs diagonally along the edge itself
-      // (`canvasStyle.ts`'s `text-rotation: autorotate`), not wrapped in a
-      // box like a node's own label -- a long guard reads as tangled
-      // sideways text the moment more than one edge converges on a node.
-      // The full guard is never lost, just not here: it's what `Options`
-      // already shows in full in the detail panel.
+      // wasn't one of those" without spelling it out. Truncated so the
+      // guard still fits beside a fanned arrow; parallel edges also get
+      // a lane (`assignParallelEdgeLanes`) so three options between the
+      // same pair do not share one label pile. The full guard is in the
+      // detail panel (`Options`).
       guard:
         edge.from_option === null
           ? ""
-          : trunc(guardLabel(edge, questionsById.get(edge.from_question)), 20),
+          : trunc(guardLabel(edge, questionsById.get(edge.from_question)), 32),
       priority: edge.priority,
       isDead: deadEdges.has(edge.id),
       isBroken: brokenEdges.has(edge.id),

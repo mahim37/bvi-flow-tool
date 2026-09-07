@@ -12,6 +12,19 @@ import { useGraph, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import croppedLogo from "../assets/predmind-logo - cropped.webp";
 import { useAuth } from "../auth/useAuth";
+import { Badge } from "@/components/ui/badge";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { AddQuestion } from "./AddQuestion";
 import { DraftBar } from "./DraftBar";
 import { versionLabel } from "./labels";
@@ -84,6 +97,9 @@ function questionnaireGroupLabel(
   const parentName = versionQuestionnaireName.get(spawnedFrom);
   return parentName === undefined ? group.name : `${group.name} (from ${parentName})`;
 }
+
+const toolbarSelectTrigger =
+  "h-9 min-w-0 bg-card font-semibold shadow-sm data-[size=default]:h-9";
 
 export function VersionLayout() {
   const { versionId } = useParams<{ versionId: string }>();
@@ -187,187 +203,187 @@ export function VersionLayout() {
     // simply does not hold `view_flow_tool`, which is granted per user and
     // never through a role. Saying so beats an endless login loop.
     return (
-      <main className="gate">
-        <h1>No access to the flow tool</h1>
-        <p>
+      <main className="mx-auto flex min-h-svh max-w-[520px] flex-col items-center justify-center gap-2.5 bg-background p-6 text-center">
+        <h1 className="m-0 text-xl font-extrabold tracking-tight">
+          No access to the flow tool
+        </h1>
+        <p className="text-muted-foreground m-0">
           {identity?.email ?? "This account"} is signed in but does not have the
           questionnaire flow-tool permission. It is granted per user, so holding an
           administrator role does not confer it.
         </p>
-        <button className="button" type="button" onClick={() => void signOut()}>
-          Sign out
-        </button>
+        <Button onClick={() => void signOut()}>Sign out</Button>
       </main>
     );
   }
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="topbar__brand">
-          <img className="topbar__logo" src={croppedLogo} alt="" />
-          <div>
-            <h1 className="topbar__title">Flow Tool</h1>
-            {/* Ported from break-backend's #viewSub subtitle line -- named
-                from the version actually loaded rather than a fixed string,
-                since (unlike break) this tool serves more than one product. */}
-            {graphData !== undefined && (
-              <p className="topbar__subtitle">
-                {graphData.version.questionnaire_name} ·{" "}
-                {graphData.version.is_draft
-                  ? "draft"
-                  : graphData.version.is_active
-                    ? "latest"
-                    : "published"}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {graphData !== undefined && (
-          // Ported from break-backend's .stats pills (#stats) -- question
-          // count at a glance without opening the sidebar or a tab. The
-          // "N pending" pill that used to sit beside this counted
-          // proposals across the whole product, not this version, which
-          // read as "stuck" once the one open here was dealt with --
-          // dropped rather than relabelled.
-          <div className="topbar__stats">
-            <div className="stat">
-              <b>{graphData.questions.length}</b>
-              <span>Questions</span>
+    <div className="flex h-svh min-h-0 flex-col overflow-hidden bg-background">
+      <div className="shrink-0 border-b border-border bg-background">
+        <header className="flex h-14 items-center gap-3 px-4">
+          <div className="flex shrink-0 items-center gap-2.5">
+            <img className="block h-7 w-auto" src={croppedLogo} alt="" />
+            <div>
+              <h1 className="m-0 text-[15px] font-semibold tracking-[0.2px] whitespace-nowrap">
+                Flow Tool
+              </h1>
+              {graphData !== undefined && (
+                <p className="text-muted-foreground m-0 mt-px text-[11.5px] whitespace-nowrap">
+                  {graphData.version.questionnaire_name} ·{" "}
+                  {graphData.version.is_draft
+                    ? "draft"
+                    : graphData.version.is_active
+                      ? "latest"
+                      : "published"}
+                </p>
+              )}
             </div>
           </div>
-        )}
 
-        {/* No "All questionnaires" option -- every render of this select
-            has a real product selected (`effectiveQuestionnaireId`), so
-            there's nothing to render until that resolves (a beat, while
-            the graph for the version in the URL is still loading). */}
-        {questionnaires.length > 1 && effectiveQuestionnaireId !== null && (
-          <label className="topbar__picker">
-            <span className="sr-only">Questionnaire</span>
-            <select
-              value={effectiveQuestionnaireId}
-              onChange={(event) =>
-                setSearchParams({ questionnaire: event.target.value })
-              }
+          {graphData !== undefined && (
+            <Badge
+              tone="meta"
+              className="h-9 flex-col items-start justify-center gap-0 rounded-md px-3 py-0"
             >
-              {questionnaires.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+              <span className="text-sm font-bold tabular-nums leading-none">
+                {graphData.questions.length}
+              </span>
+              <span className="text-muted-foreground text-[10px] font-semibold tracking-[0.08em] uppercase">
+                Questions
+              </span>
+            </Badge>
+          )}
 
-        <label className="topbar__picker topbar__picker--wide">
-          <span className="sr-only">Version</span>
-          <select
-            value={versionId ?? ""}
-            onChange={(event) => navigate(`/versions/${event.target.value}`)}
-            disabled={versions.isPending}
-          >
-            {grouped.map(([id, group]) => (
-              <optgroup
-                key={id}
-                label={questionnaireGroupLabel(group, versionQuestionnaireName)}
+          {questionnaires.length > 1 && effectiveQuestionnaireId !== null && (
+            <Select
+              value={effectiveQuestionnaireId}
+              onValueChange={(next) => setSearchParams({ questionnaire: next })}
+            >
+              <SelectTrigger
+                aria-label="Questionnaire"
+                className={`${toolbarSelectTrigger} max-w-[220px]`}
               >
-                {group.versions.map((version) => (
-                  <option key={version.id} value={version.id}>
-                    {versionOptionLabel(version)}
-                  </option>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start" position="popper" className="min-w-56">
+                {questionnaires.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-        </label>
+              </SelectContent>
+            </Select>
+          )}
 
-        {graphData !== undefined && editable && (
-          // Always reachable rather than buried in a collapsed sidebar
-          // section: the version this bar names is exactly the draft
-          // Add-question writes to, so this is the one place it belongs
-          // regardless of which tab (Map/Review/Preview) is open. A jump to
-          // the new question goes through `?question=`, the same URL param
-          // the review screen already uses to point the map at a question --
-          // no local selection state to thread down from here.
-          <div className="topbar__editors">
-            <AddQuestion
-              graph={graphData}
-              onAdded={(id) =>
-                navigate(`/versions/${graphData.version.id}?question=${id}`)
-              }
-            />
+          <Select
+            value={versionId ?? ""}
+            onValueChange={(next) => navigate(`/versions/${next}`)}
+            {...(versions.isPending ? { disabled: true } : {})}
+          >
+            <SelectTrigger
+              aria-label="Version"
+              className={`${toolbarSelectTrigger} max-w-[min(100%,420px)] flex-1`}
+            >
+              <SelectValue placeholder="Choose a version" />
+            </SelectTrigger>
+            <SelectContent align="start" position="popper" className="min-w-80">
+              {grouped.map(([id, group]) => (
+                <SelectGroup key={id}>
+                  <SelectLabel>
+                    {questionnaireGroupLabel(group, versionQuestionnaireName)}
+                  </SelectLabel>
+                  {group.versions.map((version) => (
+                    <SelectItem key={version.id} value={version.id}>
+                      {versionOptionLabel(version)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {graphData !== undefined && editable && (
+            <div className="flex shrink-0 gap-2">
+              <AddQuestion
+                graph={graphData}
+                onAdded={(id) =>
+                  navigate(`/versions/${graphData.version.id}?question=${id}`)
+                }
+              />
+            </div>
+          )}
+
+          {graphData !== undefined && graphData.version.is_active && (
+            <Button
+              asChild
+              className="border-transparent bg-[var(--accent-2)] text-white hover:bg-[var(--accent-2)]/90"
+            >
+              <a
+                href="https://bvi-product-preview.vercel.app/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Product preview
+                <ExternalLinkIcon />
+              </a>
+            </Button>
+          )}
+
+          <div className="ml-auto flex shrink-0 items-center gap-2.5">
+            <span className="text-muted-foreground text-[0.85rem] whitespace-nowrap">
+              {identity?.email}
+            </span>
+            <Separator orientation="vertical" className="h-5" />
+            <Button variant="ghost" onClick={() => void signOut()}>
+              Sign out
+            </Button>
           </div>
+        </header>
+
+        {versions.isError &&
+          !(versionsError instanceof ApiError && versionsError.isForbidden) && (
+            <Banner tone="error" role="alert" className="mx-4 mt-0 mb-2">
+              {versionsError instanceof Error
+                ? versionsError.message
+                : "Could not load versions."}
+            </Banner>
+          )}
+
+        {graph.isPending && versionId !== undefined && (
+          <Banner tone="info" className="mx-4 mt-0 mb-2">
+            Loading the map…
+          </Banner>
         )}
 
-        {graphData !== undefined && graphData.version.is_active && (
-          <a
-            className="topbar__preview-link"
-            href="https://bvi-product-preview.vercel.app/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Product preview
-            <ExternalLinkIcon />
-          </a>
-        )}
+        {graph.isError &&
+          (graph.error instanceof ApiError && graph.error.isNotFound ? (
+            // The one case where a URL that worked a moment ago stops
+            // working without anybody mistyping anything: a draft is a hard
+            // delete (`editing.discard_draft`), so a tab left open on it, a
+            // stale bookmark, or a link sent before somebody discarded it
+            // all land here. The raw "No QuestionnaireVersion matches the
+            // given query." is accurate but offers nowhere to go next --
+            // this does, the same way `StaleDraftError`'s banner names an
+            // actual version rather than just saying "stale."
+            <Banner tone="error" role="alert" className="mx-4 mt-0 mb-2">
+              This version no longer exists — most likely a draft that has since been
+              discarded. <Link to="/">Go to the latest version</Link>.
+            </Banner>
+          ) : (
+            <Banner tone="error" role="alert" className="mx-4 mt-0 mb-2">
+              {graph.error instanceof ApiError && graph.error.isConflict
+                ? // A sequence-routed version has no edges at all, so there is
+                  // nothing to draw. The API refuses rather than serving an
+                  // empty map, and repeating its reasoning here is more use
+                  // than a bare "409".
+                  graph.error.message
+                : graph.error instanceof Error
+                  ? graph.error.message
+                  : "Could not load this version."}
+            </Banner>
+          ))}
 
-        <div className="topbar__identity">
-          <span>{identity?.email}</span>
-          <button
-            className="button button--quiet"
-            type="button"
-            onClick={() => void signOut()}
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
-
-      {versions.isError &&
-        !(versionsError instanceof ApiError && versionsError.isForbidden) && (
-          <p className="banner banner--error" role="alert">
-            {versionsError instanceof Error
-              ? versionsError.message
-              : "Could not load versions."}
-          </p>
-        )}
-
-      {graph.isPending && versionId !== undefined && (
-        <p className="banner banner--info">Loading the map…</p>
-      )}
-
-      {graph.isError &&
-        (graph.error instanceof ApiError && graph.error.isNotFound ? (
-          // The one case where a URL that worked a moment ago stops
-          // working without anybody mistyping anything: a draft is a hard
-          // delete (`editing.discard_draft`), so a tab left open on it, a
-          // stale bookmark, or a link sent before somebody discarded it
-          // all land here. The raw "No QuestionnaireVersion matches the
-          // given query." is accurate but offers nowhere to go next --
-          // this does, the same way `StaleDraftError`'s banner names an
-          // actual version rather than just saying "stale."
-          <p className="banner banner--error" role="alert">
-            This version no longer exists — most likely a draft that has since been
-            discarded. <Link to="/">Go to the latest version</Link>.
-          </p>
-        ) : (
-          <p className="banner banner--error" role="alert">
-            {graph.error instanceof ApiError && graph.error.isConflict
-              ? // A sequence-routed version has no edges at all, so there is
-                // nothing to draw. The API refuses rather than serving an
-                // empty map, and repeating its reasoning here is more use
-                // than a bare "409".
-                graph.error.message
-              : graph.error instanceof Error
-                ? graph.error.message
-                : "Could not load this version."}
-          </p>
-        ))}
-
-      {graph.data !== undefined && (
-        <>
+        {graph.data !== undefined && (
           <DraftBar
             graph={graph.data}
             versions={versions.data ?? []}
@@ -375,16 +391,19 @@ export function VersionLayout() {
               navigate(next === null ? "/" : `/versions/${next}`)
             }
           />
-          <Outlet
-            context={
-              {
-                graph: graph.data,
-                versions: versions.data ?? [],
-                editable,
-              } satisfies VersionContext
-            }
-          />
-        </>
+        )}
+      </div>
+
+      {graph.data !== undefined && (
+        <Outlet
+          context={
+            {
+              graph: graph.data,
+              versions: versions.data ?? [],
+              editable,
+            } satisfies VersionContext
+          }
+        />
       )}
     </div>
   );
@@ -415,9 +434,11 @@ export function VersionLanding() {
   const error = versions.error;
   if (error instanceof ApiError && error.isForbidden && !error.isUnauthenticated) {
     return (
-      <main className="gate">
-        <h1>No access to the flow tool</h1>
-        <p>
+      <main className="mx-auto flex min-h-svh max-w-[520px] flex-col items-center justify-center gap-2.5 bg-background p-6 text-center">
+        <h1 className="m-0 text-xl font-extrabold tracking-tight">
+          No access to the flow tool
+        </h1>
+        <p className="text-muted-foreground m-0">
           This account is signed in but does not have the questionnaire flow-tool
           permission. It is granted per user, so holding an administrator role does not
           confer it.
@@ -427,13 +448,15 @@ export function VersionLanding() {
   }
 
   return (
-    <main className="gate">
+    <main className="mx-auto flex min-h-svh max-w-[520px] flex-col items-center justify-center gap-2.5 bg-background p-6 text-center">
       {versions.isPending ? (
         <p>Loading versions…</p>
       ) : versions.data?.length === 0 ? (
         <>
-          <h1>No questionnaire versions</h1>
-          <p>
+          <h1 className="m-0 text-xl font-extrabold tracking-tight">
+            No questionnaire versions
+          </h1>
+          <p className="text-muted-foreground m-0">
             Nothing has been seeded yet, so there is no map to draw. Seed a
             questionnaire and reload.
           </p>

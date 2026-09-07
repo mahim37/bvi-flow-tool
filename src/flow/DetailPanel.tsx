@@ -2,6 +2,11 @@ import { useMemo } from "react";
 
 import { useArchiveQuestion } from "../api/queries";
 import type { Edge, Graph, Question, UUID } from "../api/types";
+import { Badge } from "@/components/ui/badge";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { emptyText, mutedHint, panelSection, subCount, subHeading } from "@/lib/chrome";
 import { ConfirmAction } from "./ConfirmAction";
 import type { ChangeKinds } from "./graphElements";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
@@ -59,7 +64,7 @@ function Flag({
   kind: "entry" | "branch" | "term" | "unreach" | "neutral" | "added" | "changed";
   children: React.ReactNode;
 }) {
-  return <span className={`flag flag--${kind}`}>{children}</span>;
+  return <Badge tone={kind}>{children}</Badge>;
 }
 
 /** A `.d-sub` heading with break's count-bubble (styles.css ~L778-795). */
@@ -73,8 +78,8 @@ function SubHeading({
   children: React.ReactNode;
 }) {
   return (
-    <h3 id={id} className="d-sub">
-      {children} <span className="count">{count}</span>
+    <h3 id={id} className={subHeading}>
+      {children} <span className={subCount}>{count}</span>
     </h3>
   );
 }
@@ -84,23 +89,20 @@ function SubHeading({
  * spacing. Delete-with-restore there is one-way retirement here: this
  * app's draft/publish model has no live single-version state to toggle
  * back, an archival made by mistake is undone by discarding the whole
- * draft instead (see the hint below). The button itself keeps this app's
- * own `.button--danger` look rather than break's small `.opt-edit-btn
- * .danger` ghost button -- that is the one control every other danger
- * action in this app already uses (EdgeEditor's "Remove"), so matching it
- * here beats matching break at the cost of an inconsistent button
- * language within this app's own UI. */
+ * draft instead (see the hint below). The button is `Button variant="danger"`,
+ * the same primitive EdgeEditor's "Remove" uses, rather than break's small
+ * outline ghost. */
 function DangerZone({ versionId, question }: { versionId: UUID; question: Question }) {
   const onWriteError = useWriteErrorHandler();
   const archiveQuestion = useArchiveQuestion(versionId);
   const error = writeErrorMessage(archiveQuestion.error);
 
   return (
-    <section className="panel__section" aria-labelledby="danger-heading">
-      <h3 id="danger-heading" className="d-sub">
+    <section className={panelSection} aria-labelledby="danger-heading">
+      <h3 id="danger-heading" className={subHeading}>
         Danger zone
       </h3>
-      <div className="danger-zone">
+      <div className="mb-[22px]">
         <ConfirmAction
           message={`Retire ${question.code}? It stops being served, stays drawn while anything still points at it, and there is no way to bring it back except discarding the draft.`}
           confirmLabel="Retire this question"
@@ -110,17 +112,16 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
           }
         >
           {(open) => (
-            <button
-              className="button button--danger"
-              type="button"
+            <Button
+              variant="danger"
               disabled={archiveQuestion.isPending}
               onClick={open}
             >
               Retire this question
-            </button>
+            </Button>
           )}
         </ConfirmAction>
-        <p className="panel__hint">
+        <p className={mutedHint}>
           Retiring archives rather than deletes, and there is no un-archive: an archival
           made by mistake is undone by discarding the draft. Edges pointing at it are
           left alone on purpose — they become broken edges, which is what keeps the
@@ -128,9 +129,9 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
         </p>
       </div>
       {error !== null && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           {error}
-        </p>
+        </Banner>
       )}
     </section>
   );
@@ -186,8 +187,12 @@ export function DetailPanel({
 
   if (question === null) {
     return (
-      <aside className="panel" aria-label="Question detail" aria-hidden="true">
-        <p className="empty">Select a question to see where its answers lead.</p>
+      <aside
+        className="panel relative h-full min-h-0 min-w-0 overflow-y-auto bg-background p-5"
+        aria-label="Question detail"
+        aria-hidden="true"
+      >
+        <p className={emptyText}>Select a question to see where its answers lead.</p>
       </aside>
     );
   }
@@ -204,21 +209,24 @@ export function DetailPanel({
   const questionChange = changeKinds.questions.get(question.id);
 
   return (
-    <aside className="panel" aria-label={`Detail for ${question.code}`}>
+    <aside
+      className="panel relative h-full min-h-0 min-w-0 overflow-y-auto bg-background p-5"
+      aria-label={`Detail for ${question.code}`}
+    >
       {onClose !== undefined && (
         // Ported from break-backend's #detailClose (index.html ~L369-371,
-        // same "✕" glyph and .icon-btn look as the canvas's own zoom
+        // same "✕" glyph and icon Button as the canvas's own zoom
         // controls). Closing just clears the map's selection -- there is
         // no separate open/closed state to keep in sync with it.
-        <button
-          type="button"
-          className="icon-btn panel__close"
+        <Button
+          size="icon"
+          className="absolute top-3 right-3 z-3"
           title="Close"
           aria-label="Close detail panel"
           onClick={onClose}
         >
           ✕
-        </button>
+        </Button>
       )}
 
       {/* Flags first, no heading -- ported from break-backend's
@@ -228,14 +236,14 @@ export function DetailPanel({
           in the same slot instead, matching break's own "Deleted
           placeholder" flag substituting for the rest of the row. */}
       {question.archived_at !== null ? (
-        <p className="banner banner--warn">
+        <Banner tone="warn">
           Archived on {formatTimestamp(question.archived_at)}. It is shown only because
           an edge still points at it, and the resolver raises rather than serving it.
           Nothing here describes routing behaviour, because it has none.
-        </p>
+        </Banner>
       ) : (
         audit !== null && (
-          <div className="d-flags" aria-label="Diagnostics">
+          <div className="mb-3.5 flex flex-wrap gap-1.5" aria-label="Diagnostics">
             {questionChange === "added" && <Flag kind="added">New</Flag>}
             {questionChange === "changed" && <Flag kind="changed">Changed</Flag>}
             {audit.is_entry && <Flag kind="entry">Entry point</Flag>}
@@ -255,28 +263,35 @@ export function DetailPanel({
           a coloured section badge (same dot-plus-tint look as the
           diagnostics badge) followed by small muted chips. Requiredness
           has no break equivalent -- it is this app's own field -- so it
-          gets the same `.d-type` chip treatment rather than a new style.
+          gets the same meta Badge chip rather than a new style.
           Shown as "Optional" only when true, not "Required" when true:
           every question is required right now, so a chip that fires on
           the common case would just be noise on every card. */}
-      <div className="d-meta">
-        <span
-          className="d-section-badge"
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge
+          tone="section"
           style={{ background: `${sectionColor}22`, color: sectionColor }}
         >
-          <span className="sw" style={{ background: sectionColor }} />
+          <span
+            className="inline-block size-2.5 shrink-0 rounded-full"
+            style={{ background: sectionColor }}
+          />
           {section ? section.name : "No section"}
-        </span>
-        <span className="d-type">{answerTypeLabel(question.answer_type)}</span>
-        {!question.is_required && <span className="d-type">Optional</span>}
+        </Badge>
+        <Badge tone="meta">{answerTypeLabel(question.answer_type)}</Badge>
+        {!question.is_required && <Badge tone="meta">Optional</Badge>}
       </div>
 
-      <header className="panel__header">
-        <div className="d-id">QID {question.code}</div>
+      <header className="mt-4">
+        <div className="text-muted-foreground text-xs tabular-nums">
+          QID {question.code}
+        </div>
         {editable && live ? (
           <QuestionEditor graph={graph} question={question} />
         ) : (
-          <p className="d-question">{question.prompt}</p>
+          <p className="mt-1.5 text-[16.5px] leading-snug font-medium">
+            {question.prompt}
+          </p>
         )}
       </header>
 
@@ -302,18 +317,18 @@ export function DetailPanel({
         onCancelPick={onCancelPick}
       />
 
-      <section className="panel__section" aria-labelledby="incoming-heading">
+      <section className={panelSection} aria-labelledby="incoming-heading">
         <SubHeading id="incoming-heading" count={incomingBySource.size}>
           Reached from
         </SubHeading>
         {incoming.length === 0 ? (
-          <p className="empty">
+          <p className={emptyText}>
             {audit?.is_entry === true
               ? "Nothing routes here. It is the entry point, so it runs first anyway."
               : "Nothing routes here, so this question is never served."}
           </p>
         ) : (
-          <ul className="in-list">
+          <ul className="flex list-none flex-col gap-1.5 p-0">
             {[...incomingBySource.entries()].map(([fromId, edgesFromSource]) => {
               const source = questionsById.get(fromId);
               const swatch =
@@ -324,35 +339,40 @@ export function DetailPanel({
                 optionLabel(source, edge.from_option),
               );
               return (
-                <li key={fromId} className="in-row">
-                  <span className="in-sw" style={{ background: swatch }} />
-                  <span className="in-row__body">
-                    <button
-                      type="button"
-                      className="link in-q"
-                      onClick={() => onSelectQuestion(fromId)}
-                    >
-                      {sourceLabel(source)}
-                    </button>
-                    <br />
-                    <span className="in-via">
-                      {guards.length === 1 ? (
-                        <>
-                          when {guards[0] !== undefined && <strong>{guards[0]}</strong>}
-                        </>
-                      ) : (
-                        <>
-                          when:
-                          {guards.map((guard, index) => (
-                            <span key={index}>
-                              <br />
-                              {index + 1}. <strong>{guard}</strong>
-                            </span>
-                          ))}
-                        </>
-                      )}
+                <li key={fromId}>
+                  <Card
+                    size="sm"
+                    className="flex-row items-start gap-2.5 rounded-[9px] p-2.5 ring-border hover:ring-[var(--accent-2)]"
+                  >
+                    <span
+                      className="mt-1 size-2 shrink-0 rounded-full"
+                      style={{ background: swatch }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <Button variant="link" onClick={() => onSelectQuestion(fromId)}>
+                        {sourceLabel(source)}
+                      </Button>
+                      <br />
+                      <span className="text-muted-foreground text-[11.5px]">
+                        {guards.length === 1 ? (
+                          <>
+                            when{" "}
+                            {guards[0] !== undefined && <strong>{guards[0]}</strong>}
+                          </>
+                        ) : (
+                          <>
+                            when:
+                            {guards.map((guard, index) => (
+                              <span key={index}>
+                                <br />
+                                {index + 1}. <strong>{guard}</strong>
+                              </span>
+                            ))}
+                          </>
+                        )}
+                      </span>
                     </span>
-                  </span>
+                  </Card>
                 </li>
               );
             })}

@@ -1,5 +1,12 @@
 import type { StylesheetCSS } from "cytoscape";
 
+import {
+  PARALLEL_LABEL_STAGGER,
+  parallelLaneOffset,
+  sourceEndpointSpec,
+  targetEndpointSpec,
+} from "./canvasLayout";
+
 /**
  * Ported from break-backend's question_graph_editor
  * (static/question_graph_editor/app.js, the STYLE array and the
@@ -75,6 +82,29 @@ function badgeDataUri(kind: string): string {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+function toggleButtonUri(collapsed: boolean, fill: string): string {
+  // Down chevron = expanded (click to collapse); right = collapsed.
+  const icon = collapsed ? '<path d="M10 6l6 6-6 6"/>' : '<path d="M6 9l6 6 6-6"/>';
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">` +
+    `<rect x="1" y="1" width="22" height="22" rx="5" fill="${fill}"/>` +
+    `<g fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${icon}</g>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function laneData(ele: { data: (name: string) => unknown }): {
+  lane: number;
+  count: number;
+} {
+  const lane = ele.data("lane");
+  const count = ele.data("laneCount");
+  return {
+    lane: typeof lane === "number" ? lane : 0,
+    count: typeof count === "number" ? count : 1,
+  };
+}
+
 function badgeStyle(kind: string): Record<string, string> {
   // Every larger offset (11px, 14px, 22px, all tried on break's end)
   // made their vendored Cytoscape build silently stop rendering the
@@ -118,6 +148,87 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       width: "label",
       height: "label",
       padding: "18px",
+      "z-index": 10,
+      "z-index-compare": "manual",
+    },
+  },
+  {
+    // Questions inside a section must paint above the compound fill.
+    // z-index-compare: manual so a child at 20 wins over the parent at 0.
+    // Do not use z-compound-depth: bottom — that layer steals mouse
+    // events from the questions, which is why hover looked broken.
+    selector: "$node > node",
+    css: {
+      "z-index": 20,
+      "z-index-compare": "manual",
+    },
+  },
+  {
+    // Section chrome shared by the expanded compound and the collapsed
+    // stand-in. Fill is tinted enough to tell sections apart, not a slab
+    // over the questions. The chevron is a real control (see Canvas tap
+    // hit-test); clicking the rest of the box does nothing.
+    selector: 'node[kind = "section"]',
+    css: {
+      shape: "round-rectangle",
+      "background-color": "data(sectionColor)",
+      "background-opacity": 0.08,
+      "border-color": "data(sectionColor)",
+      "border-width": 1.5,
+      "border-style": "solid",
+      "border-opacity": 0.5,
+      "text-valign": "top",
+      "text-halign": "center",
+      "text-margin-y": 10,
+      "font-size": 11,
+      "font-weight": 700,
+      color: "data(sectionColor)",
+      "text-wrap": "wrap",
+      "text-max-width": "220px",
+      "overlay-opacity": 0,
+      "background-image": ((ele: { data: (name: string) => unknown }) =>
+        toggleButtonUri(
+          ele.data("collapsed") === true,
+          String(ele.data("sectionColor") ?? "#6b6355"),
+        )) as unknown as string,
+      "background-fit": "none",
+      "background-clip": "none",
+      "background-width": "20px",
+      "background-height": "20px",
+      "background-position-x": "0%",
+      "background-position-y": "0%",
+      "background-offset-x": "10px",
+      "background-offset-y": "10px",
+      "background-repeat": "no-repeat",
+    } as unknown as Record<string, string>,
+  },
+  {
+    // Expanded section box. Must override the generic node's width/height
+    // `label` sizing or the compound cannot grow around its children.
+    // Padding is larger than a parallel-edge fan so option arrows stay
+    // inside the box (compound bounds include nodes, not edges).
+    selector: ":parent",
+    css: {
+      padding: "80px",
+      "compound-sizing-wrt-labels": "include",
+      "z-index": 0,
+      "z-index-compare": "manual",
+      "background-opacity": 0.08,
+      "overlay-opacity": 0,
+    },
+  },
+  {
+    selector: 'node[kind = "section"][?collapsed]',
+    css: {
+      "background-opacity": 0.1,
+      "border-opacity": 0.55,
+      padding: "22px",
+      "text-valign": "center",
+      "text-margin-y": 0,
+      width: 210,
+      height: 78,
+      "z-index": 20,
+      "z-index-compare": "manual",
     },
   },
   {
@@ -218,6 +329,10 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "target-arrow-shape": "triangle",
       "arrow-scale": 0.95,
       "curve-style": "bezier",
+      "control-point-step-size": 24,
+      "edge-distances": "node-position",
+      "z-index": 5,
+      "z-index-compare": "manual",
       // Split from the old single `opacity: 0.6`: that dimmed the label
       // and its background right along with the line, capping how
       // opaque a white pill could ever look regardless of
@@ -242,6 +357,16 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     },
   },
   {
+    // Both ends live in the same expanded section. A wide bezier is what
+    // leaked out of the category pad; keep the fan tight so the compound
+    // AABB still contains the stroke.
+    selector: "edge[?internal]",
+    css: {
+      "curve-style": "bezier",
+      "control-point-step-size": 12,
+    },
+  },
+  {
     // Break's own stance, quoted in their comment: a back-edge stays
     // identifiable by its curved routing, not by hue -- color is not
     // spent on it.
@@ -251,6 +376,38 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "control-point-distances": [40],
       "control-point-weights": [0.5],
     },
+  },
+  {
+    selector: "edge[?internal][?isBack]",
+    css: {
+      "control-point-distances": [16],
+    },
+  },
+  {
+    // Several arrows leaving or entering one node. Cytoscape percents on
+    // `source-endpoint` are from the *centre* (`50%` y = bottom edge). A
+    // CSS-like `20% 100%` sat a full height below the box, so four
+    // options shared one origin, crossed, and stacked arrowheads inside
+    // the target. Split at the nodes: one dock per edge along the facing
+    // side, then a straight stroke to that dock (no mid-path bow).
+    selector: "edge[outLaneCount > 1][!isBack], edge[inLaneCount > 1][!isBack]",
+    css: {
+      "curve-style": "straight",
+      "source-endpoint": ((ele: { data: (name: string) => unknown }) =>
+        sourceEndpointSpec(ele)) as unknown as string,
+      "target-endpoint": ((ele: { data: (name: string) => unknown }) =>
+        targetEndpointSpec(ele)) as unknown as string,
+      "text-rotation": "none",
+    } as unknown as Record<string, string>,
+  },
+  {
+    selector: "edge[laneCount > 1]",
+    css: {
+      "text-margin-y": ((ele: { data: (name: string) => unknown }) => {
+        const { lane, count } = laneData(ele);
+        return parallelLaneOffset(lane, count, PARALLEL_LABEL_STAGGER);
+      }) as unknown as number,
+    } as unknown as Record<string, string>,
   },
   {
     // An open draft's own added/retargeted route -- break's single
@@ -329,8 +486,25 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     css: { opacity: 0.2 },
   },
   {
-    selector: "node.hl",
-    css: { "border-width": 3.5, "z-index": 30, "font-weight": 600 },
+    // Hover must not change border-width or font-weight: nodes size to
+    // their label, so a thicker border or bolder type grows the box and
+    // shoves the wrapped prompt. Underlay is paint-only.
+    selector: "node.hl[kind != 'section']",
+    css: {
+      "underlay-color": "#1c1a16",
+      "underlay-opacity": 0.16,
+      "underlay-padding": 5,
+      "underlay-shape": "round-rectangle",
+      "z-index": 30,
+      "z-index-compare": "manual",
+    } as unknown as Record<string, string>,
+  },
+  {
+    selector: "node.hl[kind = 'section']",
+    css: {
+      "background-opacity": 0.14,
+      "border-opacity": 0.75,
+    },
   },
   {
     selector: "edge.hl",

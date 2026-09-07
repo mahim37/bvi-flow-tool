@@ -16,6 +16,25 @@ import { EditorDropdown } from "./EditorDropdown";
 import type { ChangeKind, ChangeKinds } from "./graphElements";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { diffChangeLabel, targetLabel } from "./labels";
+import { Badge } from "@/components/ui/badge";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field, nativeSelectClassName } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  destChip,
+  destChipEnd,
+  emptyText,
+  editorActions,
+  editorBox,
+  mutedHint,
+  optCard,
+  panelSection,
+  subCount,
+  subHeading,
+} from "@/lib/chrome";
+import { cn } from "@/lib/utils";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const END_OF_FLOW = "__end__";
@@ -43,14 +62,13 @@ interface OptionsProps {
   changeKinds?: ChangeKinds;
 }
 
-/** A small "Added"/"Changed" pill, reusing `ReviewView`'s own
- * `.diff__badge` styling and wording (`diffChangeLabel`) rather than a
- * second badge language for the same two states. */
+/** A small "Added"/"Changed" pill, the same Badge primitive and wording
+ * (`diffChangeLabel`) Review uses, rather than a second badge language. */
 function ChangeBadge({ kind }: { kind: ChangeKind }) {
   return (
-    <span className={`diff__badge diff__badge--${kind} opt-change-badge`}>
+    <Badge tone={kind} className="ml-1.5">
       {diffChangeLabel(kind)}
-    </span>
+    </Badge>
   );
 }
 
@@ -65,7 +83,10 @@ function ChangeBadge({ kind }: { kind: ChangeKind }) {
 function HelpHint({ text }: { text: string }) {
   return (
     <button type="button" className="help-hint" aria-label={text}>
-      ?<span className="help-hint__bubble" aria-hidden="true">{text}</span>
+      ?
+      <span className="help-hint__bubble" aria-hidden="true">
+        {text}
+      </span>
     </button>
   );
 }
@@ -164,25 +185,25 @@ function EdgeRow({
   const edgeChange = ctx.edgeChangeKinds.get(edge.id);
 
   return (
-    <div className="edge-row">
-      <div
-        className={edge.to_question === null ? "opt-dest terminal-dest" : "opt-dest"}
-      >
-        <span className="arrow" aria-hidden="true">
+    <div className="border-t border-dashed border-border pt-2 first:border-t-0 first:pt-0">
+      <div className={cn(destChip, edge.to_question === null && destChipEnd)}>
+        <span className="shrink-0" aria-hidden="true">
           {edge.to_question === null ? "⏹" : "↘"}
         </span>
         {edge.to_question !== null && (
-          <span className="dest-sw" style={{ background: targetColor }} />
+          <span
+            className="size-2 shrink-0 rounded-full"
+            style={{ background: targetColor }}
+          />
         )}
-        <span className="dest-txt">
+        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
           {edge.to_question !== null && ctx.questionsById.has(edge.to_question) ? (
-            <button
-              type="button"
-              className="link"
+            <Button
+              variant="link"
               onClick={() => onSelectQuestion(edge.to_question as UUID)}
             >
               {targetLabel(edge, ctx.questionsById)}
-            </button>
+            </Button>
           ) : (
             targetLabel(edge, ctx.questionsById)
           )}
@@ -191,69 +212,74 @@ function EdgeRow({
       </div>
 
       {isBroken && (
-        <p className="edges__fault">
+        <p className="mt-0.5 block text-[0.8rem] text-destructive">
           This route leads to a question that has been archived or removed, so it would
           fail instead of continuing.
         </p>
       )}
       {isDead && !hideDeadNote && (
-        <p className="edges__fault">
+        <p className="mt-0.5 block text-[0.8rem] text-destructive">
           This route is tied to an answer that is not one of this question's options
           anymore, so it can never happen.
         </p>
       )}
 
       {editable && isRetargeting && (
-        <p className="panel__hint" role="status">
+        <p className={mutedHint} role="status">
           Click a question on the canvas to send this route there, or press Esc to
           cancel.
         </p>
       )}
 
       {editable && (
-        <div className="opt-edit-row">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {isRetargeting ? (
-            <button
-              type="button"
-              className="opt-edit-btn active"
+            <Button
+              variant="outline"
+              size="sm"
+              pressed
               disabled={pending}
               onClick={onCancelPick}
             >
               Cancel retarget
-            </button>
+            </Button>
           ) : (
             <EditorDropdown
-              trigger={<span className="opt-edit-btn">Change destination</span>}
-              disabled={pending}
+              trigger={
+                <Button variant="outline" size="sm">
+                  Change destination
+                </Button>
+              }
+              {...(pending ? { disabled: true } : {})}
             >
               {(close) => (
-                <div className="destination-choices">
-                  <p className="panel__hint">What should happen after this answer?</p>
-                  <button
-                    type="button"
-                    className="opt-edit-btn"
+                <div className="flex flex-col items-start gap-2">
+                  <p className={mutedHint}>What should happen after this answer?</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => {
                       onStartRetarget(edge.id, selectLabel);
                       close();
                     }}
                   >
                     Jump to a specific question
-                  </button>
+                  </Button>
                   {edge.from_option !== null && hasFallback && (
-                    <button
-                      type="button"
-                      className="opt-edit-btn"
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => {
                         removeEdge.mutate(edge.id, { onError: onWriteError });
                         close();
                       }}
                     >
                       Use the default route instead
-                    </button>
+                    </Button>
                   )}
-                  <button
-                    type="button"
-                    className="opt-edit-btn danger"
+                  <Button
+                    variant="danger"
+                    size="sm"
                     disabled={edge.to_question === null}
                     onClick={() => {
                       updateEdge.mutate(
@@ -264,38 +290,33 @@ function EdgeRow({
                     }}
                   >
                     End the flow here
-                  </button>
+                  </Button>
                 </div>
               )}
             </EditorDropdown>
           )}
           {onEditText && (
-            <button
-              type="button"
-              className="opt-edit-btn"
-              disabled={pending}
-              onClick={onEditText}
-            >
+            <Button variant="outline" size="sm" disabled={pending} onClick={onEditText}>
               Edit text
-            </button>
+            </Button>
           )}
           {expanded && (
-            <button
-              type="button"
-              className="opt-edit-btn danger"
+            <Button
+              variant="danger"
+              size="sm"
               disabled={pending}
               onClick={() => removeEdge.mutate(edge.id, { onError: onWriteError })}
             >
               Remove
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       {error !== null && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           {error}
-        </p>
+        </Banner>
       )}
     </div>
   );
@@ -338,40 +359,45 @@ function EdgeGroupCard({
   const [editing, setEditing] = useState(false);
 
   return (
-    <li className="opt">
-      <div className="opt-label">
-        <span>{heading}</span>
-        {editable && (
-          <button
-            type="button"
-            className="opt-edit-btn d-edit-btn"
-            onClick={() => setEditing((value) => !value)}
-          >
-            {editing ? "Done" : "Edit"}
-          </button>
+    <li>
+      <Card size="sm" className={optCard}>
+        <div className="mb-1.5 text-[13px] leading-snug">
+          <span>{heading}</span>
+          {editable && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-2 align-middle"
+              onClick={() => setEditing((value) => !value)}
+            >
+              {editing ? "Done" : "Edit"}
+            </Button>
+          )}
+        </div>
+        {note !== undefined && (
+          <p className="mt-0.5 block text-[0.8rem] text-destructive">{note}</p>
         )}
-      </div>
-      {note !== undefined && <p className="options__fault">{note}</p>}
-      <div className="opt-edges">
-        {edges.map((edge) => (
-          <EdgeRow
-            key={edge.id}
-            versionId={versionId}
-            edge={edge}
-            selectLabel={selectLabel}
-            ctx={ctx}
-            editable={editable}
-            expanded={editing}
-            disabled={disabled}
-            retargetingEdgeId={retargetingEdgeId}
-            hasFallback={false}
-            hideDeadNote={note !== undefined}
-            onSelectQuestion={onSelectQuestion}
-            onStartRetarget={onStartRetarget}
-            onCancelPick={onCancelPick}
-          />
-        ))}
-      </div>
+        <div className="mt-2 flex flex-col gap-2 border-t border-dashed border-border pt-2">
+          {edges.map((edge) => (
+            <EdgeRow
+              key={edge.id}
+              versionId={versionId}
+              edge={edge}
+              selectLabel={selectLabel}
+              ctx={ctx}
+              editable={editable}
+              expanded={editing}
+              disabled={disabled}
+              retargetingEdgeId={retargetingEdgeId}
+              hasFallback={false}
+              hideDeadNote={note !== undefined}
+              onSelectQuestion={onSelectQuestion}
+              onStartRetarget={onStartRetarget}
+              onCancelPick={onCancelPick}
+            />
+          ))}
+        </div>
+      </Card>
     </li>
   );
 }
@@ -420,10 +446,10 @@ function DefaultRouteSection({
   const [newTarget, setNewTarget] = useState<string>(END_OF_FLOW);
 
   return (
-    <div className="fallback-section">
-      <div className="opt-label">
+    <Card size="sm" className={cn(optCard, "ring-gold/35")}>
+      <div className="text-muted-foreground mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-[0.7px] uppercase">
         <span>
-          <span className="fallback-section__icon" aria-hidden="true">
+          <span className="text-[13px] text-gold" aria-hidden="true">
             ⚙
           </span>{" "}
           Default route
@@ -436,18 +462,19 @@ function DefaultRouteSection({
           }
         />
         {editable && edges.length > 0 && (
-          <button
-            type="button"
-            className="opt-edit-btn d-edit-btn"
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-2 align-middle"
             onClick={() => setEditing((value) => !value)}
           >
             {editing ? "Done" : "Edit"}
-          </button>
+          </Button>
         )}
       </div>
 
       {edges.length > 0 && (
-        <div className="opt-edges">
+        <div className="mt-2 flex flex-col gap-2 border-t border-dashed border-border pt-2">
           {edges.map((edge) => (
             <EdgeRow
               key={edge.id}
@@ -472,7 +499,7 @@ function DefaultRouteSection({
         <>
           {addingEdge ? (
             <form
-              className="editor"
+              className={editorBox}
               onSubmit={(event) => {
                 event.preventDefault();
                 addEdge.mutate(
@@ -491,12 +518,12 @@ function DefaultRouteSection({
                 );
               }}
             >
-              <div className="field field--inline">
-                <label htmlFor={addTargetId}>Go to</label>
+              <Field label="Go to" htmlFor={addTargetId}>
                 <select
                   id={addTargetId}
+                  className={nativeSelectClassName}
                   value={newTarget}
-                  disabled={addEdge.isPending || disabled}
+                  {...(addEdge.isPending || disabled ? { disabled: true } : {})}
                   onChange={(event) => setNewTarget(event.target.value)}
                 >
                   <option value={END_OF_FLOW}>End of flow</option>
@@ -506,42 +533,37 @@ function DefaultRouteSection({
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="editor__actions">
-                <button
-                  className="button button--primary"
+              </Field>
+              <div className={editorActions}>
+                <Button
+                  variant="primary"
                   type="submit"
                   disabled={addEdge.isPending || disabled}
                 >
                   Add route
-                </button>
-                <button
-                  className="button button--quiet"
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
                   disabled={addEdge.isPending || disabled}
                   onClick={() => setAddingEdge(false)}
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           ) : (
-            <button
-              className="button button--quiet"
-              type="button"
-              onClick={() => setAddingEdge(true)}
-            >
+            <Button variant="ghost" onClick={() => setAddingEdge(true)}>
               {takesOptions ? "+ Add a default route" : "+ Add a route"}
-            </button>
+            </Button>
           )}
           {writeErrorMessage(addEdge.error) !== null && (
-            <p className="banner banner--error" role="alert">
+            <Banner tone="error" role="alert">
               {writeErrorMessage(addEdge.error)}
-            </p>
+            </Banner>
           )}
         </>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -627,187 +649,180 @@ function OptionCard({
   }
 
   return (
-    <li className="opt">
-      {editing ? (
-        <div className="optedit__fields">
-          <div className="field field--inline">
-            <label htmlFor={labelId}>Label</label>
-            <input
-              id={labelId}
-              value={label}
-              disabled={pending}
-              onChange={(event) => setLabel(event.target.value)}
-            />
+    <li>
+      <Card size="sm" className={optCard}>
+        {editing ? (
+          <div className="mb-1.5 flex flex-wrap gap-2.5">
+            <Field label="Label" htmlFor={labelId} className="min-w-[120px]">
+              <Input
+                id={labelId}
+                value={label}
+                {...(pending ? { disabled: true } : {})}
+                onChange={(event) => setLabel(event.target.value)}
+              />
+            </Field>
+            <Field label="Code" htmlFor={codeId} className="min-w-[120px]">
+              <Input
+                id={codeId}
+                value={code}
+                {...(pending ? { disabled: true } : {})}
+                onChange={(event) => setCode(event.target.value)}
+              />
+            </Field>
           </div>
-          <div className="field field--inline">
-            <label htmlFor={codeId}>Code</label>
-            <input
-              id={codeId}
-              value={code}
-              disabled={pending}
-              onChange={(event) => setCode(event.target.value)}
-            />
+        ) : (
+          <div className="mb-1.5 text-[13px] leading-snug">
+            <span>{option.label}</span>{" "}
+            <code className="text-muted-foreground ml-2 text-[0.75rem]">
+              {option.code}
+            </code>
+            {optionChange !== undefined && <ChangeBadge kind={optionChange} />}
           </div>
-        </div>
-      ) : (
-        <div className="opt-label">
-          <span>{option.label}</span>{" "}
-          <code className="options__code">{option.code}</code>
-          {optionChange !== undefined && <ChangeBadge kind={optionChange} />}
-        </div>
-      )}
+        )}
 
-      {isUncovered && (
-        <p className="options__fault">
-          No route covers this answer yet, so choosing it ends the flow.
-        </p>
-      )}
+        {isUncovered && (
+          <p className="mt-0.5 block text-[0.8rem] text-destructive">
+            No route covers this answer yet, so choosing it ends the flow.
+          </p>
+        )}
 
-      {editing && (
-        <>
-          <div className="optedit__controls">
-            <button
-              className="opt-edit-btn active"
-              type="button"
-              disabled={pending || !dirty}
-              onClick={() =>
-                updateOption.mutate(
-                  {
-                    optionId: option.id,
-                    // Only what moved: an absent key stays absent from
-                    // `validated_data`, and the code of an inherited option is
-                    // refused outright, so sending an unchanged one would turn
-                    // a label edit into a refusal.
-                    changes: {
-                      ...(label !== option.label ? { label } : {}),
-                      ...(code !== option.code ? { code } : {}),
-                    },
-                  },
-                  { onError: onWriteError, onSuccess: () => setEditing(false) },
-                )
-              }
-            >
-              Save
-            </button>
-            <button
-              className="opt-edit-btn danger"
-              type="button"
-              disabled={pending || isGuard}
-              title={
-                isGuard
-                  ? "A route still uses this answer. Deleting it would break that route without warning, so remove the route first."
-                  : undefined
-              }
-              onClick={() => removeOption.mutate(option.id, { onError: onWriteError })}
-            >
-              Delete
-            </button>
-            <button
-              className="opt-edit-btn"
-              type="button"
-              disabled={pending}
-              onClick={cancel}
-            >
-              Cancel
-            </button>
-          </div>
-
-          {isGuard && (
-            // Refused rather than cascaded, and the edge may leave another
-            // question entirely -- the dead-edge case the draft copy
-            // deliberately preserves.
-            <p className="panel__hint">
-              A route still uses this answer, so it can't be deleted yet. Remove that
-              route first.
-            </p>
-          )}
-        </>
-      )}
-
-      {error !== null && (
-        <div className="banner banner--error" role="alert">
-          <p>{error}</p>
-          {blockingEdges !== null && blockingEdges.length > 0 && (
-            <BlockingList
-              items={blockingEdges.map((item) => ({
-                questionId: item.fromQuestionId,
-                code: item.fromQuestionCode,
-                prompt: item.fromQuestionPrompt,
-              }))}
-              onSelectQuestion={onSelectQuestion}
-            />
-          )}
-        </div>
-      )}
-
-      {edges.length > 0 && (
-        <div className="opt-edges">
-          {edges.map((edge) => (
-            <EdgeRow
-              key={edge.id}
-              versionId={versionId}
-              edge={edge}
-              selectLabel={`Where "${option.label}" leads`}
-              ctx={ctx}
-              editable={editable}
-              expanded={editing}
-              disabled={disabled}
-              retargetingEdgeId={retargetingEdgeId}
-              hasFallback={hasFallback}
-              onEditText={editing ? undefined : () => setEditing(true)}
-              onSelectQuestion={onSelectQuestion}
-              onStartRetarget={onStartRetarget}
-              onCancelPick={onCancelPick}
-            />
-          ))}
-        </div>
-      )}
-
-      {editable && edges.length === 0 && (
-        <div className="opt-add-edge">
-          {isAddingRoute && (
-            <p className="panel__hint" role="status">
-              Click a question on the canvas to route this answer there, or press Esc to
-              cancel.
-            </p>
-          )}
-          <div className="opt-edit-row">
-            {isAddingRoute ? (
-              <button
-                type="button"
-                className="opt-edit-btn active"
-                onClick={onCancelPick}
-              >
-                Cancel specific route
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="opt-edit-btn"
-                disabled={disabled}
+        {editing && (
+          <>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                pressed
+                disabled={pending || !dirty}
                 onClick={() =>
-                  onStartAddRoute(
-                    questionId,
-                    option.id,
-                    `"${option.label}"'s new route`,
+                  updateOption.mutate(
+                    {
+                      optionId: option.id,
+                      // Only what moved: an absent key stays absent from
+                      // `validated_data`, and the code of an inherited option is
+                      // refused outright, so sending an unchanged one would turn
+                      // a label edit into a refusal.
+                      changes: {
+                        ...(label !== option.label ? { label } : {}),
+                        ...(code !== option.code ? { code } : {}),
+                      },
+                    },
+                    { onError: onWriteError, onSuccess: () => setEditing(false) },
                   )
                 }
               >
-                Add a specific route
-              </button>
-            )}
-            {!editing && (
-              <button
-                type="button"
-                className="opt-edit-btn"
-                onClick={() => setEditing(true)}
+                Save
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={pending || isGuard}
+                {...(isGuard
+                  ? {
+                      title:
+                        "A route still uses this answer. Deleting it would break that route without warning, so remove the route first.",
+                    }
+                  : {})}
+                onClick={() =>
+                  removeOption.mutate(option.id, { onError: onWriteError })
+                }
               >
-                Edit text
-              </button>
+                Delete
+              </Button>
+              <Button variant="outline" size="sm" disabled={pending} onClick={cancel}>
+                Cancel
+              </Button>
+            </div>
+
+            {isGuard && (
+              // Refused rather than cascaded, and the edge may leave another
+              // question entirely -- the dead-edge case the draft copy
+              // deliberately preserves.
+              <p className={mutedHint}>
+                A route still uses this answer, so it can't be deleted yet. Remove that
+                route first.
+              </p>
             )}
+          </>
+        )}
+
+        {error !== null && (
+          <Banner as="div" tone="error" role="alert">
+            <p>{error}</p>
+            {blockingEdges !== null && blockingEdges.length > 0 && (
+              <BlockingList
+                items={blockingEdges.map((item) => ({
+                  questionId: item.fromQuestionId,
+                  code: item.fromQuestionCode,
+                  prompt: item.fromQuestionPrompt,
+                }))}
+                onSelectQuestion={onSelectQuestion}
+              />
+            )}
+          </Banner>
+        )}
+
+        {edges.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2 border-t border-dashed border-border pt-2">
+            {edges.map((edge) => (
+              <EdgeRow
+                key={edge.id}
+                versionId={versionId}
+                edge={edge}
+                selectLabel={`Where "${option.label}" leads`}
+                ctx={ctx}
+                editable={editable}
+                expanded={editing}
+                disabled={disabled}
+                retargetingEdgeId={retargetingEdgeId}
+                hasFallback={hasFallback}
+                onEditText={editing ? undefined : () => setEditing(true)}
+                onSelectQuestion={onSelectQuestion}
+                onStartRetarget={onStartRetarget}
+                onCancelPick={onCancelPick}
+              />
+            ))}
           </div>
-        </div>
-      )}
+        )}
+
+        {editable && edges.length === 0 && (
+          <div className="mt-2 border-t border-dashed border-border pt-2">
+            {isAddingRoute && (
+              <p className={mutedHint} role="status">
+                Click a question on the canvas to route this answer there, or press Esc
+                to cancel.
+              </p>
+            )}
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {isAddingRoute ? (
+                <Button variant="outline" size="sm" pressed onClick={onCancelPick}>
+                  Cancel specific route
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() =>
+                    onStartAddRoute(
+                      questionId,
+                      option.id,
+                      `"${option.label}"'s new route`,
+                    )
+                  }
+                >
+                  Add a specific route
+                </Button>
+              )}
+              {!editing && (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  Edit text
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
     </li>
   );
 }
@@ -952,9 +967,9 @@ export function Options({
   const cardCount = options.length + (deadGuardEdges.length > 0 ? 1 : 0);
 
   return (
-    <section className="panel__section" aria-labelledby="options-heading">
-      <h3 id="options-heading" className="d-sub">
-        Options <span className="count">{cardCount}</span>
+    <section className={panelSection} aria-labelledby="options-heading">
+      <h3 id="options-heading" className={subHeading}>
+        Options <span className={subCount}>{cardCount}</span>
         <HelpHint
           text={
             "Where each answer leads. Ties go to the first route listed. To send an answer somewhere specific, click a button below, then pick the destination on the canvas."
@@ -980,14 +995,14 @@ export function Options({
 
       {options.length === 0 && deadGuardEdges.length === 0 ? (
         anyAnswerEdges.length === 0 && (
-          <p className="empty">
+          <p className={emptyText}>
             {takesOptions
               ? "This question has no answers yet."
               : "Nothing leads anywhere yet, so answering this question ends the flow."}
           </p>
         )
       ) : (
-        <ul className="opt-list">
+        <ul className="mb-[22px] flex list-none flex-col gap-1.5 p-0">
           {options.map((option) => (
             <OptionCard
               key={option.id}
@@ -1030,11 +1045,11 @@ export function Options({
       )}
 
       {editable && (
-        <div className="options-add">
+        <div className="mt-4 flex flex-col items-start gap-3">
           {takesOptions ? (
             addingOption ? (
               <form
-                className="editor"
+                className={editorBox}
                 onSubmit={(event) => {
                   event.preventDefault();
                   addOption.mutate(
@@ -1054,31 +1069,29 @@ export function Options({
                   );
                 }}
               >
-                <div className="field field--inline">
-                  <label htmlFor={optionLabelId}>Label</label>
-                  <input
+                <Field label="Label" htmlFor={optionLabelId}>
+                  <Input
                     id={optionLabelId}
                     value={newOptionLabel}
                     required
                     placeholder="What a respondent reads"
-                    disabled={pending}
+                    {...(pending ? { disabled: true } : {})}
                     onChange={(event) => setNewOptionLabel(event.target.value)}
                   />
-                </div>
-                <div className="field field--inline">
-                  <label htmlFor={optionCodeId}>Code</label>
-                  <input
+                </Field>
+                <Field label="Code" htmlFor={optionCodeId}>
+                  <Input
                     id={optionCodeId}
                     value={newOptionCode}
                     required
                     placeholder="Stable identifier"
-                    disabled={pending}
+                    {...(pending ? { disabled: true } : {})}
                     onChange={(event) => setNewOptionCode(event.target.value)}
                   />
-                </div>
-                <div className="editor__actions">
-                  <button
-                    className="button button--primary"
+                </Field>
+                <div className={editorActions}>
+                  <Button
+                    variant="primary"
                     type="submit"
                     disabled={
                       pending ||
@@ -1087,36 +1100,31 @@ export function Options({
                     }
                   >
                     {addOption.isPending ? "Adding…" : "Add option"}
-                  </button>
-                  <button
-                    className="button button--quiet"
-                    type="button"
+                  </Button>
+                  <Button
+                    variant="ghost"
                     disabled={pending}
                     onClick={() => setAddingOption(false)}
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
                 {/* Appended, never inserted: a unique constraint on
                     (question, display_order) makes an insertion a renumbering,
                     which is what the up/down controls above do. */}
-                <p className="panel__hint">
+                <p className={mutedHint}>
                   Added last. A new answer with no route yet just ends the flow if
                   picked -- that's fine, and it's not refused, because answers are added
                   before the routes that lead from them.
                 </p>
               </form>
             ) : (
-              <button
-                className="button button--quiet"
-                type="button"
-                onClick={() => setAddingOption(true)}
-              >
+              <Button variant="ghost" onClick={() => setAddingOption(true)}>
                 + Add an answer
-              </button>
+              </Button>
             )
           ) : (
-            <p className="panel__hint">
+            <p className={mutedHint}>
               This question's answers don't use separate options -- like a written
               response or a number -- so there's nothing to add here.
             </p>
@@ -1125,9 +1133,9 @@ export function Options({
       )}
 
       {error !== null && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           {error}
-        </p>
+        </Banner>
       )}
     </section>
   );

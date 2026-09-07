@@ -9,6 +9,7 @@ import { MapView } from "./flow/MapView";
 import { PreviewView } from "./flow/PreviewView";
 import { ReviewView } from "./flow/ReviewView";
 import { VersionLanding, VersionLayout } from "./flow/VersionLayout";
+import { Card, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,16 +59,18 @@ export function App() {
           something unusable. Pure CSS (`.app-shell` hidden by the same
           media query that shows this) -- no JS breakpoint state to keep in
           sync. */}
-      <div className="desktop-required">
-        <div className="desktop-required-card">
-          <h2>Desktop required</h2>
-          <p>
-            The flow tool needs a larger screen to use safely — please switch to a
-            desktop or laptop to continue.
-          </p>
-        </div>
+      <div className="desktop-required hidden max-[1024px]:fixed max-[1024px]:inset-0 max-[1024px]:z-100 max-[1024px]:flex max-[1024px]:items-center max-[1024px]:justify-center max-[1024px]:bg-background max-[1024px]:p-8">
+        <Card className="max-w-[380px] text-center">
+          <CardHeader>
+            <CardTitle>Desktop required</CardTitle>
+            <CardDescription>
+              The flow tool needs a larger screen to use safely — please switch to a
+              desktop or laptop to continue.
+            </CardDescription>
+          </CardHeader>
+        </Card>
       </div>
-      <div className="app-shell">
+      <div className="app-shell flex h-svh min-h-0 flex-col overflow-hidden max-[1024px]:hidden">
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <BrowserRouter>

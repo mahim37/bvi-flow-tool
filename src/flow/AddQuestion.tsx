@@ -3,7 +3,13 @@ import { useId, useState } from "react";
 import { useAddQuestion } from "../api/queries";
 import type { AnswerType, Graph, UUID } from "../api/types";
 import { EditorDropdown } from "./EditorDropdown";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Field, nativeSelectClassName } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { answerTypeLabel } from "./labels";
+import { checkRow, editorBox, mutedHint } from "@/lib/chrome";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const ANSWER_TYPES: AnswerType[] = [
@@ -60,7 +66,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
       {(close) => (
         <>
           <form
-            className="editor"
+            className={editorBox}
             onSubmit={(event) => {
               event.preventDefault();
               addQuestion.mutate(
@@ -84,36 +90,34 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
               );
             }}
           >
-            <div className="field">
-              <label htmlFor={codeId}>QID</label>
-              <input
+            <Field label="QID" htmlFor={codeId}>
+              <Input
                 id={codeId}
                 value={code}
                 required
                 placeholder="Stable identifier"
-                disabled={addQuestion.isPending}
+                {...(addQuestion.isPending ? { disabled: true } : {})}
                 onChange={(event) => setCode(event.target.value)}
               />
-            </div>
+            </Field>
 
-            <div className="field">
-              <label htmlFor={promptId}>Question text</label>
-              <textarea
+            <Field label="Question text" htmlFor={promptId}>
+              <Textarea
                 id={promptId}
                 rows={3}
                 value={prompt}
                 required
-                disabled={addQuestion.isPending}
+                {...(addQuestion.isPending ? { disabled: true } : {})}
                 onChange={(event) => setPrompt(event.target.value)}
               />
-            </div>
+            </Field>
 
-            <div className="field">
-              <label htmlFor={typeId}>Answer type</label>
+            <Field label="Answer type" htmlFor={typeId}>
               <select
                 id={typeId}
+                className={nativeSelectClassName}
                 value={answerType}
-                disabled={addQuestion.isPending}
+                {...(addQuestion.isPending ? { disabled: true } : {})}
                 onChange={(event) => setAnswerType(event.target.value as AnswerType)}
               >
                 {ANSWER_TYPES.map((type) => (
@@ -122,14 +126,14 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
                   </option>
                 ))}
               </select>
-            </div>
+            </Field>
 
-            <div className="field">
-              <label htmlFor={sectionId}>Section</label>
+            <Field label="Section" htmlFor={sectionId}>
               <select
                 id={sectionId}
+                className={nativeSelectClassName}
                 value={section}
-                disabled={addQuestion.isPending}
+                {...(addQuestion.isPending ? { disabled: true } : {})}
                 onChange={(event) => setSection(event.target.value)}
               >
                 <option value={NO_SECTION}>No section</option>
@@ -139,9 +143,9 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
                   </option>
                 ))}
               </select>
-            </div>
+            </Field>
 
-            <div className="field field--check">
+            <div className={checkRow}>
               <input
                 id={requiredId}
                 type="checkbox"
@@ -158,7 +162,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
             have to start from a guess and would silently overwrite whatever
             was really set. On a question being created there is no prior
             value to misreport. */}
-            <div className="field field--check">
+            <div className={checkRow}>
               <input
                 id={rawId}
                 type="checkbox"
@@ -169,17 +173,17 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
               <label htmlFor={rawId}>Show the raw answer to advisors</label>
             </div>
 
-            <button
-              className="button button--primary"
+            <Button
+              variant="primary"
               type="submit"
               disabled={
                 addQuestion.isPending || code.trim() === "" || prompt.trim() === ""
               }
             >
               {addQuestion.isPending ? "Adding…" : "Add question"}
-            </button>
+            </Button>
 
-            <p className="panel__hint">
+            <p className={mutedHint}>
               Added last, and unreachable until an edge points at it. Use the detail
               panel of the question it should follow to add that edge, and the position
               controls there to move it.
@@ -187,9 +191,9 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
           </form>
 
           {error !== null && (
-            <p className="banner banner--error" role="alert">
+            <Banner tone="error" role="alert">
               {error}
-            </p>
+            </Banner>
           )}
         </>
       )}
