@@ -71,6 +71,8 @@
   --chart-4: var(--emphasis);
   --chart-5: var(--text-dim);
   --radius: 0.5rem;
+  --sidebar-width: 300px;
+  --detail-width: 380px;
   --sidebar: var(--bg);
   --sidebar-foreground: var(--text);
   --sidebar-primary: var(--primary);

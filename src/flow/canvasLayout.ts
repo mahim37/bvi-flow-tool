@@ -159,6 +159,48 @@ export function shouldRepositionNewSiblings(
   return retainedReal && added.length > 0 && added.length <= MAX_INCREMENTAL_ADDS;
 }
 
+function isSubsetOf(small: ReadonlySet<string>, large: ReadonlySet<string>): boolean {
+  for (const id of small) {
+    if (!large.has(id)) return false;
+  }
+  return true;
+}
+
+/** Collapse/expand hides or restores a section's questions; the boxes
+ * stay. Fitting the camera again is what feels like the zoom resetting. */
+export function isSectionCollapseToggle(
+  previousIds: ReadonlySet<string>,
+  currentIds: ReadonlySet<string>,
+): boolean {
+  if (previousIds.size === 0 || currentIds.size === 0) return false;
+
+  const prevQuestions = new Set<string>();
+  const currQuestions = new Set<string>();
+  const prevSections = new Set<string>();
+  const currSections = new Set<string>();
+  for (const id of previousIds) {
+    if (isSectionNode(id)) prevSections.add(id);
+    else if (!isSyntheticNode(id)) prevQuestions.add(id);
+  }
+  for (const id of currentIds) {
+    if (isSectionNode(id)) currSections.add(id);
+    else if (!isSyntheticNode(id)) currQuestions.add(id);
+  }
+  if (prevSections.size === 0 || prevSections.size !== currSections.size) return false;
+  for (const id of prevSections) {
+    if (!currSections.has(id)) return false;
+  }
+  if (prevQuestions.size === currQuestions.size) return false;
+  const [smaller, larger] =
+    prevQuestions.size < currQuestions.size
+      ? [prevQuestions, currQuestions]
+      : [currQuestions, prevQuestions];
+  if (!isSubsetOf(smaller, larger)) return false;
+  // A single new question is an edit, not a collapse — that path still
+  // gets `shouldRepositionNewSiblings` and a camera fit.
+  return !shouldRepositionNewSiblings(previousIds, currentIds);
+}
+
 const CLEARANCE = 16;
 const MAX_SEPARATION_PASSES = 10;
 

@@ -4,11 +4,23 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /** Segmented view switcher. Real links rather than local tab state, so
- * each view is a URL. Track is pill-shaped group chrome, not a CTA. */
-export function TabsNav({ label, children }: { label: string; children: ReactNode }) {
+ * each view is a URL. Sizes to its labels — the parent centers this
+ * cluster in the sidebar column. Chrome, not a CTA. */
+export function TabsNav({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
     <nav
-      className="inline-flex h-9 shrink-0 items-center gap-0.5 rounded-md bg-secondary p-[3px]"
+      className={cn(
+        "inline-flex w-fit items-center justify-center gap-1 rounded-xl bg-secondary p-1",
+        className,
+      )}
       aria-label={label}
       data-slot="tabs"
     >
@@ -23,8 +35,8 @@ export function TabsLink({ className, ...props }: NavLinkProps) {
       {...props}
       className={(state) =>
         cn(
-          "inline-flex h-full items-center rounded-md px-3.5 text-[0.85rem] font-semibold text-muted-foreground no-underline transition-colors hover:text-foreground",
-          state.isActive && "bg-card text-foreground shadow-sm",
+          "inline-flex items-center justify-center rounded-lg border border-transparent px-5 py-2 text-center text-[10.5px] leading-none font-semibold whitespace-nowrap text-muted-foreground no-underline transition-colors hover:bg-background/70 hover:text-foreground",
+          state.isActive && "border-border bg-card text-foreground shadow-sm",
           typeof className === "function" ? className(state) : className,
         )
       }

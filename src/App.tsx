@@ -59,11 +59,13 @@ export function App() {
           something unusable. Pure CSS (`.app-shell` hidden by the same
           media query that shows this) -- no JS breakpoint state to keep in
           sync. */}
-      <div className="desktop-required hidden max-[1024px]:fixed max-[1024px]:inset-0 max-[1024px]:z-100 max-[1024px]:flex max-[1024px]:items-center max-[1024px]:justify-center max-[1024px]:bg-background max-[1024px]:p-8">
-        <Card className="max-w-[380px] text-center">
-          <CardHeader>
-            <CardTitle>Desktop required</CardTitle>
-            <CardDescription>
+      <div className="desktop-required hidden max-[1024px]:fixed max-[1024px]:inset-0 max-[1024px]:z-100 max-[1024px]:flex max-[1024px]:items-center max-[1024px]:justify-center max-[1024px]:bg-background max-[1024px]:p-6">
+        <Card className="w-full max-w-[520px] py-8 text-center shadow-md">
+          <CardHeader className="gap-3">
+            <CardTitle className="text-xl font-extrabold tracking-tight">
+              Desktop required
+            </CardTitle>
+            <CardDescription className="text-base text-pretty">
               The flow tool needs a larger screen to use safely — please switch to a
               desktop or laptop to continue.
             </CardDescription>

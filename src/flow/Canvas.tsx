@@ -6,6 +6,7 @@ import dagre from "cytoscape-dagre";
 import {
   cameraNeedsReframe,
   containerHasUsableSize,
+  isSectionCollapseToggle,
   pointInSectionToggle,
   runGraphLayout,
   separateNodesFromEdges,
@@ -72,6 +73,9 @@ interface CanvasProps {
    * rest of the box is not a control — hovering a question inside would
    * otherwise fight a full-box toggle. */
   onToggleSection: (sectionId: string) => void;
+  /** Sorted join of collapsed section ids. A change here is a fold, not a
+   * new graph — keep the camera instead of fitting the chain start. */
+  collapsedSectionKey: string;
 }
 
 /** The id set, in a form that is cheap to compare. A change here means
@@ -153,11 +157,13 @@ export function Canvas({
   onPickTarget,
   onCancelPick,
   onToggleSection,
+  collapsedSectionKey,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [cy, setCy] = useState<Core | null>(null);
   const signatureRef = useRef<string>("");
+  const collapseKeyRef = useRef(collapsedSectionKey);
   const selectHandlers = useRef({
     onSelectNode,
     onSelectEdge,
@@ -191,7 +197,7 @@ export function Canvas({
       selectionType: "single",
       // 0.2 is the original rate: Cytoscape's default 1 (and the 3 that
       // landed during canvas work) makes a single wheel notch a huge jump.
-      wheelSensitivity: 2,
+      wheelSensitivity: 0.2,
       minZoom: 1e-50,
       maxZoom: 2.5,
     });
@@ -368,30 +374,47 @@ export function Canvas({
     if (signature !== signatureRef.current) {
       const previousIds = idsFromSignature(signatureRef.current);
       const currentIds = idsFromSignature(signature);
+      const keepCamera =
+        signatureRef.current !== "" &&
+        (collapseKeyRef.current !== collapsedSectionKey ||
+          isSectionCollapseToggle(previousIds, currentIds));
+      const zoom = cy.zoom();
+      const pan = { ...cy.pan() };
       signatureRef.current = signature;
-      runGraphLayout(cy);
+      // Collapse can leave remaining nodes where they are. Expand still
+      // needs dagre so restored questions are not dumped at (0,0).
+      if (!keepCamera || currentIds.size > previousIds.size) {
+        runGraphLayout(cy);
+      }
       // Incremental adds only. A draft is a whole new id set (Canvas
       // stays mounted), and treating every copied question as "new"
       // stacked them beside their section anchors. See
-      // `shouldRepositionNewSiblings`.
-      if (shouldRepositionNewSiblings(previousIds, currentIds)) {
+      // `shouldRepositionNewSiblings`. Expanding a small section looks
+      // like 1–2 adds; do not park those beside the anchor.
+      if (!keepCamera && shouldRepositionNewSiblings(previousIds, currentIds)) {
         const newIds = new Set([...currentIds].filter((id) => !previousIds.has(id)));
         repositionNewSiblings(cy, newIds);
         separateNodesFromEdges(cy);
       }
-      const host = cy.container();
-      if (
-        host !== null &&
-        containerHasUsableSize(host.clientWidth, host.clientHeight)
-      ) {
-        fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
+      if (keepCamera) {
+        cy.viewport({ zoom, pan });
+        separateNodesFromEdges(cy);
+      } else {
+        const host = cy.container();
+        if (
+          host !== null &&
+          containerHasUsableSize(host.clientWidth, host.clientHeight)
+        ) {
+          fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
+        }
       }
     } else {
       // Edges can retarget without any node appearing or vanishing, and
       // that is enough to turn a neighbour-link into a skip.
       separateNodesFromEdges(cy);
     }
-  }, [elements]);
+    collapseKeyRef.current = collapsedSectionKey;
+  }, [elements, collapsedSectionKey]);
 
   useEffect(() => {
     const cy = cyRef.current;

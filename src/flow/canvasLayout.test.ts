@@ -8,6 +8,7 @@ import {
   containerHasUsableSize,
   dockAlongPercent,
   dockedPairSegment,
+  isSectionCollapseToggle,
   lineSideExtents,
   nodeDockPoint,
   nodeSideEndpoint,
@@ -112,6 +113,65 @@ describe("shouldRepositionNewSiblings", () => {
     const previous = new Set(["q1", "q2", section]);
     const current = new Set(["q1", "q2", "q3", "q4", "q5", section]);
     expect(shouldRepositionNewSiblings(previous, current)).toBe(false);
+  });
+});
+
+describe("isSectionCollapseToggle", () => {
+  const section = sectionNodeId("intro");
+
+  it("is true when a section's questions disappear (collapse)", () => {
+    expect(
+      isSectionCollapseToggle(
+        new Set(["q1", "q2", "q3", "q4", section]),
+        new Set(["q1", section]),
+      ),
+    ).toBe(true);
+  });
+
+  it("is true when those questions come back (expand)", () => {
+    expect(
+      isSectionCollapseToggle(
+        new Set(["q1", section]),
+        new Set(["q1", "q2", "q3", "q4", section]),
+      ),
+    ).toBe(true);
+  });
+
+  it("is false when opening a draft replaces every question id", () => {
+    expect(
+      isSectionCollapseToggle(
+        new Set(["live-q1", "live-q2", section, END_NODE_ID]),
+        new Set(["draft-q1", "draft-q2", section, END_NODE_ID]),
+      ),
+    ).toBe(false);
+  });
+
+  it("is false when a single question is added", () => {
+    expect(
+      isSectionCollapseToggle(
+        new Set(["q1", "q2", section]),
+        new Set(["q1", "q2", "q3", section]),
+      ),
+    ).toBe(false);
+  });
+
+  it("is true when a small section's questions disappear", () => {
+    expect(
+      isSectionCollapseToggle(
+        new Set(["q1", "q2", "q3", section]),
+        new Set(["q1", section]),
+      ),
+    ).toBe(true);
+  });
+
+  it("is false when only two questions reappear — that looks like an edit", () => {
+    // Canvas still keeps the camera: MapView passes collapsedSectionKey.
+    expect(
+      isSectionCollapseToggle(
+        new Set(["q1", section]),
+        new Set(["q1", "q2", "q3", section]),
+      ),
+    ).toBe(false);
   });
 });
 

@@ -12,7 +12,6 @@ import { useGraph, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import croppedLogo from "../assets/predmind-logo - cropped.webp";
 import { useAuth } from "../auth/useAuth";
-import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import {
@@ -239,20 +238,6 @@ export function VersionLayout() {
               )}
             </div>
           </div>
-
-          {graphData !== undefined && (
-            <Badge
-              tone="meta"
-              className="h-9 flex-col items-start justify-center gap-0 rounded-md px-3 py-0"
-            >
-              <span className="text-sm font-bold tabular-nums leading-none">
-                {graphData.questions.length}
-              </span>
-              <span className="text-muted-foreground text-[10px] font-semibold tracking-[0.08em] uppercase">
-                Questions
-              </span>
-            </Badge>
-          )}
 
           {questionnaires.length > 1 && effectiveQuestionnaireId !== null && (
             <Select

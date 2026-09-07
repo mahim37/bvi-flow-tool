@@ -140,10 +140,10 @@ export function MapView() {
     sidebarCollapsed && selectedQuestionId === null
       ? "grid-cols-[0_minmax(0,1fr)_0] [&>nav]:min-w-0 [&>nav]:overflow-hidden [&>nav]:p-0 [&>aside]:overflow-hidden [&>aside]:p-0"
       : sidebarCollapsed
-        ? "grid-cols-[0_minmax(0,1fr)_380px] [&>nav]:min-w-0 [&>nav]:overflow-hidden [&>nav]:p-0"
+        ? "grid-cols-[0_minmax(0,1fr)_var(--detail-width)] [&>nav]:min-w-0 [&>nav]:overflow-hidden [&>nav]:p-0"
         : selectedQuestionId === null
-          ? "grid-cols-[300px_minmax(0,1fr)_0] [&>aside]:overflow-hidden [&>aside]:p-0"
-          : "grid-cols-[300px_minmax(0,1fr)_380px]",
+          ? "grid-cols-[var(--sidebar-width)_minmax(0,1fr)_0] [&>aside]:overflow-hidden [&>aside]:p-0"
+          : "grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--detail-width)]",
   );
 
   return (
@@ -172,6 +172,7 @@ export function MapView() {
         pickLabel={pick?.label ?? null}
         onPickTarget={pickCanvasTarget}
         onCancelPick={() => setPick(null)}
+        collapsedSectionKey={[...collapsedSections].sort().join("|")}
         onToggleSection={(sectionId) => {
           setCollapsedSections((current) => {
             const next = new Set(current);

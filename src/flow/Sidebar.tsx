@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { emptyText, panelHeading } from "@/lib/chrome";
+import { emptyText } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { activityEventLabel, formatTimestamp } from "./labels";
@@ -216,7 +216,12 @@ function KeySwatch({
 }
 
 const accordionTrigger =
-  "rounded-none border-0 px-2 py-3 text-[0.75rem] font-bold tracking-[0.06em] text-muted-foreground uppercase hover:bg-transparent hover:no-underline hover:text-foreground";
+  "rounded-none border-0 px-4 py-3 text-[0.75rem] font-bold tracking-[0.06em] text-muted-foreground uppercase hover:bg-transparent hover:no-underline hover:text-foreground";
+
+const nestedTrigger =
+  "rounded-md border-0 px-4 py-2 text-sm font-semibold hover:bg-transparent hover:no-underline";
+
+const accordionBody = "px-4 pb-3";
 
 const countPill =
   "text-muted-foreground rounded-full border border-border bg-background px-2 py-px text-[0.78rem] font-bold tabular-nums";
@@ -225,7 +230,7 @@ const countPillSome =
   "rounded-full border border-emphasis bg-emphasis-soft px-2 py-px text-[0.78rem] font-bold text-emphasis tabular-nums";
 
 const sectionRow =
-  "flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-transparent px-2 py-2 text-left text-[13px] font-medium font-inherit hover:bg-card";
+  "flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-transparent px-2.5 py-2.5 text-left text-[13px] font-medium font-inherit hover:bg-card";
 
 /** Ported from break-backend's "History & snapshots" disclosure
  * (question_graph_editor/index.html#L287-301) -- minus snapshots, which has
@@ -255,7 +260,7 @@ function HistoryPanel({ questionnaireId }: { questionnaireId: UUID }) {
       {events.map((event) => (
         <li
           key={event.id}
-          className="flex flex-col gap-0.5 border-t border-border py-1.5 first:border-t-0 first:pt-0"
+          className="flex flex-col gap-0.5 border-t border-border py-2 first:border-t-0 first:pt-0"
         >
           <span className="font-semibold">{activityEventLabel(event.event_type)}</span>
           {event.detail !== "" && (
@@ -375,12 +380,12 @@ export function Sidebar({
 
   return (
     <nav
-      className="sidebar flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background px-3 py-4"
+      className="sidebar flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-border bg-background"
       aria-label="Questionnaire navigation"
     >
-      <div className="shrink-0">
+      <div className="shrink-0 px-4 pt-4 pb-3">
         <Label
-          className="text-muted-foreground mb-1.5 text-[0.75rem] font-bold tracking-[0.06em] uppercase"
+          className="text-muted-foreground mb-2 text-[0.75rem] font-bold tracking-[0.06em] uppercase"
           htmlFor={searchId}
         >
           Search questions
@@ -395,7 +400,7 @@ export function Sidebar({
         />
         {needle !== "" && (
           <>
-            <p className="text-muted-foreground my-1.5 text-[0.8rem]" role="status">
+            <p className="text-muted-foreground my-2 text-[0.8rem]" role="status">
               {results.length} match{results.length === 1 ? "" : "es"}
             </p>
             <ul className="mt-1 list-none p-0">{results.map(questionButton)}</ul>
@@ -403,98 +408,90 @@ export function Sidebar({
         )}
       </div>
 
-      <Separator className="my-4 shrink-0" />
+      <Separator className="shrink-0" />
 
-      {/* Sections and the three disclosures share this column. Sections
-          scroll in leftover space; Diagnostics/History/legend grow in-flow
-          below — not a white card and not an absolute overlay. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <section
-          className="flex min-h-32 flex-1 flex-col overflow-hidden"
-          aria-labelledby="sections-heading"
-        >
-          <h2 id="sections-heading" className={panelHeading}>
-            Sections
-          </h2>
-          {sections.length === 0 && unsectioned.length === 0 && (
-            <p className={emptyText}>This version has no questions.</p>
-          )}
-          <ul className="min-h-0 flex-1 list-none overflow-y-auto p-0 pr-1">
-            {sections.map((section, index) => (
-              <li key={section.id}>
-                <button
-                  type="button"
-                  className={cn(
-                    sectionRow,
-                    highlightedSection === section.id &&
-                      "border-border-strong bg-card shadow-sm",
-                  )}
-                  aria-pressed={highlightedSection === section.id}
-                  onClick={() =>
-                    toggleSectionHighlight(
-                      section.id,
-                      (bySection.get(section.id) ?? []).map((question) => question.id),
-                    )
-                  }
-                >
-                  <span className="flex min-w-0 flex-1 items-center text-left">
-                    <span
-                      className="mr-2.5 inline-block size-3 shrink-0 rounded-[4px] ring-1 ring-black/10"
-                      style={{
-                        background: sectionColors.get(section.id) ?? NO_SECTION_COLOR,
-                      }}
-                      aria-hidden="true"
-                    />
-                    <span className="truncate">
-                      {index + 1}. {section.name}
-                    </span>
-                  </span>
-                  <Badge tone="neutral" className="tabular-nums">
-                    {section.live_question_count}
-                  </Badge>
-                </button>
-              </li>
-            ))}
-            {unsectioned.length > 0 && (
-              <li>
-                <button
-                  type="button"
-                  className={cn(
-                    sectionRow,
-                    highlightedSection === "none" &&
-                      "border-border-strong bg-card shadow-sm",
-                  )}
-                  aria-pressed={highlightedSection === "none"}
-                  onClick={() =>
-                    toggleSectionHighlight(
-                      "none",
-                      unsectioned.map((question) => question.id),
-                    )
-                  }
-                >
-                  <span className="flex min-w-0 flex-1 items-center text-left">
-                    <span
-                      className="mr-2.5 inline-block size-3 shrink-0 rounded-[4px] ring-1 ring-black/10"
-                      style={{ background: NO_SECTION_COLOR }}
-                      aria-hidden="true"
-                    />
-                    No section
-                  </span>
-                  <Badge tone="neutral" className="tabular-nums">
-                    {unsectioned.length}
-                  </Badge>
-                </button>
-              </li>
-            )}
-          </ul>
-        </section>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Accordion type="multiple" defaultValue={["sections"]} className="w-full">
+          <AccordionItem value="sections">
+            <AccordionTrigger className={accordionTrigger}>Sections</AccordionTrigger>
+            <AccordionContent className={accordionBody}>
+              {sections.length === 0 && unsectioned.length === 0 && (
+                <p className={emptyText}>This version has no questions.</p>
+              )}
+              <ul className="list-none p-0">
+                {sections.map((section, index) => (
+                  <li key={section.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        sectionRow,
+                        highlightedSection === section.id &&
+                          "border-border-strong bg-card shadow-sm",
+                      )}
+                      aria-pressed={highlightedSection === section.id}
+                      onClick={() =>
+                        toggleSectionHighlight(
+                          section.id,
+                          (bySection.get(section.id) ?? []).map(
+                            (question) => question.id,
+                          ),
+                        )
+                      }
+                    >
+                      <span className="flex min-w-0 flex-1 items-center text-left">
+                        <span
+                          className="mr-2.5 inline-block size-3 shrink-0 rounded-[4px] ring-1 ring-black/10"
+                          style={{
+                            background:
+                              sectionColors.get(section.id) ?? NO_SECTION_COLOR,
+                          }}
+                          aria-hidden="true"
+                        />
+                        <span className="truncate">
+                          {index + 1}. {section.name}
+                        </span>
+                      </span>
+                      <Badge tone="neutral" className="tabular-nums">
+                        {section.live_question_count}
+                      </Badge>
+                    </button>
+                  </li>
+                ))}
+                {unsectioned.length > 0 && (
+                  <li>
+                    <button
+                      type="button"
+                      className={cn(
+                        sectionRow,
+                        highlightedSection === "none" &&
+                          "border-border-strong bg-card shadow-sm",
+                      )}
+                      aria-pressed={highlightedSection === "none"}
+                      onClick={() =>
+                        toggleSectionHighlight(
+                          "none",
+                          unsectioned.map((question) => question.id),
+                        )
+                      }
+                    >
+                      <span className="flex min-w-0 flex-1 items-center text-left">
+                        <span
+                          className="mr-2.5 inline-block size-3 shrink-0 rounded-[4px] ring-1 ring-black/10"
+                          style={{ background: NO_SECTION_COLOR }}
+                          aria-hidden="true"
+                        />
+                        No section
+                      </span>
+                      <Badge tone="neutral" className="tabular-nums">
+                        {unsectioned.length}
+                      </Badge>
+                    </button>
+                  </li>
+                )}
+              </ul>
+            </AccordionContent>
+          </AccordionItem>
 
-        <Separator className="mt-1 shrink-0" />
-
-        <Accordion
-          type="multiple"
-          className="min-h-0 max-h-[50%] shrink-0 overflow-y-auto"
-        >
           <AccordionItem value="diagnostics">
             <AccordionTrigger className={accordionTrigger}>
               Diagnostics
@@ -518,14 +515,14 @@ export function Sidebar({
                       : group.questionIds.length;
                   return (
                     <AccordionItem key={group.key} value={group.key}>
-                      <AccordionTrigger className="rounded-md border-0 py-1.5 text-sm font-semibold hover:bg-transparent hover:no-underline">
+                      <AccordionTrigger className={nestedTrigger}>
                         <span className="min-w-0 flex-1 text-left">{group.label}</span>
                         <span className={count > 0 ? countPillSome : countPill}>
                           {count}
                         </span>
                       </AccordionTrigger>
-                      <AccordionContent>
-                        <p className="text-muted-foreground mx-1 mb-2 text-[0.8rem]">
+                      <AccordionContent className={accordionBody}>
+                        <p className="text-muted-foreground mb-2 text-[0.8rem]">
                           {group.meaning}
                         </p>
                         {group.questionIds.length === 0 ? (
@@ -551,7 +548,7 @@ export function Sidebar({
 
           <AccordionItem value="history">
             <AccordionTrigger className={accordionTrigger}>History</AccordionTrigger>
-            <AccordionContent>
+            <AccordionContent className={accordionBody}>
               <HistoryPanel questionnaireId={graph.version.questionnaire} />
             </AccordionContent>
           </AccordionItem>
@@ -560,7 +557,7 @@ export function Sidebar({
             <AccordionTrigger className={accordionTrigger}>
               What do the colors mean?
             </AccordionTrigger>
-            <AccordionContent>
+            <AccordionContent className={accordionBody}>
               <ul className="flex list-none flex-col gap-2.5 p-0">
                 <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <b>Border color</b> — the question's section
