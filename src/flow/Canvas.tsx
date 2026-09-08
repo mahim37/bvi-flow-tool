@@ -1,31 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
-import type { Core, ElementDefinition } from "cytoscape";
+import type { Core, ElementDefinition, NodeSingular } from "cytoscape";
 import dagre from "cytoscape-dagre";
 
+import {
+  cameraNeedsReframe,
+  containerHasUsableSize,
+  isSectionCollapseToggle,
+  pointInSectionToggle,
+  runGraphLayout,
+  separateNodesFromEdges,
+  shouldRepositionNewSiblings,
+} from "./canvasLayout";
 import { CANVAS_STYLE } from "./canvasStyle";
+import { Minimap } from "./Minimap";
+import { Button } from "@/components/ui/button";
 
 cytoscape.use(dagre);
-
-const LAYOUT = {
-  name: "dagre",
-  rankDir: "TB",
-  nodeSep: 45,
-  // Default (dagre's internal 20) crowds a node that shares a rank with a
-  // longer edge skipping past it -- e.g. a question with both an incoming
-  // and outgoing edge, ranked between two ends of a direct fallback edge
-  // that skips it. edgeSep only spaces routed edges away from nodes/each
-  // other, unlike nodeSep, so it doesn't also widen every sibling-node gap
-  // on the canvas.
-  edgeSep: 200,
-  rankSep: 80,
-  animate: false,
-  // Framing the opening view is done by hand below (`fitToChainStart`),
-  // not dagre's own fit-to-everything -- a large questionnaire would
-  // otherwise open shrunk down to unreadable text.
-  fit: false,
-  padding: 40,
-} as const;
 
 const INITIAL_VIEW_QUESTION_COUNT = 10;
 
@@ -78,6 +69,13 @@ interface CanvasProps {
   pickLabel: string | null;
   onPickTarget: (id: string) => void;
   onCancelPick: () => void;
+  /** Clicking the chevron on a section box expands or collapses it. The
+   * rest of the box is not a control — hovering a question inside would
+   * otherwise fight a full-box toggle. */
+  onToggleSection: (sectionId: string) => void;
+  /** Sorted join of collapsed section ids. A change here is a fold, not a
+   * new graph — keep the camera instead of fitting the chain start. */
+  collapsedSectionKey: string;
 }
 
 /** The id set, in a form that is cheap to compare. A change here means
@@ -93,6 +91,33 @@ function nodeSignature(elements: ElementDefinition[]): string {
 
 function idsFromSignature(signature: string): Set<string> {
   return new Set(signature === "" ? [] : signature.split("|"));
+}
+
+/** Neighbourhood fade for a hovered question; a section hover only
+ * highlights the box itself so child questions do not pick up a thicker
+ * border. Cytoscape bubbles mouseover from child to parent, so callers
+ * must `stopPropagation` or the section handler wins and the question
+ * trace never shows. */
+function applyHover(cy: Core, node: NodeSingular): void {
+  cy.elements().removeClass("faded hl");
+  if (node.data("kind") === "section") {
+    const keep = node
+      .union(node.descendants())
+      .union(node.connectedEdges())
+      .union(node.descendants().connectedEdges());
+    cy.elements().difference(keep).addClass("faded");
+    node.addClass("hl");
+    node.connectedEdges().addClass("hl");
+    return;
+  }
+  const neighborhood = node.closedNeighborhood();
+  cy.elements().difference(neighborhood).addClass("faded");
+  neighborhood.nodes().forEach((member) => {
+    if (member.data("kind") !== "section") member.addClass("hl");
+  });
+  neighborhood.edges().addClass("hl");
+  const parent = node.parent();
+  if (parent.nonempty()) parent.removeClass("faded");
 }
 
 /** Places a brand new question beside its section's own first question
@@ -131,21 +156,27 @@ export function Canvas({
   pickLabel,
   onPickTarget,
   onCancelPick,
+  onToggleSection,
+  collapsedSectionKey,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const [cy, setCy] = useState<Core | null>(null);
   const signatureRef = useRef<string>("");
+  const collapseKeyRef = useRef(collapsedSectionKey);
   const selectHandlers = useRef({
     onSelectNode,
     onSelectEdge,
     onPickTarget,
     onCancelPick,
+    onToggleSection,
   });
   selectHandlers.current = {
     onSelectNode,
     onSelectEdge,
     onPickTarget,
     onCancelPick,
+    onToggleSection,
   };
   // Read inside the `cy.on(...)` handlers registered once below, so
   // whether a tap selects or picks a target reflects the latest mode
@@ -154,20 +185,38 @@ export function Canvas({
   pickingRef.current = pickLabel !== null;
 
   useEffect(() => {
-    if (containerRef.current === null) return;
+    const host = containerRef.current;
+    if (host === null) return;
     const cy = cytoscape({
-      container: containerRef.current,
+      container: host,
       style: CANVAS_STYLE,
       // Boxing and multi-select would let a drag produce a selection this
       // app has no verb for; one thing at a time matches the detail panel,
       // which is the only place a selection goes.
       boxSelectionEnabled: false,
       selectionType: "single",
+      // 0.2 is the original rate: Cytoscape's default 1 (and the 3 that
+      // landed during canvas work) makes a single wheel notch a huge jump.
       wheelSensitivity: 0.2,
+      minZoom: 1e-50,
+      maxZoom: 2.5,
     });
     cyRef.current = cy;
+    setCy(cy);
 
     cy.on("tap", "node", (event) => {
+      const kind = event.target.data("kind") as string | undefined;
+      if (kind === "section") {
+        if (pickingRef.current) return;
+        const rendered = event.renderedPosition;
+        const box = event.target.renderedBoundingBox({ includeOverlays: false });
+        if (!pointInSectionToggle(box, rendered)) return;
+        const sectionId = event.target.data("sectionId") as string | undefined;
+        if (typeof sectionId === "string") {
+          selectHandlers.current.onToggleSection(sectionId);
+        }
+        return;
+      }
       if (pickingRef.current) {
         selectHandlers.current.onPickTarget(event.target.id() as string);
         return;
@@ -196,17 +245,29 @@ export function Canvas({
     // Hover-to-trace, ported from break-backend's focus/highlight engine
     // (state.hover in app.js): fade everything except the hovered node's
     // own connected edges/neighbours, so tracing one question's routing
-    // doesn't require clicking it first.
+    // doesn't require clicking it first. stopPropagation keeps a question
+    // inside a section from also running the section hover.
     cy.on("mouseover", "node", (event) => {
-      const set = event.target.closedNeighborhood();
-      cy.elements().addClass("faded");
-      set.removeClass("faded");
-      set.nodes().addClass("hl");
-      set.edges().addClass("hl");
+      event.stopPropagation();
+      applyHover(cy, event.target);
     });
-    cy.on("mouseout", "node", () => {
+    cy.on("mouseout", "node", (event) => {
+      event.stopPropagation();
       cy.elements().removeClass("faded hl");
+      const container = cy.container();
+      if (container) container.style.cursor = "";
     });
+    cy.on("mousemove", 'node[kind = "section"]', (event) => {
+      const container = cy.container();
+      if (container === null) return;
+      const box = event.target.renderedBoundingBox({ includeOverlays: false });
+      container.style.cursor = pointInSectionToggle(box, event.renderedPosition)
+        ? "pointer"
+        : "";
+    });
+    // A dragged node can uncover or create a skip-through; slide the
+    // questions that now sit on a chord rather than bowing the arrow.
+    cy.on("dragfree", "node", () => separateNodesFromEdges(cy));
 
     // Keeps cytoscape's own notion of its size in sync with the container's
     // actual box -- the sidebar-collapse toggle animates `.layout`'s grid
@@ -214,13 +275,49 @@ export function Canvas({
     // recomputes on the latter. A `ResizeObserver` catches that (and a
     // plain window resize) without this component needing to know why its
     // container changed size.
-    const resizeObserver = new ResizeObserver(() => cy.resize());
-    resizeObserver.observe(containerRef.current);
+    //
+    // `cy.resize()` alone is not enough when the first layout ran against
+    // a 0×0 flex/grid cell: `width: "label"` and `fit()` both bake that
+    // degeneracy in, which is the empty canvas + sliver minimap. Relayout
+    // and reframe only when recovering from that, not on every pixel of a
+    // sidebar animation (that would steal the user's pan).
+    const size = { w: 0, h: 0 };
+    const recordSize = (width: number, height: number) => {
+      size.w = width;
+      size.h = height;
+    };
+    const box = host.getBoundingClientRect();
+    recordSize(box.width, box.height);
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect === undefined) return;
+      const wasUnusable = !containerHasUsableSize(size.w, size.h);
+      recordSize(rect.width, rect.height);
+      if (!containerHasUsableSize(rect.width, rect.height)) return;
+      cy.resize();
+      if (cy.nodes().empty()) return;
+      const graphBox = cy.nodes().boundingBox({
+        includeOverlays: false,
+        includeLabels: true,
+      });
+      const collapsedGraph = cy.nodes().length > 1 && graphBox.x2 - graphBox.x1 < 8;
+      if (wasUnusable || collapsedGraph) {
+        runGraphLayout(cy);
+        fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
+        return;
+      }
+      if (cameraNeedsReframe(cy.zoom(), cy.extent())) {
+        fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
+      }
+    });
+    resizeObserver.observe(host);
 
     return () => {
       resizeObserver.disconnect();
       cy.destroy();
       cyRef.current = null;
+      setCy(null);
       // A destroyed cy's elements go with it, so the next instance (React
       // 18 StrictMode's dev double-mount, or a real remount) starts with no
       // layout run yet -- without this reset, the elements-sync effect sees
@@ -276,20 +373,48 @@ export function Canvas({
     const signature = nodeSignature(elements);
     if (signature !== signatureRef.current) {
       const previousIds = idsFromSignature(signatureRef.current);
+      const currentIds = idsFromSignature(signature);
+      const keepCamera =
+        signatureRef.current !== "" &&
+        (collapseKeyRef.current !== collapsedSectionKey ||
+          isSectionCollapseToggle(previousIds, currentIds));
+      const zoom = cy.zoom();
+      const pan = { ...cy.pan() };
       signatureRef.current = signature;
-      cy.layout(LAYOUT).run();
-      // Only for an incremental change -- on the very first layout every
-      // node is "new" against an empty previous set, and that first full
-      // layout is exactly the one case this should leave alone.
-      if (previousIds.size > 0) {
-        const newIds = new Set(
-          [...idsFromSignature(signature)].filter((id) => !previousIds.has(id)),
-        );
-        repositionNewSiblings(cy, newIds);
+      // Collapse can leave remaining nodes where they are. Expand still
+      // needs dagre so restored questions are not dumped at (0,0).
+      if (!keepCamera || currentIds.size > previousIds.size) {
+        runGraphLayout(cy);
       }
-      fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
+      // Incremental adds only. A draft is a whole new id set (Canvas
+      // stays mounted), and treating every copied question as "new"
+      // stacked them beside their section anchors. See
+      // `shouldRepositionNewSiblings`. Expanding a small section looks
+      // like 1–2 adds; do not park those beside the anchor.
+      if (!keepCamera && shouldRepositionNewSiblings(previousIds, currentIds)) {
+        const newIds = new Set([...currentIds].filter((id) => !previousIds.has(id)));
+        repositionNewSiblings(cy, newIds);
+        separateNodesFromEdges(cy);
+      }
+      if (keepCamera) {
+        cy.viewport({ zoom, pan });
+        separateNodesFromEdges(cy);
+      } else {
+        const host = cy.container();
+        if (
+          host !== null &&
+          containerHasUsableSize(host.clientWidth, host.clientHeight)
+        ) {
+          fitToChainStart(cy, INITIAL_VIEW_QUESTION_COUNT);
+        }
+      }
+    } else {
+      // Edges can retarget without any node appearing or vanishing, and
+      // that is enough to turn a neighbour-link into a skip.
+      separateNodesFromEdges(cy);
     }
-  }, [elements]);
+    collapseKeyRef.current = collapsedSectionKey;
+  }, [elements, collapsedSectionKey]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -366,28 +491,42 @@ export function Canvas({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [pickLabel, onCancelPick]);
 
-  // Ported from break-backend's #zoomIn/#zoomOut/#fit/#reset (app.js
-  // ~L3594-3623) -- same factors and durations. Break's "reset" also
-  // clears its own search/focus state, which lives in this app's Sidebar
-  // instead of Canvas, so here it only resets the camera.
+  // Zoom about the viewport centre. The previous `center: { eles }` form
+  // panned onto the bounding-box midpoint of every node — usually some
+  // question in the middle of the chain — on every +/– click.
   function zoomBy(factor: number) {
-    const cy = cyRef.current;
-    if (cy === null) return;
-    cy.animate(
-      { zoom: cy.zoom() * factor, center: { eles: cy.elements() } },
+    const graph = cyRef.current;
+    if (graph === null) return;
+    const level = Math.min(
+      Math.max(graph.zoom() * factor, graph.minZoom()),
+      graph.maxZoom(),
+    );
+    graph.animate(
+      {
+        zoom: {
+          level,
+          renderedPosition: { x: graph.width() / 2, y: graph.height() / 2 },
+        },
+      },
       { duration: 180 },
     );
   }
-  function fitToScreen() {
-    const cy = cyRef.current;
-    if (cy === null) return;
-    cy.animate({ fit: { eles: cy.elements(), padding: 50 } }, { duration: 300 });
+  function fitEntireGraph() {
+    const graph = cyRef.current;
+    if (graph === null) return;
+    graph.animate({ fit: { eles: graph.elements(), padding: 50 } }, { duration: 300 });
+  }
+  function resetNodePositions() {
+    const graph = cyRef.current;
+    if (graph === null) return;
+    runGraphLayout(graph);
+    fitToChainStart(graph, INITIAL_VIEW_QUESTION_COUNT);
   }
 
   return (
-    <div className="canvas">
+    <div className="canvas relative h-full min-h-0 min-w-0 overflow-hidden border-x border-border bg-[var(--canvas-bg)] bg-[radial-gradient(circle_at_1px_1px,var(--canvas-dot)_1.5px,transparent_0)] bg-size-[26px_26px] [background-position:0_0]">
       <div
-        className="canvas__stage"
+        className="canvas__stage absolute inset-0 h-full w-full"
         ref={containerRef}
         // The canvas is a picture as far as assistive technology is
         // concerned: cytoscape draws to a <canvas> element with no DOM to
@@ -405,11 +544,14 @@ export function Canvas({
       />
 
       {pickLabel !== null && (
-        <div className="retarget-banner" role="status">
+        <div
+          className="absolute top-4 left-1/2 z-7 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-gold bg-gold/12 px-4 py-2 text-[12.5px] shadow-md"
+          role="status"
+        >
           <span>Click a question for {pickLabel}, or press Esc to cancel.</span>
-          <button type="button" className="opt-edit-btn" onClick={onCancelPick}>
+          <Button variant="outline" size="sm" onClick={onCancelPick}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
 
@@ -418,10 +560,9 @@ export function Canvas({
           app's topbar is shared across Map/Review/Preview while the
           sidebar only exists here, so the button sits with the rest of
           the canvas's own chrome instead. */}
-      <div className="canvas-controls canvas-controls--top-left">
-        <button
-          type="button"
-          className="icon-btn"
+      <div className="absolute top-4 left-4 z-6 flex flex-col gap-1.5">
+        <Button
+          size="icon"
           title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
           aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
           onClick={onToggleSidebar}
@@ -434,42 +575,94 @@ export function Canvas({
               strokeLinecap="round"
             />
           </svg>
-        </button>
+        </Button>
       </div>
 
-      <div className="canvas-controls">
-        <button
-          type="button"
-          className="icon-btn"
+      <div className="absolute right-4 bottom-4 z-6 flex flex-col gap-1.5">
+        <Button
+          size="icon"
           title="Zoom in"
           aria-label="Zoom in"
           onClick={() => zoomBy(1.3)}
         >
           ＋
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
+        </Button>
+        <Button
+          size="icon"
           title="Zoom out"
           aria-label="Zoom out"
           onClick={() => zoomBy(1 / 1.3)}
         >
           －
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          title="Reset view"
-          aria-label="Reset view"
-          onClick={fitToScreen}
+        </Button>
+        <Button
+          size="icon"
+          title="Fit entire graph"
+          aria-label="Fit entire graph"
+          onClick={fitEntireGraph}
         >
-          ⟲
-        </button>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              d="M8 3H3v5M16 3h5v5M8 21H3v-5M21 16v5h-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Button>
+        <div className="bg-border mx-2 my-0.5 h-px" role="separator" />
+        <Button
+          size="icon"
+          title="Reset node positions"
+          aria-label="Reset node positions"
+          onClick={resetNodePositions}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <rect
+              x="4"
+              y="3"
+              width="16"
+              height="5"
+              rx="1.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+            <rect
+              x="4"
+              y="10"
+              width="16"
+              height="5"
+              rx="1.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+            <rect
+              x="4"
+              y="17"
+              width="16"
+              height="4"
+              rx="1.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+          </svg>
+        </Button>
       </div>
 
-      <div className="hint" aria-hidden="true">
-        <strong>Click</strong> a question for details · <strong>Hover</strong> to trace
-        its paths · <strong>Drag the canvas</strong> to pan ·{" "}
+      {cy !== null && <Minimap cy={cy} />}
+
+      <div
+        className="pointer-events-none absolute bottom-4 left-1/2 z-6 -translate-x-1/2 rounded-md border border-border bg-card/95 px-4 py-1.5 text-xs text-foreground/80 shadow-md whitespace-nowrap backdrop-blur-sm"
+        aria-hidden="true"
+      >
+        <strong>Click</strong> a question for details ·{" "}
+        <strong>The section chevron</strong> collapses it · <strong>Hover</strong> to
+        trace its paths · <strong>Drag the canvas</strong> to pan ·{" "}
         <strong>Drag a question</strong> to move it · <strong>Scroll</strong> to zoom
       </div>
     </div>

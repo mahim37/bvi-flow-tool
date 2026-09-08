@@ -7,8 +7,13 @@ import { usePreviewPathTo, usePreviewWalk, useReview } from "../api/queries";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { PreviewAnswer, PreviewState, QuestionRecord, UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Segment, SegmentOption } from "@/components/ui/segment";
 import { useVersionContext } from "./versionContext";
 import { previewInstruction, questionRefLabel } from "./labels";
+import { emptyText, panelHeading } from "@/lib/chrome";
 import { writeErrorMessage } from "./useWriteError";
 
 type PreviewMode = "full" | "changes";
@@ -222,65 +227,50 @@ export function PreviewView() {
   const pathError = writeErrorMessage(pathTo.error);
 
   return (
-    <main className="page page--preview">
-      <header className="page__header page__header--preview">
-        <h2 className="page__title">Preview</h2>
+    <main className="page--preview min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-15">
+      <header className="mb-2.5 flex items-center gap-4">
+        <h2 className="m-0 text-[1.3rem] font-extrabold tracking-tight">Preview</h2>
 
         {hasChanges && (
-          // Ported from break-backend's own `.seg` segmented toggle
-          // (styles.css ~L229-257, same padding/radius/shadow values) --
-          // this app's one other place two mutually-exclusive views need
-          // picking between. "Changes only" is the default the moment
-          // there is anything to show (see `mode` above); this is what
-          // lets a reviewer switch back to the ordinary entry-point walk.
-          <div
-            className="seg preview__modeswitch"
-            role="group"
-            aria-label="Preview mode"
+          // Preview mode is the Segment primitive — Button options on a
+          // shared track, not a second control that happens to look similar.
+          <Segment
+            className="shrink-0"
+            label="Preview mode"
+            value={mode}
+            onValueChange={(next) => setModeOverride(next as PreviewMode)}
           >
-            <button
-              type="button"
-              className={mode === "changes" ? "active" : ""}
-              onClick={() => setModeOverride("changes")}
-            >
-              Changes only
-            </button>
-            <button
-              type="button"
-              className={mode === "full" ? "active" : ""}
-              onClick={() => setModeOverride("full")}
-            >
-              Full preview
-            </button>
-          </div>
+            <SegmentOption value="changes">Changes only</SegmentOption>
+            <SegmentOption value="full">Full preview</SegmentOption>
+          </Segment>
         )}
       </header>
 
       {mode === "changes" && currentChange !== null && (
-        <div className="banner banner--info preview__changebar" role="status">
+        <Banner as="div" tone="info" className="preview__changebar" role="status">
           <p>
             Change {changeIndex + 1} of {changedQuestionIds.length} — previewing{" "}
             <strong>QID {questionRefLabel(currentChange)}</strong>
           </p>
           <div className="preview__changenav">
-            <button
-              type="button"
-              className="opt-edit-btn"
+            <Button
+              variant="outline"
+              size="sm"
               disabled={changeIndex === 0}
               onClick={() => setChangeIndex((index) => index - 1)}
             >
               ← Previous
-            </button>
-            <button
-              type="button"
-              className="opt-edit-btn"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={changeIndex >= changedQuestionIds.length - 1}
               onClick={() => setChangeIndex((index) => index + 1)}
             >
               Next →
-            </button>
+            </Button>
           </div>
-        </div>
+        </Banner>
       )}
 
       {/* `mode === "changes"` too: `pathTo` is only ever called from the
@@ -288,28 +278,28 @@ export function PreviewView() {
           keep showing once the reviewer switches to Full preview -- that
           mutation's own state isn't reset just because the mode changed. */}
       {mode === "changes" && pathError !== null && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           {pathError}
-        </p>
+        </Banner>
       )}
 
       {conflict && (
         // Not an error to apologise for: a cycle or a dangling target is
         // the crash a respondent would get, found by somebody who can
         // still fix it. That is the feature.
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           <strong>The routing is broken here.</strong> {walk.error?.message} A
           respondent reaching this point would get an error rather than a question. Fix
           it on the map and walk again.
-        </p>
+        </Banner>
       )}
 
       {walk.isError && !conflict && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           {walk.error instanceof Error
             ? walk.error.message
             : "Could not walk this version."}
-        </p>
+        </Banner>
       )}
 
       {state !== null && (
@@ -345,7 +335,9 @@ export function PreviewView() {
             </div>
 
             <div className="preview__content">
-              {state === null && walk.isPending && <p className="empty">Starting…</p>}
+              {state === null && walk.isPending && (
+                <p className={emptyText}>Starting…</p>
+              )}
 
               {state?.is_complete === true && (
                 <>
@@ -390,13 +382,15 @@ export function PreviewView() {
                                   onChange={() => toggle(option.id)}
                                 />
                                 <span>{option.label}</span>
-                                <code className="options__code">{option.code}</code>
+                                <code className="text-muted-foreground ml-2 font-mono text-[0.75rem]">
+                                  {option.code}
+                                </code>
                               </label>
                             </li>
                           );
                         })}
                         {question.options.length === 0 && (
-                          <li className="empty">
+                          <li className={emptyText}>
                             This question offers no options, so nothing can be selected
                             and only a question-level edge can fire.
                           </li>
@@ -415,7 +409,7 @@ export function PreviewView() {
                       <p className="preview__subtitle">
                         {previewInstruction(question.answer_type)}
                       </p>
-                      <input
+                      <Input
                         key={question.id}
                         className="preview__freetext"
                         type={question.answer_type === "scale" ? "number" : "text"}
@@ -431,14 +425,14 @@ export function PreviewView() {
                   )}
 
                   <div className="preview__actions">
-                    <button
-                      className="button button--primary preview__next"
-                      type="button"
+                    <Button
+                      variant="primary"
+                      className="preview__next"
                       disabled={walk.isPending || (isChoice && chosen.length === 0)}
                       onClick={answer}
                     >
                       {walk.isPending ? "Walking…" : "Answer and continue"}
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -446,25 +440,22 @@ export function PreviewView() {
           </div>
 
           <div className="preview__toolbar">
-            <button
-              className="button"
-              type="button"
+            <Button
               disabled={walk.isPending || steps.length === 0}
               onClick={() => walkTo(steps.slice(0, -1))}
             >
               Back one answer
-            </button>
+            </Button>
             {/* Never disabled on an empty walk, unlike "back": a routing
                 fault refuses the very first call, and this is what asks
                 again once it has been fixed in the other tab. */}
-            <button
-              className="button button--quiet"
-              type="button"
+            <Button
+              variant="ghost"
               disabled={walk.isPending}
               onClick={() => walkTo([])}
             >
               {steps.length === 0 ? "Walk again" : "Start again"}
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -475,11 +466,11 @@ export function PreviewView() {
           // I just pick" rather than "here's how you'd actually reach
           // this" -- the Change N of M banner above already says that.
           <section className="preview__path" aria-labelledby="preview-path">
-            <h3 id="preview-path" className="panel__heading">
+            <h3 id="preview-path" className={panelHeading}>
               The route so far
             </h3>
             {steps.length === 0 ? (
-              <p className="empty">Nothing answered yet.</p>
+              <p className={emptyText}>Nothing answered yet.</p>
             ) : (
               <ol className="preview__steps">
                 {steps.map((step, index) => (

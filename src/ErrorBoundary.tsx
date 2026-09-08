@@ -1,6 +1,8 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
+
 interface ErrorBoundaryProps {
   children: ReactNode;
 }
@@ -40,19 +42,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render() {
     if (!this.state.hasError) return this.props.children;
     return (
-      <main className="gate">
-        <h1>Something went wrong</h1>
-        <p>
+      <main className="mx-auto flex min-h-svh max-w-[520px] flex-col items-center justify-center gap-2.5 bg-background p-6 text-center">
+        <h1 className="m-0 text-xl font-extrabold tracking-tight">
+          Something went wrong
+        </h1>
+        <p className="text-muted-foreground m-0">
           The app hit an unexpected error and cannot keep going from here. Reloading
           starts fresh -- if your session had expired, this takes you back to sign-in.
         </p>
-        <button
-          className="button button--primary"
-          type="button"
-          onClick={() => window.location.reload()}
-        >
+        <Button variant="primary" onClick={() => window.location.reload()}>
           Reload
-        </button>
+        </Button>
       </main>
     );
   }

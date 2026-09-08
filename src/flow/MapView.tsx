@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
+import { cn } from "@/lib/utils";
 import { useAddEdge, useReview, useUpdateEdge } from "../api/queries";
 import type { UUID } from "../api/types";
 import { Canvas } from "./Canvas";
@@ -8,7 +9,12 @@ import { DetailPanel } from "./DetailPanel";
 import { Sidebar } from "./Sidebar";
 import { useVersionContext } from "./versionContext";
 import { useWriteErrorHandler } from "./useWriteError";
-import { buildElements, changeKindsFromDiff, isSyntheticNode } from "./graphElements";
+import {
+  buildElements,
+  changeKindsFromDiff,
+  isSectionNode,
+  isSyntheticNode,
+} from "./graphElements";
 
 /** A pending canvas click-to-pick, one of two shapes: retargeting an
  * existing edge, or adding a new one for a question/option that doesn't
@@ -30,6 +36,9 @@ export function MapView() {
   const [highlightedIds, setHighlightedIds] = useState<readonly string[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pick, setPick] = useState<CanvasPick | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<UUID>>(
+    () => new Set(),
+  );
 
   // `?question=` is how the review screen points at a node. In the URL
   // rather than in a handler, so "show me this change on the map" is a
@@ -38,15 +47,25 @@ export function MapView() {
   useEffect(() => {
     setSelectedQuestionId(focusId);
     setHighlightedIds(focusId === null ? [] : [focusId]);
-  }, [versionId, focusId]);
+    if (focusId === null) return;
+    const focused = graph.questions.find((question) => question.id === focusId);
+    if (focused?.section === null || focused?.section === undefined) return;
+    const sectionId = focused.section;
+    setCollapsedSections((current) => {
+      if (!current.has(sectionId)) return current;
+      const next = new Set(current);
+      next.delete(sectionId);
+      return next;
+    });
+  }, [versionId, focusId, graph.questions]);
 
   // Only a draft has anything "pending" to highlight -- a published
   // version's own diff (`ReviewView`'s "What changed" tab) is history, not
   // work still to publish, so there's nothing to fetch for one.
   const review = useReview(graph.version.is_draft ? graph.version.id : null);
   const elements = useMemo(
-    () => buildElements(graph, review.data?.diff),
-    [graph, review.data],
+    () => buildElements(graph, review.data?.diff, collapsedSections),
+    [graph, review.data, collapsedSections],
   );
   // Computed once here rather than separately in `DetailPanel`/`Options`
   // too -- both the canvas and the detail panel highlight the same
@@ -64,7 +83,7 @@ export function MapView() {
   // ignored rather than refused, same as tapping empty canvas.
   function pickCanvasTarget(nodeId: string) {
     if (pick === null) return;
-    if (isSyntheticNode(nodeId)) return;
+    if (isSyntheticNode(nodeId) || isSectionNode(nodeId)) return;
     const target = graph.questions.find((question) => question.id === nodeId);
     if (target === undefined || target.archived_at !== null) return;
     if (pick.kind === "retarget") {
@@ -116,13 +135,16 @@ export function MapView() {
   // selected, sharing the same grid-column-collapse technique as the
   // sidebar toggle above rather than break's flex+margin-right, since
   // `.layout` is a grid here.
-  const layoutClassName = [
-    "layout",
-    sidebarCollapsed && "layout--sidebar-collapsed",
-    selectedQuestionId === null && "layout--panel-closed",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const layoutClassName = cn(
+    "layout grid min-h-0 w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden transition-[grid-template-columns] duration-200",
+    sidebarCollapsed && selectedQuestionId === null
+      ? "grid-cols-[0_minmax(0,1fr)_0] [&>nav]:min-w-0 [&>nav]:overflow-hidden [&>nav]:p-0 [&>aside]:overflow-hidden [&>aside]:p-0"
+      : sidebarCollapsed
+        ? "grid-cols-[0_minmax(0,1fr)_var(--detail-width)] [&>nav]:min-w-0 [&>nav]:overflow-hidden [&>nav]:p-0"
+        : selectedQuestionId === null
+          ? "grid-cols-[var(--sidebar-width)_minmax(0,1fr)_0] [&>aside]:overflow-hidden [&>aside]:p-0"
+          : "grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--detail-width)]",
+  );
 
   return (
     <div className={layoutClassName}>
@@ -137,10 +159,9 @@ export function MapView() {
         selectedId={selectedQuestionId}
         highlightedIds={highlightedIds}
         onSelectNode={(id) =>
-          // Synthetic nodes -- the shared end-of-flow tag, a target this
-          // version does not contain -- are not questions, so there is no
-          // detail to show for them.
-          setSelectedQuestionId(id !== null && !isSyntheticNode(id) ? id : null)
+          setSelectedQuestionId(
+            id !== null && !isSyntheticNode(id) && !isSectionNode(id) ? id : null,
+          )
         }
         onSelectEdge={(edgeId) => {
           const edge = graph.edges.find((candidate) => candidate.id === edgeId);
@@ -151,6 +172,19 @@ export function MapView() {
         pickLabel={pick?.label ?? null}
         onPickTarget={pickCanvasTarget}
         onCancelPick={() => setPick(null)}
+        collapsedSectionKey={[...collapsedSections].sort().join("|")}
+        onToggleSection={(sectionId) => {
+          setCollapsedSections((current) => {
+            const next = new Set(current);
+            if (next.has(sectionId)) next.delete(sectionId);
+            else next.add(sectionId);
+            return next;
+          });
+          const selected = graph.questions.find(
+            (question) => question.id === selectedQuestionId,
+          );
+          if (selected?.section === sectionId) setSelectedQuestionId(null);
+        }}
       />
       <DetailPanel
         graph={graph}

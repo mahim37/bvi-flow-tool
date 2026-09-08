@@ -1,4 +1,5 @@
 import type { UUID } from "../api/types";
+import { Button } from "@/components/ui/button";
 
 export interface BlockingQuestionItem {
   questionId: UUID;
@@ -18,17 +19,13 @@ export function BlockingList({
   onSelectQuestion: (id: UUID) => void;
 }) {
   return (
-    <ul className="blockers">
+    <ul className="mt-2 flex list-none flex-col gap-1 p-0">
       {items.map((item) => (
-        <li key={item.questionId}>
-          <button
-            type="button"
-            className="link"
-            onClick={() => onSelectQuestion(item.questionId)}
-          >
+        <li key={item.questionId} className="flex flex-wrap items-baseline gap-1.5">
+          <Button variant="link" onClick={() => onSelectQuestion(item.questionId)}>
             {item.code}
-          </button>
-          <span className="blockers__prompt">{item.prompt}</span>
+          </Button>
+          <span className="text-[0.85rem] opacity-85">{item.prompt}</span>
         </li>
       ))}
     </ul>

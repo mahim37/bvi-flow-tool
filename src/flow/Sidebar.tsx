@@ -3,6 +3,19 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useHistory } from "../api/queries";
 import type { Graph, Question, UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { emptyText } from "@/lib/chrome";
+import { cn } from "@/lib/utils";
+import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { activityEventLabel, formatTimestamp } from "./labels";
 
 interface SidebarProps {
@@ -94,7 +107,8 @@ function useDiagnosticGroups(graph: Graph): DiagnosticGroup[] {
       {
         key: "loops",
         label: "Loops",
-        meaning: "A route that goes back into a question already on the path. Blocks publishing.",
+        meaning:
+          "A route that goes back into a question already on the path. Blocks publishing.",
         questionIds: sources(audit.back_edge_ids),
         highlightIds: audit.back_edge_ids,
       },
@@ -105,29 +119,6 @@ function useDiagnosticGroups(graph: Graph): DiagnosticGroup[] {
 function matches(question: Question, needle: string): boolean {
   const haystack = `${question.code} ${question.prompt}`.toLowerCase();
   return haystack.includes(needle);
-}
-
-/** Ported from break-backend's `.chevron` (index.html's disclosure-toggle
- * SVG, `<path d="M9 6l6 6-6 6" />`) in place of this app's previous
- * CSS-only `summary::before` (two rotated border edges): a real,
- * fixed-viewBox icon sits dead center in its box regardless of font
- * metrics, where the border-corner trick's visual weight drifted off the
- * cap-height of bold, uppercase summary text. */
-function Chevron() {
-  return (
-    <svg
-      className="chevron"
-      viewBox="0 0 24 24"
-      width="12"
-      height="12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={3}
-      aria-hidden="true"
-    >
-      <path d="M9 6l6 6-6 6" />
-    </svg>
-  );
 }
 
 /** Ported from break-backend's `.node-key-icon` (index.html ~L307-330) --
@@ -142,7 +133,14 @@ function BadgeIcon({
 }) {
   return (
     <svg
-      className={`node-key-icon node-key-icon--${kind}`}
+      className={cn(
+        "size-[13px] shrink-0",
+        kind === "added"
+          ? "text-green"
+          : kind === "changed"
+            ? "text-gold"
+            : "text-foreground/80",
+      )}
       width="13"
       height="13"
       viewBox="0 0 24 24"
@@ -185,6 +183,55 @@ function BadgeIcon({
   );
 }
 
+function KeySwatch({
+  kind,
+}: {
+  kind: "archived" | "end" | "missing" | "fault" | "dead" | "broken";
+}) {
+  if (kind === "dead" || kind === "broken") {
+    return (
+      <span
+        className={
+          kind === "dead"
+            ? "h-0 w-4 shrink-0 border-t-2 border-dashed border-[#9a3412]"
+            : "h-0 w-4 shrink-0 border-t-[3px] border-dotted border-destructive"
+        }
+        aria-hidden="true"
+      />
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "size-4 shrink-0 rounded-[4px]",
+        kind === "archived" &&
+          "border-border-strong border-2 border-dashed bg-[#f1e7d2]",
+        kind === "end" && "border-muted-foreground border-2 bg-[#f1e7d2]",
+        kind === "missing" && "border-2 border-dashed border-destructive bg-[#fbe2dc]",
+        kind === "fault" && "border-2 border-destructive bg-card",
+      )}
+      aria-hidden="true"
+    />
+  );
+}
+
+const accordionTrigger =
+  "rounded-none border-0 px-4 py-3 text-[0.75rem] font-bold tracking-[0.06em] text-muted-foreground uppercase hover:bg-transparent hover:no-underline hover:text-foreground";
+
+const nestedTrigger =
+  "rounded-md border-0 px-4 py-2 text-sm font-semibold hover:bg-transparent hover:no-underline";
+
+const accordionBody = "px-4 pb-3";
+
+const countPill =
+  "text-muted-foreground rounded-full border border-border bg-background px-2 py-px text-[0.78rem] font-bold tabular-nums";
+
+const countPillSome =
+  "rounded-full border border-emphasis bg-emphasis-soft px-2 py-px text-[0.78rem] font-bold text-emphasis tabular-nums";
+
+const sectionRow =
+  "flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-transparent px-2.5 py-2.5 text-left text-[13px] font-medium font-inherit hover:bg-card";
+
 /** Ported from break-backend's "History & snapshots" disclosure
  * (question_graph_editor/index.html#L287-301) -- minus snapshots, which has
  * no equivalent here: break's named, restorable checkpoints are a distinct
@@ -200,22 +247,26 @@ function HistoryPanel({ questionnaireId }: { questionnaireId: UUID }) {
     if (history.error) noteApiError(history.error);
   }, [history.error, noteApiError]);
 
-  if (history.isPending) return <p className="empty">Loading…</p>;
+  if (history.isPending) return <p className={emptyText}>Loading…</p>;
   if (history.isError)
-    return <p className="empty">Could not load the activity trail.</p>;
+    return <p className={emptyText}>Could not load the activity trail.</p>;
 
   const events = history.data.results;
-  if (events.length === 0) return <p className="empty">Nothing has happened yet.</p>;
+  if (events.length === 0)
+    return <p className={emptyText}>Nothing has happened yet.</p>;
 
   return (
-    <ul className="history">
+    <ul className="mt-1 list-none p-0">
       {events.map((event) => (
-        <li key={event.id}>
-          <span className="history__what">{activityEventLabel(event.event_type)}</span>
+        <li
+          key={event.id}
+          className="flex flex-col gap-0.5 border-t border-border py-2 first:border-t-0 first:pt-0"
+        >
+          <span className="font-semibold">{activityEventLabel(event.event_type)}</span>
           {event.detail !== "" && (
-            <span className="history__detail">{event.detail}</span>
+            <span className="text-[0.82rem] text-foreground/80">{event.detail}</span>
           )}
-          <span className="history__by">
+          <span className="text-muted-foreground text-[0.75rem]">
             {event.actor_email} · {event.version_name} ·{" "}
             {formatTimestamp(event.occurred_at)}
           </span>
@@ -273,6 +324,10 @@ export function Sidebar({
   );
 
   const unsectioned = bySection.get("none") ?? [];
+  const sectionColors = useMemo(
+    () => sectionColorMap(graph.sections),
+    [graph.sections],
+  );
 
   // Ported from break-backend's Sections legend (.legend/.legend-row,
   // question_graph_editor/styles.css ~L318-362) -- a flat, click-to-
@@ -300,273 +355,268 @@ export function Sidebar({
       <li key={question.id}>
         <button
           type="button"
-          className={
-            question.id === selectedId ? "list__item list__item--active" : "list__item"
-          }
-          aria-current={question.id === selectedId ? "true" : undefined}
+          className={cn(
+            "flex w-full flex-wrap items-baseline rounded-md px-2.5 py-2 text-left text-sm",
+            question.id === selectedId
+              ? "bg-secondary shadow-[inset_3px_0_0_var(--primary)]"
+              : "hover:bg-card",
+          )}
+          {...(question.id === selectedId ? { "aria-current": "true" } : {})}
           onClick={() => onSelectQuestion(question.id)}
         >
-          <span className="list__code">{question.code}</span>
-          <span className="list__prompt">{question.prompt}</span>
-          {question.archived_at !== null && <span className="list__tag">archived</span>}
+          <span className="mr-1.5 font-bold">{question.code}</span>
+          <span className="text-muted-foreground text-[0.85rem]">
+            {question.prompt}
+          </span>
+          {question.archived_at !== null && (
+            <Badge tone="tag" className="ml-1.5">
+              archived
+            </Badge>
+          )}
         </button>
       </li>
     );
   }
 
   return (
-    <nav className="sidebar" aria-label="Questionnaire navigation">
-      <div className="sidebar__block">
-        <label className="sidebar__label" htmlFor={searchId}>
+    <nav
+      className="sidebar flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-border bg-background"
+      aria-label="Questionnaire navigation"
+    >
+      <div className="shrink-0 px-4 pt-4 pb-3">
+        <Label
+          className="text-muted-foreground mb-2 text-[0.75rem] font-bold tracking-[0.06em] uppercase"
+          htmlFor={searchId}
+        >
           Search questions
-        </label>
-        <input
+        </Label>
+        <Input
           id={searchId}
           type="search"
           value={search}
           placeholder="Code or prompt text"
+          className="bg-card shadow-sm"
           onChange={(event) => setSearch(event.target.value)}
         />
         {needle !== "" && (
           <>
-            <p className="sidebar__count" role="status">
+            <p className="text-muted-foreground my-2 text-[0.8rem]" role="status">
               {results.length} match{results.length === 1 ? "" : "es"}
             </p>
-            <ul className="list">{results.map(questionButton)}</ul>
+            <ul className="mt-1 list-none p-0">{results.map(questionButton)}</ul>
           </>
         )}
       </div>
 
-      {/* `flex: 1` with its own scroll (see `.sidebar__block--sections` in
-          app.css) rather than growing to fit every section: with a dozen
-          or more sections this list alone can be taller than the sidebar,
-          which would push Diagnostics/History/the colour key below it
-          off-screen -- scrolling this block internally keeps them
-          reachable without scrolling past the whole list first. */}
-      <section
-        className="sidebar__block sidebar__block--sections"
-        aria-labelledby="sections-heading"
-      >
-        <h2 id="sections-heading" className="sidebar__heading">
-          Sections
-        </h2>
-        {sections.length === 0 && unsectioned.length === 0 && (
-          <p className="empty">This version has no questions.</p>
-        )}
-        <ul className="sections">
-          {sections.map((section, index) => (
-            // A section with no live questions is still listed. It is a
-            // fact about the version -- one that usually means every
-            // question in it was archived -- and hiding it would make that
-            // disappearance invisible. Numbered by its position in this
-            // already-`display_order`-sorted list, matching break-backend's
-            // own "1. Getting Started" numbering (there is no stored
-            // section number to read instead).
-            <li key={section.id}>
-              <button
-                type="button"
-                className={
-                  highlightedSection === section.id
-                    ? "sections__row sections__row--active"
-                    : "sections__row"
-                }
-                aria-pressed={highlightedSection === section.id}
-                onClick={() =>
-                  toggleSectionHighlight(
-                    section.id,
-                    (bySection.get(section.id) ?? []).map((question) => question.id),
-                  )
-                }
-              >
-                <span className="sections__name">
-                  {index + 1}. {section.name}
-                </span>
-                <span className="sections__count">{section.live_question_count}</span>
-              </button>
-            </li>
-          ))}
-          {unsectioned.length > 0 && (
-            <li>
-              <button
-                type="button"
-                className={
-                  highlightedSection === "none"
-                    ? "sections__row sections__row--active"
-                    : "sections__row"
-                }
-                aria-pressed={highlightedSection === "none"}
-                onClick={() =>
-                  toggleSectionHighlight(
-                    "none",
-                    unsectioned.map((question) => question.id),
-                  )
-                }
-              >
-                <span className="sections__name">No section</span>
-                <span className="sections__count">{unsectioned.length}</span>
-              </button>
-            </li>
-          )}
-        </ul>
-      </section>
+      <Separator className="shrink-0" />
 
-      {/* One block, not three: break's own `.disclosure-group` keeps these
-          three snug against each other (a hairline border, no gap) and
-          separated from Sections above as a group -- see
-          `.sidebar__disclosure-group` in app.css. Fixed height (not
-          `flex: 1` like Sections below), so it stays anchored at whatever
-          it naturally needs rather than being pushed off the bottom of the
-          sidebar's visible area. */}
-      <div className="sidebar__block sidebar__block--disclosures">
-        <div className="sidebar__disclosure-group">
-          <details className="sidebar__disclosure">
-            <summary>
-              <Chevron />
-              <span className="sidebar__heading">Diagnostics</span>
-            </summary>
-            {/* Capped and independently scrollable rather than growing with
-                however many of the eight groups below are open -- eight
-                disclosures each free to expand could otherwise push History
-                and the colour key far enough down that reaching them means
-                scrolling the whole sidebar past a wall of question buttons. */}
-            <div className="disclosure-body">
-              <ul className="diagnostics">
-                {groups.map((group) => (
-                  <li key={group.key}>
-                    <details
-                      onToggle={(event) => {
-                        // Highlighting follows the disclosure rather than a
-                        // separate control: opening a group is the moment
-                        // somebody wants to see where its members are.
-                        if (event.currentTarget.open) onHighlight(group.highlightIds);
-                        else onHighlight([]);
-                      }}
-                    >
-                      <summary>
-                        <Chevron />
-                        <span className="diagnostics__label">{group.label}</span>
-                        <span
-                          className={
-                            group.questionIds.length > 0
-                              ? "diagnostics__count diagnostics__count--some"
-                              : "diagnostics__count"
-                          }
-                        >
-                          {group.key === "dead" ||
-                          group.key === "broken" ||
-                          group.key === "loops"
-                            ? group.highlightIds.length
-                            : group.questionIds.length}
-                        </span>
-                      </summary>
-                      <p className="diagnostics__meaning">{group.meaning}</p>
-                      {group.questionIds.length === 0 ? (
-                        <p className="empty">None.</p>
-                      ) : (
-                        <ul className="list">
-                          {group.questionIds
-                            .map((id) => questionsById.get(id))
-                            .filter(
-                              (question): question is Question =>
-                                question !== undefined,
-                            )
-                            .map(questionButton)}
-                        </ul>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Accordion type="multiple" defaultValue={["sections"]} className="w-full">
+          <AccordionItem value="sections">
+            <AccordionTrigger className={accordionTrigger}>Sections</AccordionTrigger>
+            <AccordionContent className={accordionBody}>
+              {sections.length === 0 && unsectioned.length === 0 && (
+                <p className={emptyText}>This version has no questions.</p>
+              )}
+              <ul className="list-none p-0">
+                {sections.map((section, index) => (
+                  <li key={section.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        sectionRow,
+                        highlightedSection === section.id &&
+                          "border-border-strong bg-card shadow-sm",
                       )}
-                    </details>
+                      aria-pressed={highlightedSection === section.id}
+                      onClick={() =>
+                        toggleSectionHighlight(
+                          section.id,
+                          (bySection.get(section.id) ?? []).map(
+                            (question) => question.id,
+                          ),
+                        )
+                      }
+                    >
+                      <span className="flex min-w-0 flex-1 items-center text-left">
+                        <span
+                          className="mr-2.5 inline-block size-3 shrink-0 rounded-[4px] ring-1 ring-black/10"
+                          style={{
+                            background:
+                              sectionColors.get(section.id) ?? NO_SECTION_COLOR,
+                          }}
+                          aria-hidden="true"
+                        />
+                        <span className="truncate">
+                          {index + 1}. {section.name}
+                        </span>
+                      </span>
+                      <Badge tone="neutral" className="tabular-nums">
+                        {section.live_question_count}
+                      </Badge>
+                    </button>
                   </li>
                 ))}
+                {unsectioned.length > 0 && (
+                  <li>
+                    <button
+                      type="button"
+                      className={cn(
+                        sectionRow,
+                        highlightedSection === "none" &&
+                          "border-border-strong bg-card shadow-sm",
+                      )}
+                      aria-pressed={highlightedSection === "none"}
+                      onClick={() =>
+                        toggleSectionHighlight(
+                          "none",
+                          unsectioned.map((question) => question.id),
+                        )
+                      }
+                    >
+                      <span className="flex min-w-0 flex-1 items-center text-left">
+                        <span
+                          className="mr-2.5 inline-block size-3 shrink-0 rounded-[4px] ring-1 ring-black/10"
+                          style={{ background: NO_SECTION_COLOR }}
+                          aria-hidden="true"
+                        />
+                        No section
+                      </span>
+                      <Badge tone="neutral" className="tabular-nums">
+                        {unsectioned.length}
+                      </Badge>
+                    </button>
+                  </li>
+                )}
               </ul>
-            </div>
-          </details>
+            </AccordionContent>
+          </AccordionItem>
 
-          <details className="sidebar__disclosure">
-            <summary>
-              <Chevron />
-              <span className="sidebar__heading">History</span>
-            </summary>
-            <div className="disclosure-body">
+          <AccordionItem value="diagnostics">
+            <AccordionTrigger className={accordionTrigger}>
+              Diagnostics
+            </AccordionTrigger>
+            <AccordionContent className="pb-2">
+              <Accordion
+                type="multiple"
+                onValueChange={(open) => {
+                  const keys = Array.isArray(open) ? open : [open];
+                  const last = keys.at(-1);
+                  const group = groups.find((item) => item.key === last);
+                  onHighlight(group?.highlightIds ?? []);
+                }}
+              >
+                {groups.map((group) => {
+                  const count =
+                    group.key === "dead" ||
+                    group.key === "broken" ||
+                    group.key === "loops"
+                      ? group.highlightIds.length
+                      : group.questionIds.length;
+                  return (
+                    <AccordionItem key={group.key} value={group.key}>
+                      <AccordionTrigger className={nestedTrigger}>
+                        <span className="min-w-0 flex-1 text-left">{group.label}</span>
+                        <span className={count > 0 ? countPillSome : countPill}>
+                          {count}
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className={accordionBody}>
+                        <p className="text-muted-foreground mb-2 text-[0.8rem]">
+                          {group.meaning}
+                        </p>
+                        {group.questionIds.length === 0 ? (
+                          <p className={emptyText}>None.</p>
+                        ) : (
+                          <ul className="mt-1 list-none p-0">
+                            {group.questionIds
+                              .map((id) => questionsById.get(id))
+                              .filter(
+                                (question): question is Question =>
+                                  question !== undefined,
+                              )
+                              .map(questionButton)}
+                          </ul>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="history">
+            <AccordionTrigger className={accordionTrigger}>History</AccordionTrigger>
+            <AccordionContent className={accordionBody}>
               <HistoryPanel questionnaireId={graph.version.questionnaire} />
-            </div>
-          </details>
+            </AccordionContent>
+          </AccordionItem>
 
-          <details className="sidebar__disclosure">
-            <summary>
-              <Chevron />
-              <span className="sidebar__heading">What do the colors mean?</span>
-            </summary>
-            {/* Ported from break-backend's `.node-key` (index.html
-                ~L307-330) -- same badge icons (this canvas draws exactly
-                these, not a circle/diamond stand-in), same "Border color"
-                line first. Added/changed are break's own pending-new/
-                -modified badges, ported the same way -- see `changeKind`'s
-                doc comment in graphElements.ts. What follows has no break
-                equivalent: this app's own archived/missing/dead/broken
-                diagnostics (see canvasStyle.ts's docstring), not something
-                break's model has a mark for, so there is nothing to port
-                for those beyond describing them accurately -- spelled out
-                because the canvas signals state by shape as well as
-                colour, and a shape vocabulary nobody can look up is not
-                much better than colour alone. */}
-            <div className="disclosure-body">
-              <ul className="node-key">
-                <li>
+          <AccordionItem value="legend" className="border-b-0">
+            <AccordionTrigger className={accordionTrigger}>
+              What do the colors mean?
+            </AccordionTrigger>
+            <AccordionContent className={accordionBody}>
+              <ul className="flex list-none flex-col gap-2.5 p-0">
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <b>Border color</b> — the question's section
                 </li>
-                <li>
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <BadgeIcon kind="added" />
                   Added by this draft, not yet published (corner badge, green tint)
                 </li>
-                <li>
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <BadgeIcon kind="changed" />
                   Changed by this draft, not yet published (corner badge, gold tint)
                 </li>
-                <li>
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <BadgeIcon kind="entry" />
                   Entry point (corner badge)
                 </li>
-                <li>
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <BadgeIcon kind="terminal" />
                   Can end the flow (corner badge)
                 </li>
-                <li>
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <BadgeIcon kind="branch" />
                   Decision point — different next question per answer (corner badge)
                 </li>
-                <li>
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
                   <BadgeIcon kind="unreachable" />
                   Unreachable — no path currently leads here (corner badge)
                 </li>
-                <li>
-                  <span className="node-key-swatch node-key-swatch--archived" />
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
+                  <KeySwatch kind="archived" />
                   Archived — kept on the map only because something still points at it
                 </li>
-                <li>
-                  <span className="node-key-swatch node-key-swatch--end" />
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
+                  <KeySwatch kind="end" />
                   End of flow — the shared destination every "flow ends here" edge
                   points at
                 </li>
-                <li>
-                  <span className="node-key-swatch node-key-swatch--missing" />
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
+                  <KeySwatch kind="missing" />
                   Missing — an edge points at a question this version does not contain
                 </li>
-                <li>
-                  <span className="node-key-swatch node-key-swatch--fault" />
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
+                  <KeySwatch kind="fault" />
                   Red border — this question has a dead or broken route leaving it
                 </li>
-                <li>
-                  <span className="node-key-swatch node-key-swatch--dead" />
-                  Dashed arrow — dead route, tied to an answer this question doesn't offer
-                  anymore
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
+                  <KeySwatch kind="dead" />
+                  Dashed arrow — dead route, tied to an answer this question doesn't
+                  offer anymore
                 </li>
-                <li>
-                  <span className="node-key-swatch node-key-swatch--broken" />
-                  Dotted arrow — broken route, leads to a question that's archived or removed
+                <li className="flex items-center gap-2.5 text-[0.78rem] leading-snug text-foreground/80">
+                  <KeySwatch kind="broken" />
+                  Dotted arrow — broken route, leads to a question that's archived or
+                  removed
                 </li>
               </ul>
-            </div>
-          </details>
-        </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </nav>
   );

@@ -15,12 +15,10 @@ import {
 } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 
-// The trigger is a `<span class="opt-edit-btn">` inside a native
-// `<summary>` (styled to match "Edit text" beside it) -- `<summary>`
-// carries no accessible role jsdom's ARIA mapping recognizes, so these
-// tests find it by its text instead of `getByRole("button", ...)`.
+// The trigger is a real Button (PopoverTrigger asChild), not a span
+// inside <summary>.
 function changeDestinationTrigger(row: HTMLElement) {
-  return within(row).getByText("Change destination", { selector: "span" });
+  return within(row).getByRole("button", { name: "Change destination" });
 }
 
 function panelFor(questionId: string, editable = false, changeKinds?: ChangeKinds) {
@@ -165,7 +163,7 @@ describe("edit controls", () => {
   it("offers no destination controls at all on a published version", () => {
     panelFor(Q1, false);
     expect(
-      screen.queryByText("Change destination", { selector: "span" }),
+      screen.queryByRole("button", { name: "Change destination" }),
     ).not.toBeInTheDocument();
   });
 
@@ -180,10 +178,10 @@ describe("edit controls", () => {
     await user.click(changeDestinationTrigger(yesRow));
 
     expect(
-      within(yesRow).getByRole("button", { name: "Jump to a specific question" }),
+      screen.getByRole("button", { name: "Jump to a specific question" }),
     ).toBeInTheDocument();
     expect(
-      within(yesRow).getByRole("button", { name: "End the flow here" }),
+      screen.getByRole("button", { name: "End the flow here" }),
     ).toBeInTheDocument();
     expect(
       within(yesRow).queryByRole("button", { name: "Remove" }),
@@ -213,7 +211,7 @@ describe("edit controls", () => {
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
     await user.click(changeDestinationTrigger(yesRow));
     await user.click(
-      within(yesRow).getByRole("button", { name: "Jump to a specific question" }),
+      screen.getByRole("button", { name: "Jump to a specific question" }),
     );
 
     expect(onStartRetarget).toHaveBeenCalledWith(E_YES_TO_Q2, 'Where "Yes" leads');
@@ -242,7 +240,7 @@ describe("edit controls", () => {
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
 
     expect(
-      within(yesRow).queryByText("Change destination", { selector: "span" }),
+      within(yesRow).queryByRole("button", { name: "Change destination" }),
     ).not.toBeInTheDocument();
     await user.click(within(yesRow).getByRole("button", { name: "Cancel retarget" }));
 
@@ -332,14 +330,10 @@ describe("edit controls", () => {
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
     const noRow = screen.getByText("No").closest("li") as HTMLElement;
     await user.click(changeDestinationTrigger(yesRow));
+    expect(screen.getByRole("button", { name: "End the flow here" })).toBeEnabled();
+    await user.keyboard("{Escape}");
     await user.click(changeDestinationTrigger(noRow));
-
-    expect(
-      within(yesRow).getByRole("button", { name: "End the flow here" }),
-    ).toBeEnabled();
-    expect(
-      within(noRow).getByRole("button", { name: "End the flow here" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "End the flow here" })).toBeDisabled();
   });
 
   it("offers a one-click fall-through only when this question has a default route", async () => {
@@ -350,7 +344,7 @@ describe("edit controls", () => {
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
     await user.click(changeDestinationTrigger(yesRow));
     expect(
-      within(yesRow).queryByRole("button", { name: /Use the default route/ }),
+      screen.queryByRole("button", { name: /Use the default route/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -393,7 +387,7 @@ describe("edit controls", () => {
     // hidden away.
     await user.click(changeDestinationTrigger(yesRow));
     expect(
-      within(yesRow).getByRole("button", { name: "Use the default route instead" }),
+      screen.getByRole("button", { name: "Use the default route instead" }),
     ).toBeEnabled();
   });
 
@@ -428,10 +422,10 @@ describe("edit controls", () => {
 
     const defaultRouteSection = screen
       .getByText("Default route")
-      .closest(".fallback-section") as HTMLElement;
+      .closest("[data-slot=card]") as HTMLElement;
     await user.click(changeDestinationTrigger(defaultRouteSection));
     expect(
-      within(defaultRouteSection).queryByRole("button", {
+      screen.queryByRole("button", {
         name: /Use the default route/,
       }),
     ).not.toBeInTheDocument();
@@ -470,7 +464,9 @@ describe("edit controls", () => {
       screen.queryByRole("button", { name: "Add a specific route" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "This route applies no matter what's answered." }),
+      screen.getByRole("button", {
+        name: "This route applies no matter what's answered.",
+      }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "+ Add a route" }));

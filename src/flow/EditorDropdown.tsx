@@ -1,60 +1,45 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useOutsideDismiss } from "./useOutsideDismiss";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface EditorDropdownProps {
-  /** The pill button that opens the panel -- plain text or a short node,
-   * styled by `.editor-dropdown > summary` in app.css. */
+  /** The control that opens the panel. A string is wrapped in a real
+   * Button. A node is the caller's own trigger (also a Button). */
   trigger: ReactNode;
-  /** Blocks opening without hiding the trigger, matching every other
-   * disabled control in this app (a greyed-out button, not a missing
-   * one) -- `<summary>` has no native `disabled`, so this is done by
-   * hand via `aria-disabled` plus swallowing the click that would
-   * otherwise toggle it open. */
   disabled?: boolean;
-  /** Either the panel's contents, or a function receiving `close` to
-   * dismiss itself on a successful submit (`DraftBar`'s forms,
-   * `AddQuestion`). */
   children: ReactNode | ((close: () => void) => ReactNode);
 }
 
 /**
- * The one place this app's floating "click a button, a form pops up"
- * popup is built -- Add a question, Submit for review, and anything added
- * after them all get the same behaviour for free instead of each
- * hand-rolling its own `<details>`/open-state/dismiss logic:
- * closed by clicking the trigger again, by Escape, or by clicking
- * anywhere outside the panel.
+ * Click a button, a form (or a short list of actions) pops up.
  *
- * Still a native `<details>` underneath (`.editor-dropdown`/`.editor-panel`
- * in app.css), just with the click-outside/Escape wiring `<details>` does
- * not provide on its own.
+ * A real `<button>` inside `<summary>` is invalid HTML, so this is a
+ * shadcn Popover rather than native `<details>`. Dismisses on outside
+ * click, Escape, or a successful submit calling `close`.
  */
 export function EditorDropdown({ trigger, disabled, children }: EditorDropdownProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDetailsElement>(null);
-  useOutsideDismiss(ref, open, () => setOpen(false));
 
   return (
-    <details
-      ref={ref}
-      className="editor-dropdown"
+    <Popover
       open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onOpenChange={(next) => {
+        if (disabled) return;
+        setOpen(next);
+      }}
     >
-      <summary
-        aria-disabled={disabled}
-        onClick={(event) => {
-          if (disabled) event.preventDefault();
-        }}
-      >
-        {trigger}
-      </summary>
-
-      <div className="editor-panel">
+      <PopoverTrigger asChild>
+        {typeof trigger === "string" ? (
+          <Button {...(disabled ? { disabled: true } : {})}>{trigger}</Button>
+        ) : (
+          trigger
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64">
         {typeof children === "function" ? children(() => setOpen(false)) : children}
-      </div>
-    </details>
+      </PopoverContent>
+    </Popover>
   );
 }

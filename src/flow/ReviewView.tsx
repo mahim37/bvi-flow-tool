@@ -12,6 +12,12 @@ import type { ChangeRequest, DiffKind, ItemDiff, UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { ConfirmAction } from "./ConfirmAction";
 import { DiffList } from "./DiffList";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
+import { emptyText, mutedHint, panelHeading, panelSection } from "@/lib/chrome";
 import { useVersionContext } from "./versionContext";
 import {
   decisionLabel,
@@ -27,28 +33,29 @@ const KINDS: DiffKind[] = ["question", "option", "edge", "section"];
 function ReviewHistory({ changeRequest }: { changeRequest: ChangeRequest }) {
   if (changeRequest.reviews.length === 0) return null;
   return (
-    <section className="panel__section" aria-labelledby="review-history">
-      <h3 id="review-history" className="panel__heading">
+    <section className={panelSection} aria-labelledby="review-history">
+      <h3 id="review-history" className={panelHeading}>
         Review history
       </h3>
-      {/* Every round, not just the latest verdict. A proposal rejected
-          twice for the same reason and submitted a third time is the case
-          this exists for, and it is unreadable from one most-recent row. */}
-      <ol className="reviews">
+      <ol className="list-none p-0">
         {changeRequest.reviews.map((review) => (
           <li
             key={review.id}
-            className={`reviews__row reviews__row--${review.decision}`}
+            className={
+              review.decision === "approved"
+                ? "mt-2 rounded-lg border border-border border-l-4 border-l-green bg-card p-3 first:mt-0"
+                : "mt-2 rounded-lg border border-border border-l-4 border-l-emphasis bg-card p-3 first:mt-0"
+            }
           >
-            <div className="reviews__head">
-              <span className="reviews__decision">
-                {decisionLabel(review.decision)}
-              </span>
-              <span className="reviews__by">
+            <div className="flex flex-wrap items-baseline gap-2.5">
+              <span className="font-extrabold">{decisionLabel(review.decision)}</span>
+              <span className="text-muted-foreground text-[0.85rem]">
                 by {review.reviewer_email} on {formatTimestamp(review.created)}
               </span>
             </div>
-            {review.note !== "" && <p className="reviews__note">{review.note}</p>}
+            {review.note !== "" && (
+              <p className="mt-1.5 mb-0 whitespace-pre-wrap">{review.note}</p>
+            )}
           </li>
         ))}
       </ol>
@@ -84,22 +91,22 @@ export function ReviewView() {
 
   if (review.isPending) {
     return (
-      <main className="page">
-        <p className="banner banner--info">Working out what changed…</p>
+      <main className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-15">
+        <Banner tone="info">Working out what changed…</Banner>
       </main>
     );
   }
 
   if (review.isError || review.data === undefined) {
     return (
-      <main className="page">
-        <p className="banner banner--error" role="alert">
+      <main className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-15">
+        <Banner tone="error" role="alert">
           {review.error instanceof ApiError && review.error.isConflict
             ? review.error.message
             : review.error instanceof Error
               ? review.error.message
               : "Could not work out what changed."}
-        </p>
+        </Banner>
       </main>
     );
   }
@@ -150,12 +157,12 @@ export function ReviewView() {
   };
 
   return (
-    <main className="page page--review">
-      <header className="page__header">
-        <h2 className="page__title">
+    <main className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-15">
+      <header className="mb-4">
+        <h2 className="mb-1 text-[1.3rem] font-extrabold tracking-tight">
           {version.is_draft ? "Review" : "What this version changed"}
         </h2>
-        <p className="page__subtitle">
+        <p className="text-muted-foreground m-0 max-w-[72ch]">
           {versionLabel(version)}
           {base_version === null ? (
             // A draft with no parent is the first version of a new
@@ -170,12 +177,12 @@ export function ReviewView() {
       </header>
 
       {changeRequest !== null && (
-        <div className="review__status">
-          <p className="review__statusline">
+        <div className="mb-3.5 rounded-lg border border-border bg-card p-3.5">
+          <p className="m-0 mb-1">
             <strong>{statusLabel(changeRequest.status)}</strong> —{" "}
             {statusMeaning(changeRequest.status)}
           </p>
-          <p className="review__meta">
+          <p className="text-muted-foreground m-0 text-[0.88rem]">
             Proposed by {changeRequest.created_by_email}
             {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
             {changeRequest.submitted_at !== null &&
@@ -185,7 +192,7 @@ export function ReviewView() {
           </p>
           {changeRequest.reviewer_1_email !== null &&
             changeRequest.reviewer_2_email !== null && (
-              <p className="review__meta">
+              <p className="text-muted-foreground m-0 text-[0.88rem]">
                 Reviewers: {changeRequest.reviewer_1_email} and{" "}
                 {changeRequest.reviewer_2_email}
               </p>
@@ -198,48 +205,57 @@ export function ReviewView() {
         // screen where somebody is about to approve it. A reviewer who
         // clears a stale draft finds out at publish, which wastes the one
         // round trip through a second person the whole workflow is for.
-        <p className="banner banner--warn" role="alert">
+        <Banner tone="warn" role="alert">
           Somebody published underneath this draft: the version it was copied from is no
           longer the latest one. Publishing is refused rather than silently reinstating
           whatever landed in between. Open a new draft from the latest version and
           re-apply these changes.
-        </p>
+        </Banner>
       )}
 
       {publish_blocker !== null && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           <strong>This cannot be published as it stands.</strong> {publish_blocker}
-        </p>
+        </Banner>
       )}
 
-      <section className="panel__section" aria-labelledby="diff-summary">
-        <h3 id="diff-summary" className="panel__heading">
+      <section className={panelSection} aria-labelledby="diff-summary">
+        <h3 id="diff-summary" className={panelHeading}>
           Summary
         </h3>
         {diff.is_empty ? (
           // Said plainly, because opening a draft and changing nothing is
           // a thing people do, and an empty list otherwise reads as "the
           // diff failed to load".
-          <p className="empty">
+          <p className={emptyText}>
             Nothing has changed. This version still says exactly what the one it was
             copied from says.
           </p>
         ) : (
-          <ul className="summary">
+          <ul className="text-muted-foreground m-0 flex list-none gap-[22px] p-0">
             <li>
-              <span className="summary__count">{summary.added}</span> added
+              <span className="mr-1.5 text-[1.4rem] font-extrabold text-foreground">
+                {summary.added}
+              </span>{" "}
+              added
             </li>
             <li>
-              <span className="summary__count">{summary.removed}</span> removed
+              <span className="mr-1.5 text-[1.4rem] font-extrabold text-foreground">
+                {summary.removed}
+              </span>{" "}
+              removed
             </li>
             <li>
-              <span className="summary__count">{summary.changed}</span> changed
+              <span className="mr-1.5 text-[1.4rem] font-extrabold text-foreground">
+                {summary.changed}
+              </span>{" "}
+              changed
             </li>
           </ul>
         )}
       </section>
 
-      <div className="diff">
+      <div className="grid gap-4.5">
         {KINDS.map((kind) => (
           <DiffList
             key={kind}
@@ -253,64 +269,64 @@ export function ReviewView() {
       {changeRequest !== null && <ReviewHistory changeRequest={changeRequest} />}
 
       {version.is_draft && (
-        <section className="panel__section" aria-labelledby="review-actions">
-          <h3 id="review-actions" className="panel__heading">
+        <section className={panelSection} aria-labelledby="review-actions">
+          <h3 id="review-actions" className={panelHeading}>
             Decision
           </h3>
 
           {reviewRefused && (
-            <p className="banner banner--warn">
+            <Banner tone="warn">
               Your account can read this diff but not act on it. Approving, sending back
               and publishing need the flow-tool publish grant, which is separate from
               the edit one.
-            </p>
+            </Banner>
           )}
 
           {status === "open" && (
-            <p className="empty">
+            <p className={emptyText}>
               This proposal has not been submitted yet, so there is nothing to decide.
               Its author submits it when it is ready to be read.
             </p>
           )}
 
           {status === "published" && (
-            <p className="empty">
+            <p className={emptyText}>
               This proposal has been published. Nothing is left to do.
             </p>
           )}
 
           {canApprove && isAuthor && (
-            <p className="banner banner--warn">
+            <Banner tone="warn">
               This is your own proposal, so you cannot approve or send it back. Somebody
               else has to read it — that independent check is the whole point of the
               workflow. You may press publish once they have cleared it.
-            </p>
+            </Banner>
           )}
 
           {/* status === "approved" here -- canApprove is false, so the
               banner above didn't fire, but canReject still applies. */}
           {canReject && !canApprove && isAuthor && (
-            <p className="banner banner--warn">
+            <Banner tone="warn">
               This is your own proposal, so you cannot send it back either, even now
               that it is approved. Withdrawing it is yours to do instead, from the map
               -- that also drops the approval.
-            </p>
+            </Banner>
           )}
 
           {canReject && !isAuthor && !isNamedReviewer && changeRequest !== null && (
-            <p className="banner banner--warn">
+            <Banner tone="warn">
               You hold the publish grant, but this proposal named two other people as
               its reviewers: {changeRequest.reviewer_1_email ?? "someone"} and{" "}
               {changeRequest.reviewer_2_email ?? "someone"}. Only they can approve or
               send it back.
-            </p>
+            </Banner>
           )}
 
           {canReject && !isAuthor && isNamedReviewer && (
-            <div className="review__forms">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
               {canApprove && (
                 <form
-                  className="review__form"
+                  className="rounded-lg border border-border bg-card p-3.5"
                   onSubmit={(event) => {
                     event.preventDefault();
                     approve.mutate(approveNote, {
@@ -319,25 +335,26 @@ export function ReviewView() {
                     });
                   }}
                 >
-                  <div className="field">
-                    <label htmlFor={approveNoteId}>Note (optional)</label>
-                    <textarea
+                  <Field label="Note (optional)" htmlFor={approveNoteId}>
+                    <Textarea
                       id={approveNoteId}
                       rows={2}
                       value={approveNote}
                       placeholder="Anything worth saying alongside an approval"
-                      disabled={approve.isPending || reviewRefused}
+                      {...(approve.isPending || reviewRefused
+                        ? { disabled: true }
+                        : {})}
                       onChange={(event) => setApproveNote(event.target.value)}
                     />
-                  </div>
-                  <button
-                    className="button button--primary"
+                  </Field>
+                  <Button
+                    variant="primary"
                     type="submit"
                     disabled={approve.isPending || reviewRefused}
                   >
                     {approve.isPending ? "Approving…" : "Approve"}
-                  </button>
-                  <p className="panel__hint">
+                  </Button>
+                  <p className={mutedHint}>
                     Approving freezes the draft as it stands. What gets published is
                     what you read.
                   </p>
@@ -345,7 +362,7 @@ export function ReviewView() {
               )}
 
               <form
-                className="review__form"
+                className="rounded-lg border border-border bg-card p-3.5"
                 onSubmit={(event) => {
                   event.preventDefault();
                   reject.mutate(rejectNote, {
@@ -354,20 +371,18 @@ export function ReviewView() {
                   });
                 }}
               >
-                <div className="field">
-                  <label htmlFor={rejectNoteId}>Why it is going back</label>
-                  <textarea
+                <Field label="Why it is going back" htmlFor={rejectNoteId}>
+                  <Textarea
                     id={rejectNoteId}
                     rows={2}
                     required
                     value={rejectNote}
                     placeholder="What the author has to change"
-                    disabled={reject.isPending || reviewRefused}
+                    {...(reject.isPending || reviewRefused ? { disabled: true } : {})}
                     onChange={(event) => setRejectNote(event.target.value)}
                   />
-                </div>
-                <button
-                  className="button"
+                </Field>
+                <Button
                   type="submit"
                   disabled={
                     reject.isPending || reviewRefused || rejectNote.trim() === ""
@@ -378,12 +393,12 @@ export function ReviewView() {
                     : canApprove
                       ? "Send back"
                       : "Undo the approval"}
-                </button>
+                </Button>
                 {/* A rejection with nothing to say makes the author guess,
                     which is why the note is required here and on the
                     server. There is no "rejected" state: this returns the
                     proposal to open, and your reasons are kept with it. */}
-                <p className="panel__hint">
+                <p className={mutedHint}>
                   This returns the proposal to open so its author can work on it again.
                   {!canApprove &&
                     " It also withdraws the approval you're reversing."}{" "}
@@ -394,7 +409,7 @@ export function ReviewView() {
           )}
 
           {canPublish && (
-            <div className="review__publish">
+            <Card size="sm" className="gap-2.5 rounded-lg p-3.5 ring-border">
               <p>
                 Approved
                 {changeRequest !== null && changeRequest.reviews[0] !== undefined
@@ -408,27 +423,26 @@ export function ReviewView() {
                 onConfirm={() => publish.mutate(undefined, { onError: onReviewError })}
               >
                 {(open) => (
-                  <button
-                    className="button button--primary"
-                    type="button"
+                  <Button
+                    variant="primary"
                     disabled={publish.isPending || reviewRefused}
                     onClick={open}
                   >
                     {publish.isPending ? "Publishing…" : "Publish"}
-                  </button>
+                  </Button>
                 )}
               </ConfirmAction>
-              <p className="panel__hint">
+              <p className={mutedHint}>
                 The version this replaces is kept exactly as it is, so rolling back is
                 activating the old one rather than restoring anything.
               </p>
-            </div>
+            </Card>
           )}
 
           {error !== null && (
-            <p className="banner banner--error" role="alert">
+            <Banner tone="error" role="alert">
               {error}
-            </p>
+            </Banner>
           )}
         </section>
       )}

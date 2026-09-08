@@ -6,6 +6,7 @@ import {
   buildElements,
   changeKindsFromDiff,
   missingNodeId,
+  sectionNodeId,
 } from "./graphElements";
 import {
   E_FOREIGN_TO_Q2,
@@ -24,9 +25,13 @@ import {
 } from "../test/fixtures";
 import type { ItemDiff, VersionDiff } from "../api/types";
 
-function nodes(graph = makeGraph(), diff?: VersionDiff) {
+function nodes(
+  graph = makeGraph(),
+  diff?: VersionDiff,
+  collapsed?: ReadonlySet<string>,
+) {
   return new Map(
-    buildElements(graph, diff)
+    buildElements(graph, diff, collapsed)
       .filter((element) => element.group === "nodes")
       .map((element) => [
         element.data.id as string,
@@ -35,9 +40,13 @@ function nodes(graph = makeGraph(), diff?: VersionDiff) {
   );
 }
 
-function edges(graph = makeGraph(), diff?: VersionDiff) {
+function edges(
+  graph = makeGraph(),
+  diff?: VersionDiff,
+  collapsed?: ReadonlySet<string>,
+) {
   return new Map(
-    buildElements(graph, diff)
+    buildElements(graph, diff, collapsed)
       .filter((element) => element.group === "edges")
       .map((element) => [
         element.data.id as string,
@@ -352,5 +361,37 @@ describe("section anchor", () => {
 
     expect(built.get(Q1)?.sectionAnchorId).toBe(null);
     expect(built.get(Q2)?.sectionAnchorId).toBe(null);
+  });
+
+  it("wraps questions in a compound parent for the section box", () => {
+    const built = nodes(graphWithSharedSection());
+    const sectionId = graphWithSharedSection().sections[0]?.id;
+    if (sectionId === undefined) throw new Error("fixture has no section");
+    const box = built.get(sectionNodeId(sectionId));
+    expect(box?.kind).toBe("section");
+    expect(box?.collapsed).toBe(false);
+    expect(box?.label).toBe("Introduction");
+    expect(built.get(Q1)?.parent).toBe(sectionNodeId(sectionId));
+    expect(built.get(Q2)?.parent).toBe(sectionNodeId(sectionId));
+  });
+
+  it("hides members and rewires outside edges onto the box when collapsed", () => {
+    const graph = graphWithSharedSection();
+    const sectionId = graph.sections[0]?.id;
+    if (sectionId === undefined) throw new Error("fixture has no section");
+    const collapsed = new Set([sectionId]);
+    const builtNodes = nodes(graph, undefined, collapsed);
+    const builtEdges = edges(graph, undefined, collapsed);
+    const boxId = sectionNodeId(sectionId);
+
+    expect(builtNodes.get(Q1)).toBeUndefined();
+    expect(builtNodes.get(Q2)).toBeUndefined();
+    expect(builtNodes.get(boxId)?.collapsed).toBe(true);
+    expect(builtNodes.get(boxId)?.label).toBe("Introduction\n2 questions");
+    // Q1 → Q2 lived inside the section, so it must not become a self-loop.
+    expect(builtEdges.get(E_YES_TO_Q2)).toBeUndefined();
+    // Q1 → End leaves the section: it now leaves the box.
+    expect(builtEdges.get(E_NO_TO_END)?.source).toBe(boxId);
+    expect(builtEdges.get(E_NO_TO_END)?.target).toBe(END_NODE_ID);
   });
 });

@@ -1,7 +1,14 @@
 import { useId, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import type { Graph, UUID, VersionListItem } from "../api/types";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Field, nativeSelectClassName } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { TabsLink, TabsNav } from "@/components/ui/nav-tabs";
+import { editorBox, mutedHint } from "@/lib/chrome";
 import {
   useActivateVersion,
   useCreateDraft,
@@ -38,27 +45,49 @@ interface DraftBarProps {
   onOpenVersion: (versionId: UUID | null) => void;
 }
 
-/** Map/Review/Preview -- folded into this bar (VersionLayout no longer
- * renders a separate tabs strip above it) so the version's own status and
- * actions sit in the same row as the views on it, instead of two stacked
- * bars. */
+/** Map/Review/Preview — a compact cluster centered in the sidebar
+ * column, not stretched to its edges. */
 function VersionTabs({ versionId, isDraft }: { versionId: UUID; isDraft: boolean }) {
   return (
-    <nav className="tabs" aria-label="Version views">
-      <NavLink end to={`/versions/${versionId}`} className="tabs__tab">
+    <TabsNav label="Version views">
+      <TabsLink end to={`/versions/${versionId}`}>
         Map
-      </NavLink>
-      {/* Shown for a published version too, where the same diff answers
-          "what did this release change" against the version it superseded.
-          That is the history half of spec 4.10, and it needs no endpoint
-          the review screen does not already call. */}
-      <NavLink to={`/versions/${versionId}/review`} className="tabs__tab">
+      </TabsLink>
+      <TabsLink to={`/versions/${versionId}/review`}>
         {isDraft ? "Review" : "What changed"}
-      </NavLink>
-      <NavLink to={`/versions/${versionId}/preview`} className="tabs__tab">
-        Preview
-      </NavLink>
-    </nav>
+      </TabsLink>
+      <TabsLink to={`/versions/${versionId}/preview`}>Preview</TabsLink>
+    </TabsNav>
+  );
+}
+
+/** Left column is the sidebar's width; the switcher sits in the middle
+ * of that cell. Status and actions use the rest. */
+function DraftChrome({
+  versionId,
+  isDraft,
+  children,
+  after,
+}: {
+  versionId: UUID;
+  isDraft: boolean;
+  children: ReactNode;
+  after?: ReactNode;
+}) {
+  return (
+    <div className="border-t border-border bg-background">
+      <div className="flex items-stretch">
+        <div className="flex w-(--sidebar-width) min-w-(--sidebar-width) max-w-(--sidebar-width) items-center justify-center border-r border-border px-2">
+          <VersionTabs versionId={versionId} isDraft={isDraft} />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 px-4 py-2">
+          {children}
+        </div>
+      </div>
+      {after !== undefined && after !== null ? (
+        <div className="space-y-2 px-4 pb-2">{after}</div>
+      ) : null}
+    </div>
   );
 }
 
@@ -82,15 +111,14 @@ function Cta({
   onClick: () => void;
 }) {
   return (
-    <button
-      className={`button${primary ? " button--primary" : ""}`}
-      type="button"
-      title={description}
-      disabled={disabled}
+    <Button
+      variant={primary ? "primary" : "default"}
       onClick={onClick}
+      {...(description !== undefined ? { title: description } : {})}
+      {...(disabled !== undefined ? { disabled } : {})}
     >
       {title}
-    </button>
+    </Button>
   );
 }
 
@@ -186,35 +214,42 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // stood `is_draft` down.
   if (!graph.version.is_draft) {
     return (
-      <div className="draftbar">
-        <div className="draftbar__row">
-          <div className="draftbar__left">
-            <VersionTabs versionId={versionId} isDraft={false} />
-            <span className="draftbar__divider" aria-hidden="true" />
-
-            <div className="draftbar__status">
-              <div className="draftbar__status-name">
-                <span
-                  className={`draftbar__dot draftbar__dot--${graph.version.is_active ? "live" : "muted"}`}
-                />
-                <strong>{versionLabel(graph.version)}</strong>
-              </div>
-              <span className="draftbar__note">
-                {graph.version.is_active ? "Latest version" : "Published version"} — read
-                only. Edits are made on a proposal.
-                {changeRequest !== null && changeRequest.published_at !== null && (
-                  <>
-                    {" "}
-                    Published {formatTimestamp(changeRequest.published_at)} from a
-                    proposal by {changeRequest.created_by_email}.
-                  </>
-                )}
-              </span>
-            </div>
+      <DraftChrome
+        versionId={versionId}
+        isDraft={false}
+        {...(error !== null
+          ? {
+              after: (
+                <Banner tone="error" role="alert">
+                  {error}
+                </Banner>
+              ),
+            }
+          : {})}
+      >
+        <div className="bg-muted/70 flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-3 py-1.5">
+          <span
+            className={`inline-block size-2 shrink-0 rounded-full ${graph.version.is_active ? "bg-green" : "bg-muted-foreground"}`}
+            aria-hidden="true"
+          />
+          <div className="flex min-w-0 flex-col">
+            <strong className="truncate text-sm">{versionLabel(graph.version)}</strong>
+            <span className="text-muted-foreground truncate text-xs">
+              {graph.version.is_active ? "Latest version" : "Published version"} — read
+              only. Edits are made on a proposal.
+              {changeRequest !== null && changeRequest.published_at !== null && (
+                <>
+                  {" "}
+                  Published {formatTimestamp(changeRequest.published_at)} from a
+                  proposal by {changeRequest.created_by_email}.
+                </>
+              )}
+            </span>
           </div>
+        </div>
 
-          <div className="draftbar__right">
-            {/* Rollback (spec 4.10) -- only offered on a version that was
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Rollback (spec 4.10) -- only offered on a version that was
                 live before and has since been replaced. It already went
                 through a review on the way in, so this is the one route to
                 `is_active` that skips a fresh one: the recovery path for a
@@ -223,157 +258,141 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                 wrong. Gated on the same publish grant as Propose/Spawn
                 below, not the edit one -- see `FlowToolActivateView`'s
                 docstring. */}
-            {!graph.version.is_active &&
-              (reviewRefused ? (
-                <p className="banner banner--warn">
-                  Your account can view this version but not activate it.
-                </p>
-              ) : (
-                <ConfirmAction
-                  message={`Activate ${versionLabel(graph.version)}? It becomes the latest version immediately, replacing whatever is latest now, with no new review round.`}
-                  confirmLabel="Activate"
-                  onConfirm={() =>
-                    activate.mutate(undefined, { onError: onReviewError })
-                  }
+          {!graph.version.is_active &&
+            (reviewRefused ? (
+              <Banner tone="warn">
+                Your account can view this version but not activate it.
+              </Banner>
+            ) : (
+              <ConfirmAction
+                message={`Activate ${versionLabel(graph.version)}? It becomes the latest version immediately, replacing whatever is latest now, with no new review round.`}
+                confirmLabel="Activate"
+                onConfirm={() => activate.mutate(undefined, { onError: onReviewError })}
+              >
+                {(open) => (
+                  <Cta
+                    primary
+                    title={activate.isPending ? "Activating…" : "Activate this version"}
+                    disabled={activate.isPending}
+                    onClick={open}
+                  />
+                )}
+              </ConfirmAction>
+            ))}
+
+          {editRefused ? (
+            <Banner tone="warn">
+              Your account can view the flow tool but not propose changes.
+            </Banner>
+          ) : existingDraft !== undefined ? (
+            // Only one draft may be open per questionnaire (spec:
+            // `editing.DraftAlreadyExistsError`) -- offering the form
+            // anyway would be a button that always 409s, the same
+            // reasoning every other disabled-vs-hidden control in this
+            // file already follows. Stays a pill in the row rather than
+            // becoming a banner: it is still one click to the thing that
+            // matters (the existing draft), just quieted and relabelled
+            // instead of swapped for a form.
+            <Button
+              variant="ghost"
+              title={`${versionLabel(existingDraft)} is already open. Only one draft may exist per product at a time.`}
+              onClick={() => onOpenVersion(existingDraft.id)}
+            >
+              Open the existing draft
+            </Button>
+          ) : (
+            <EditorDropdown
+              trigger={<Button variant="primary">Propose a change</Button>}
+            >
+              {(close) => (
+                <form
+                  className={editorBox}
+                  onSubmit={(event) => startProposal(event, close)}
                 >
-                  {(open) => (
-                    <Cta
-                      primary
-                      title={
-                        activate.isPending ? "Activating…" : "Activate this version"
-                      }
-                      disabled={activate.isPending}
-                      onClick={open}
+                  <p className={mutedHint}>
+                    A draft is a whole copy of this version. Only one may be open at a
+                    time.
+                  </p>
+                  <Field label="Name" htmlFor={labelId}>
+                    <Input
+                      id={labelId}
+                      value={label}
+                      placeholder="What this proposal is called"
+                      onChange={(event) => setLabel(event.target.value)}
                     />
-                  )}
-                </ConfirmAction>
-              ))}
-
-            {editRefused ? (
-              <p className="banner banner--warn">
-                Your account can view the flow tool but not propose changes.
-              </p>
-            ) : existingDraft !== undefined ? (
-              // Only one draft may be open per questionnaire (spec:
-              // `editing.DraftAlreadyExistsError`) -- offering the form
-              // anyway would be a button that always 409s, the same
-              // reasoning every other disabled-vs-hidden control in this
-              // file already follows. Stays a pill in the row rather than
-              // becoming a banner: it is still one click to the thing that
-              // matters (the existing draft), just quieted and relabelled
-              // instead of swapped for a form.
-              <button
-                className="button button--quiet"
-                type="button"
-                title={`${versionLabel(existingDraft)} is already open. Only one draft may exist per product at a time.`}
-                onClick={() => onOpenVersion(existingDraft.id)}
-              >
-                Open the existing draft
-              </button>
-            ) : (
-              <EditorDropdown
-                trigger={
-                  <span className="button button--primary">Propose a change</span>
-                }
-              >
-                {(close) => (
-                  <form
-                    className="editor"
-                    onSubmit={(event) => startProposal(event, close)}
+                  </Field>
+                  <Field label="Summary" htmlFor={summaryId}>
+                    <Input
+                      id={summaryId}
+                      value={summary}
+                      placeholder="Why it exists"
+                      onChange={(event) => setSummary(event.target.value)}
+                    />
+                  </Field>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled={createDraft.isPending}
                   >
-                    <p className="panel__hint">
-                      A draft is a whole copy of this version. Only one may be open at a
-                      time.
-                    </p>
-                    <div className="field">
-                      <label htmlFor={labelId}>Name</label>
-                      <input
-                        id={labelId}
-                        value={label}
-                        placeholder="What this proposal is called"
-                        onChange={(event) => setLabel(event.target.value)}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor={summaryId}>Summary</label>
-                      <input
-                        id={summaryId}
-                        value={summary}
-                        placeholder="Why it exists"
-                        onChange={(event) => setSummary(event.target.value)}
-                      />
-                    </div>
-                    <button
-                      className="button button--primary"
-                      type="submit"
-                      disabled={createDraft.isPending}
-                    >
-                      {createDraft.isPending ? "Copying…" : "Create draft"}
-                    </button>
-                  </form>
-                )}
-              </EditorDropdown>
-            )}
+                    {createDraft.isPending ? "Copying…" : "Create draft"}
+                  </Button>
+                </form>
+              )}
+            </EditorDropdown>
+          )}
 
-            {reviewRefused ? (
-              <p className="banner banner--warn">
-                Your account can view the flow tool but not spawn a product from it.
-              </p>
-            ) : (
-              <EditorDropdown trigger="Spawn a product">
-                {(close) => (
-                  <form
-                    className="editor"
-                    onSubmit={(event) => startSpawn(event, close)}
+          {reviewRefused ? (
+            <Banner tone="warn">
+              Your account can view the flow tool but not spawn a product from it.
+            </Banner>
+          ) : (
+            <EditorDropdown
+              trigger={<Button variant="outline">Spawn a product</Button>}
+            >
+              {(close) => (
+                <form
+                  className={editorBox}
+                  onSubmit={(event) => startSpawn(event, close)}
+                >
+                  <p className={mutedHint}>
+                    Copies this version into a brand-new questionnaire, live
+                    immediately.
+                  </p>
+                  <Field label="Name" htmlFor={spawnNameId}>
+                    <Input
+                      id={spawnNameId}
+                      value={spawnName}
+                      required
+                      placeholder="The new product's name"
+                      onChange={(event) => setSpawnName(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Code" htmlFor={spawnCodeId}>
+                    <Input
+                      id={spawnCodeId}
+                      value={spawnCode}
+                      required
+                      placeholder="Stable identifier, unique across every product"
+                      onChange={(event) => setSpawnCode(event.target.value)}
+                    />
+                  </Field>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled={
+                      spawnProduct.isPending ||
+                      spawnName.trim() === "" ||
+                      spawnCode.trim() === ""
+                    }
                   >
-                    <p className="panel__hint">
-                      Copies this version into a brand-new questionnaire, live
-                      immediately.
-                    </p>
-                    <div className="field">
-                      <label htmlFor={spawnNameId}>Name</label>
-                      <input
-                        id={spawnNameId}
-                        value={spawnName}
-                        required
-                        placeholder="The new product's name"
-                        onChange={(event) => setSpawnName(event.target.value)}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor={spawnCodeId}>Code</label>
-                      <input
-                        id={spawnCodeId}
-                        value={spawnCode}
-                        required
-                        placeholder="Stable identifier, unique across every product"
-                        onChange={(event) => setSpawnCode(event.target.value)}
-                      />
-                    </div>
-                    <button
-                      className="button button--primary"
-                      type="submit"
-                      disabled={
-                        spawnProduct.isPending ||
-                        spawnName.trim() === "" ||
-                        spawnCode.trim() === ""
-                      }
-                    >
-                      {spawnProduct.isPending ? "Spawning…" : "Spawn product"}
-                    </button>
-                  </form>
-                )}
-              </EditorDropdown>
-            )}
-          </div>
+                    {spawnProduct.isPending ? "Spawning…" : "Spawn product"}
+                  </Button>
+                </form>
+              )}
+            </EditorDropdown>
+          )}
         </div>
-
-        {error !== null && (
-          <p className="banner banner--error" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
+      </DraftChrome>
     );
   }
 
@@ -381,18 +400,18 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // the payload types it as nullable, so this keeps the rest honest.
   if (changeRequest === null) {
     return (
-      <div className="draftbar draftbar--draft">
-        <div className="draftbar__row">
-          <div className="draftbar__left">
-            <VersionTabs versionId={versionId} isDraft={true} />
-          </div>
-        </div>
-
-        <p className="banner banner--warn">
-          This version is a draft with no proposal attached, which should not be
-          possible. Nothing here can be edited safely.
-        </p>
-      </div>
+      <DraftChrome
+        versionId={versionId}
+        isDraft={true}
+        after={
+          <Banner tone="warn">
+            This version is a draft with no proposal attached, which should not be
+            possible. Nothing here can be edited safely.
+          </Banner>
+        }
+      >
+        {null}
+      </DraftChrome>
     );
   }
 
@@ -452,140 +471,199 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
     releaseLock.isPending;
 
   return (
-    <div className="draftbar draftbar--draft">
-      <div className="draftbar__row">
-        <div className="draftbar__left">
-          <VersionTabs versionId={versionId} isDraft={true} />
-          <span className="draftbar__divider" aria-hidden="true" />
+    <DraftChrome
+      versionId={versionId}
+      isDraft={true}
+      after={
+        <>
+          {graph.version.is_stale && (
+            // Named here as well as on the review screen, because this is the
+            // bar somebody edits under. `is_stale` is the server's answer,
+            // through the same function the publish refusal reads, so this
+            // cannot promise a publish the backend then declines.
+            <Banner tone="warn">
+              Behind the latest version: something was published after this draft was
+              copied, so publishing it is refused rather than silently reinstating
+              whatever landed in between. There is no automatic rebase — draft again
+              from the latest version and re-apply.
+            </Banner>
+          )}
 
-          <div className="draftbar__status">
-            <div className="draftbar__status-name">
-              <span className="draftbar__dot draftbar__dot--draft" />
-              <strong>
-                {versionLabel(graph.version)} —{" "}
-                {statusLabel(changeRequest.status).toLowerCase()}
-              </strong>
-            </div>
-            <span className="draftbar__note">
-              {statusMeaning(changeRequest.status)} Proposed by{" "}
-              {changeRequest.created_by_email}
-              {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
-            </span>
-          </div>
+          {lock !== null &&
+            (heldByMe ? (
+              <Banner as="div" tone="info">
+                You last edited this draft at {formatTimestamp(lock.since)}. It's yours
+                to keep editing until {formatTimestamp(lock.expires_at)} unless you edit
+                again before then.{" "}
+                <Button
+                  variant="link"
+                  disabled={busy}
+                  onClick={() =>
+                    releaseLock.mutate(undefined, { onError: onWriteError })
+                  }
+                >
+                  Release it
+                </Button>{" "}
+                so somebody else can edit sooner.
+              </Banner>
+            ) : (
+              <Banner tone="warn">
+                {lock.email} last edited this at {formatTimestamp(lock.since)}. Nobody
+                else can edit until {formatTimestamp(lock.expires_at)}, unless they
+                release it first.
+              </Banner>
+            ))}
+
+          {!isAuthor && !isOpen && (
+            <Banner tone="info">
+              Only {changeRequest.created_by_email} can discard or withdraw this
+              proposal.
+            </Banner>
+          )}
+
+          {editRefused && (
+            <Banner tone="warn">
+              Your account can view this proposal but not change it.
+            </Banner>
+          )}
+
+          {error !== null && (
+            <Banner tone="error" role="alert">
+              {error}
+            </Banner>
+          )}
+        </>
+      }
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md bg-card/80 px-3 py-1.5">
+        <span
+          className="inline-block size-2 shrink-0 rounded-full bg-gold"
+          aria-hidden="true"
+        />
+        <div className="flex min-w-0 flex-col">
+          <strong className="truncate text-sm">
+            {versionLabel(graph.version)} —{" "}
+            {statusLabel(changeRequest.status).toLowerCase()}
+          </strong>
+          <span className="text-muted-foreground truncate text-xs">
+            {statusMeaning(changeRequest.status)} Proposed by{" "}
+            {changeRequest.created_by_email}
+            {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
+          </span>
         </div>
+      </div>
 
-        <div className="draftbar__right">
-          {/* Quiet while there's a more primary action beside it (Submit
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Quiet while there's a more primary action beside it (Submit
               for review) or while this signed-in account cannot actually
               approve, reject or publish this proposal -- everyone with
               view access may still open it to read the diff, but only
               `canActOnReview` earns the same visual weight Submit/Publish
               get elsewhere and the wording that promises an action. */}
-          <Link
-            className={`button ${isOpen || !canActOnReview ? "button--quiet" : "button--primary"}`}
-            to={`/versions/${versionId}/review`}
-          >
+        <Button asChild variant={isOpen || !canActOnReview ? "ghost" : "primary"}>
+          <Link to={`/versions/${versionId}/review`}>
             {isOpen || !canActOnReview ? "Check the diff" : "Review and publish"}
           </Link>
+        </Button>
 
-          {isOpen && (
-            <EditorDropdown trigger="Submit for review" disabled={busy || editRefused}>
-              {(close) => (
-                <form
-                  className="editor"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (reviewer1 === "" || reviewer2 === "") return;
-                    submitDraft.mutate(
-                      { reviewer1Id: reviewer1, reviewer2Id: reviewer2 },
-                      {
-                        onError: onWriteError,
-                        onSuccess: () => {
-                          close();
-                          setReviewer1("");
-                          setReviewer2("");
-                        },
+        {isOpen && (
+          <EditorDropdown trigger="Submit for review" disabled={busy || editRefused}>
+            {(close) => (
+              <form
+                className={editorBox}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (reviewer1 === "" || reviewer2 === "") return;
+                  submitDraft.mutate(
+                    { reviewer1Id: reviewer1, reviewer2Id: reviewer2 },
+                    {
+                      onError: onWriteError,
+                      onSuccess: () => {
+                        close();
+                        setReviewer1("");
+                        setReviewer2("");
                       },
-                    );
-                  }}
-                >
-                  <div className="field">
-                    <label htmlFor={reviewer1Id}>First reviewer</label>
-                    <select
-                      id={reviewer1Id}
-                      value={reviewer1}
-                      required
-                      onChange={(event) => setReviewer1(event.target.value)}
-                    >
-                      <option value="" disabled>
-                        Choose a reviewer
-                      </option>
-                      {(reviewers.data ?? [])
-                        .filter(
-                          (candidate) =>
-                            candidate.id !== changeRequest.created_by &&
-                            candidate.id !== reviewer2,
-                        )
-                        .map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>
-                            {candidate.email}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor={reviewer2Id}>Second reviewer</label>
-                    <select
-                      id={reviewer2Id}
-                      value={reviewer2}
-                      required
-                      onChange={(event) => setReviewer2(event.target.value)}
-                    >
-                      <option value="" disabled>
-                        Choose a reviewer
-                      </option>
-                      {(reviewers.data ?? [])
-                        .filter(
-                          (candidate) =>
-                            candidate.id !== changeRequest.created_by &&
-                            candidate.id !== reviewer1,
-                        )
-                        .map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>
-                            {candidate.email}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <button
-                    className="button button--primary"
-                    type="submit"
-                    disabled={
-                      submitDraft.isPending ||
-                      reviewer1 === "" ||
-                      reviewer2 === "" ||
-                      reviewer1 === reviewer2
-                    }
+                    },
+                  );
+                }}
+              >
+                <Field label="First reviewer" htmlFor={reviewer1Id}>
+                  <select
+                    id={reviewer1Id}
+                    className={nativeSelectClassName}
+                    value={reviewer1}
+                    required
+                    onChange={(event) => setReviewer1(event.target.value)}
                   >
-                    {submitDraft.isPending ? "Submitting…" : "Submit for review"}
-                  </button>
-                  {/* Two named reviewers are required, so a group with
+                    <option value="" disabled>
+                      Choose a reviewer
+                    </option>
+                    {(reviewers.data ?? [])
+                      .filter(
+                        (candidate) =>
+                          candidate.id !== changeRequest.created_by &&
+                          candidate.id !== reviewer2,
+                      )
+                      .map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.email}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+                <Field label="Second reviewer" htmlFor={reviewer2Id}>
+                  <select
+                    id={reviewer2Id}
+                    className={nativeSelectClassName}
+                    value={reviewer2}
+                    required
+                    onChange={(event) => setReviewer2(event.target.value)}
+                  >
+                    <option value="" disabled>
+                      Choose a reviewer
+                    </option>
+                    {(reviewers.data ?? [])
+                      .filter(
+                        (candidate) =>
+                          candidate.id !== changeRequest.created_by &&
+                          candidate.id !== reviewer1,
+                      )
+                      .map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.email}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  disabled={
+                    submitDraft.isPending ||
+                    reviewer1 === "" ||
+                    reviewer2 === "" ||
+                    reviewer1 === reviewer2
+                  }
+                >
+                  {submitDraft.isPending ? "Submitting…" : "Submit for review"}
+                </Button>
+                {/* Two named reviewers are required, so a group with
                       fewer than two publish-flow-tool holders cannot
                       submit anything at all -- worth saying here rather
                       than leaving both selects empty with no explanation. */}
-                  {reviewers.data !== undefined && reviewers.data.length < 2 && (
-                    <p className="panel__hint">
-                      Fewer than two people currently hold the publish grant, so there
-                      is nobody eligible to name. Ask whoever manages staff accounts to
-                      grant it before submitting.
-                    </p>
-                  )}
-                </form>
-              )}
-            </EditorDropdown>
-          )}
+                {reviewers.data !== undefined && reviewers.data.length < 2 && (
+                  <p className={mutedHint}>
+                    Fewer than two people currently hold the publish grant, so there is
+                    nobody eligible to name. Ask whoever manages staff accounts to grant
+                    it before submitting.
+                  </p>
+                )}
+              </form>
+            )}
+          </EditorDropdown>
+        )}
 
-          {/* Discard accepts the author or anyone holding the publish
+        {/* Discard accepts the author or anyone holding the publish
               grant (`isPublisher`) -- widened from author-only so an
               abandoned draft does not permanently occupy the one slot
               `create_draft` now caps a questionnaire at. Withdraw stays
@@ -594,147 +672,65 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               cover every status this bar reaches (never both at once),
               so exactly one control or the explanatory note below
               renders. */}
-          {isOpen && (isAuthor || isPublisher) && (
-            <ConfirmAction
-              message="Discard this draft? The proposal and every edit in it are deleted."
-              confirmLabel="Discard draft"
-              danger
-              onConfirm={() =>
-                // `parent_version` is null only when this draft was itself
-                // drafted from another (now-discarded) draft -- an edge
-                // case worth not crashing on, not a version to fall back
-                // to: `versionId` is the one that just stopped existing.
-                // `onOpenVersion(null)` sends whoever discarded it
-                // somewhere that still does.
-                discardDraft.mutate(versionId, {
-                  onError: onWriteError,
-                  onSuccess: () => onOpenVersion(graph.version.parent_version),
-                })
-              }
-            >
-              {(open) => (
-                <button
-                  className="button button--danger"
-                  type="button"
-                  // `editRefused` only matters on the author path: a pure
-                  // publisher needs no edit grant for this action at all,
-                  // so an unrelated edit refusal earlier this session
-                  // must not block a discard they are otherwise entitled
-                  // to.
-                  disabled={busy || (editRefused && !isPublisher)}
-                  onClick={open}
-                >
-                  Discard draft
-                </button>
-              )}
-            </ConfirmAction>
-          )}
-
-          {isFrozen &&
-            isAuthor &&
-            (changeRequest.status === "approved" ? (
-              // The parenthetical used to be part of the button's own
-              // label, which was the longest thing on this row -- moved
-              // into the description line instead, same self-describing
-              // shape as Propose/Spawn/Activate, so "Withdraw" itself
-              // stays one short word and the row has a chance to fit on
-              // one line.
-              <Cta
-                title="Withdraw"
-                description="Also drops the current approval."
-                disabled={busy || editRefused}
-                onClick={() =>
-                  withdrawDraft.mutate(undefined, { onError: onWriteError })
-                }
-              />
-            ) : (
-              <button
-                className="button"
-                type="button"
-                disabled={busy || editRefused}
-                onClick={() =>
-                  withdrawDraft.mutate(undefined, { onError: onWriteError })
-                }
+        {isOpen && (isAuthor || isPublisher) && (
+          <ConfirmAction
+            message="Discard this draft? The proposal and every edit in it are deleted."
+            confirmLabel="Discard draft"
+            danger
+            onConfirm={() =>
+              // `parent_version` is null only when this draft was itself
+              // drafted from another (now-discarded) draft -- an edge
+              // case worth not crashing on, not a version to fall back
+              // to: `versionId` is the one that just stopped existing.
+              // `onOpenVersion(null)` sends whoever discarded it
+              // somewhere that still does.
+              discardDraft.mutate(versionId, {
+                onError: onWriteError,
+                onSuccess: () => onOpenVersion(graph.version.parent_version),
+              })
+            }
+          >
+            {(open) => (
+              <Button
+                variant="danger"
+                // `editRefused` only matters on the author path: a pure
+                // publisher needs no edit grant for this action at all,
+                // so an unrelated edit refusal earlier this session
+                // must not block a discard they are otherwise entitled
+                // to.
+                disabled={busy || (editRefused && !isPublisher)}
+                onClick={open}
               >
-                Withdraw
-              </button>
-            ))}
-        </div>
-      </div>
+                Discard draft
+              </Button>
+            )}
+          </ConfirmAction>
+        )}
 
-      {graph.version.is_stale && (
-        // Named here as well as on the review screen, because this is the
-        // bar somebody edits under. `is_stale` is the server's answer,
-        // through the same function the publish refusal reads, so this
-        // cannot promise a publish the backend then declines.
-        <p className="banner banner--warn">
-          Behind the latest version: something was published after this draft was
-          copied, so publishing it is refused rather than silently reinstating whatever
-          landed in between. There is no automatic rebase — draft again from the latest
-          version and re-apply.
-        </p>
-      )}
-
-      {lock !== null &&
-        (heldByMe ? (
-          <p className="banner banner--info">
-            You last edited this draft at {formatTimestamp(lock.since)}. It's yours to
-            keep editing until {formatTimestamp(lock.expires_at)} unless you edit again
-            before then.{" "}
-            <button
-              className="link"
-              type="button"
-              disabled={busy}
-              onClick={() => releaseLock.mutate(undefined, { onError: onWriteError })}
+        {isFrozen &&
+          isAuthor &&
+          (changeRequest.status === "approved" ? (
+            // The parenthetical used to be part of the button's own
+            // label, which was the longest thing on this row -- moved
+            // into the description line instead, same self-describing
+            // shape as Propose/Spawn/Activate, so "Withdraw" itself
+            // stays one short word and the row has a chance to fit on
+            // one line.
+            <Cta
+              title="Withdraw"
+              description="Also drops the current approval."
+              disabled={busy || editRefused}
+              onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
+            />
+          ) : (
+            <Button
+              disabled={busy || editRefused}
+              onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
             >
-              Release it
-            </button>{" "}
-            so somebody else can edit sooner.
-          </p>
-        ) : (
-          // Not an error state: the lock is taken by the first edit and
-          // released automatically once it goes idle, so the honest thing
-          // to say is who to ask, not "locked". `expires_at` names the
-          // moment this banner's own advice goes stale -- past it, the
-          // lock is gone whether or not they ever come back to release it.
-          <p className="banner banner--warn">
-            {lock.email} last edited this at {formatTimestamp(lock.since)}. Nobody else
-            can edit until {formatTimestamp(lock.expires_at)}, unless they release it
-            first.
-          </p>
-        ))}
-
-      {/* Moved out of .draftbar__right (which is otherwise just the one
-          Review/Check-the-diff link in this state) rather than left as a
-          flex sibling of it -- boxed banners are what every other "why a
-          control isn't offered" fact in this bar already renders as, and
-          giving this one the same full-width treatment is what actually
-          lets the row above stay on one line.
-
-          Only shown once frozen (`!isOpen`): while open, Discard is
-          already offered to a publisher, not just the author, and an
-          ordinary editor still has Submit for review and every content
-          edit to do, so there's nothing missing worth explaining. Once
-          frozen, Withdraw is author-only with no publisher exception (see
-          `isAuthor`'s comment above) and is the one thing left that
-          Publish isn't, so its absence is worth a word. */}
-      {!isAuthor && !isOpen && (
-        <p className="banner banner--info">
-          Only {changeRequest.created_by_email} can discard or withdraw this proposal.
-        </p>
-      )}
-
-      {editRefused && (
-        <p className="banner banner--warn">
-          Your account can view this proposal but not change it.
-        </p>
-      )}
-
-      {error !== null && (
-        <p className="banner banner--error" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
+              Withdraw
+            </Button>
+          ))}
+      </div>
+    </DraftChrome>
   );
 }

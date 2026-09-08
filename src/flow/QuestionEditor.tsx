@@ -5,6 +5,12 @@ import type { AnswerType, Graph, Question } from "../api/types";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { QuestionChanges } from "../api/endpoints";
 import { answerTypeLabel } from "./labels";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Field, nativeSelectClassName } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { checkRow, editorActions, editorBox, warnHint } from "@/lib/chrome";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const ANSWER_TYPES: AnswerType[] = [
@@ -110,7 +116,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
     <>
       {editing ? (
         <form
-          className="editor"
+          className={editorBox}
           onSubmit={(event) => {
             event.preventDefault();
             if (!dirty) return;
@@ -120,44 +126,35 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
             );
           }}
         >
-          <div className="field">
-            <label htmlFor={promptId}>Question text</label>
-            <textarea
+          <Field label="Question text" htmlFor={promptId}>
+            <Textarea
               id={promptId}
               rows={3}
               value={draft.prompt}
-              disabled={pending}
+              {...(pending ? { disabled: true } : {})}
               onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="field">
-            <label htmlFor={codeId}>QID</label>
-            <input
+          <Field
+            label="QID"
+            htmlFor={codeId}
+            hint="Editable only on something this draft introduced. Renaming an inherited code reads as a removal and an addition in the review screen, so the server refuses it — retire the question and add its replacement instead."
+          >
+            <Input
               id={codeId}
               value={draft.code}
-              disabled={pending}
+              {...(pending ? { disabled: true } : {})}
               onChange={(event) => setDraft({ ...draft, code: event.target.value })}
             />
-            {/* Refused on anything this draft inherited, and that refusal is
-                the server's. A code is the identity that survives copying --
-                the review screen matches every item by it, because a draft is
-                a whole copy and every id in it is new -- so renaming an
-                inherited one would read as that item removed and a different
-                one added, carrying its options and edges with it. */}
-            <p className="panel__hint">
-              Editable only on something this draft introduced. Renaming an inherited
-              code reads as a removal and an addition in the review screen, so the
-              server refuses it — retire the question and add its replacement instead.
-            </p>
-          </div>
+          </Field>
 
-          <div className="field">
-            <label htmlFor={typeId}>Answer type</label>
+          <Field label="Answer type" htmlFor={typeId}>
             <select
               id={typeId}
+              className={nativeSelectClassName}
               value={draft.answer_type}
-              disabled={pending}
+              {...(pending ? { disabled: true } : {})}
               onChange={(event) =>
                 setDraft({ ...draft, answer_type: event.target.value as AnswerType })
               }
@@ -169,25 +166,20 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
               ))}
             </select>
             {losingGuards && (
-              // The silent-consequence case: the guards would stop matching,
-              // the flow would quietly fall to the question-level edge or
-              // end, and nothing downstream objects -- no target is dangling,
-              // so the publish gate says nothing. The server refuses it, and
-              // this says so before the refusal arrives.
-              <p className="panel__hint panel__hint--warn">
+              <p className={warnHint}>
                 Per-option edges leave this question. An answer type that selects no
                 option would leave those guards unable to match, with nothing downstream
                 to catch it, so this change is refused until they are removed.
               </p>
             )}
-          </div>
+          </Field>
 
-          <div className="field">
-            <label htmlFor={sectionId}>Section</label>
+          <Field label="Section" htmlFor={sectionId}>
             <select
               id={sectionId}
+              className={nativeSelectClassName}
               value={draft.section}
-              disabled={pending}
+              {...(pending ? { disabled: true } : {})}
               onChange={(event) => setDraft({ ...draft, section: event.target.value })}
             >
               <option value={NO_SECTION}>No section</option>
@@ -197,9 +189,9 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
 
-          <div className="field field--check">
+          <div className={checkRow}>
             <input
               id={requiredId}
               type="checkbox"
@@ -212,17 +204,12 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
             <label htmlFor={requiredId}>Required</label>
           </div>
 
-          <div className="editor__actions">
-            <button
-              className="button button--primary"
-              type="submit"
-              disabled={pending || !dirty}
-            >
+          <div className={editorActions}>
+            <Button variant="primary" type="submit" disabled={pending || !dirty}>
               {updateQuestion.isPending ? "Saving…" : "Save changes"}
-            </button>
-            <button
-              className="button button--quiet"
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
               disabled={pending}
               onClick={() => {
                 setDraft(draftOf(question));
@@ -230,26 +217,27 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
               }}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       ) : (
-        <p className="d-question">
+        <p className="mt-1.5 text-[16.5px] leading-snug font-medium">
           {question.prompt}{" "}
-          <button
-            type="button"
-            className="opt-edit-btn d-edit-btn"
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-2 align-middle"
             onClick={() => setEditing(true)}
           >
             Edit
-          </button>
+          </Button>
         </p>
       )}
 
       {error !== null && (
-        <p className="banner banner--error" role="alert">
+        <Banner tone="error" role="alert">
           {error}
-        </p>
+        </Banner>
       )}
     </>
   );
