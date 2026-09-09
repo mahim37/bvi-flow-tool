@@ -126,6 +126,10 @@ export interface NodeData {
    * unreachable) is carried entirely by `badgeKind`, not by anything in
    * this text -- see break's own `nodeLabel`/`badgeClassFor` split. */
   label: string;
+  /** Untruncated canvas wording. Hover shows this at a larger size so
+   * ellipsis and wrap are only the resting state, including on nodes
+   * whose compact label already fitted. */
+  fullLabel: string;
   prompt: string;
   sectionColor: string;
   badgeKind: BadgeKind | null;
@@ -159,8 +163,11 @@ export interface EdgeData {
   target: string;
   /** The guard, in words: an option's label, or "anything else" for the
    * question-level edge. Both are real routing behaviour, so neither is
-   * left blank. */
+   * left blank. Truncated for the arrow; hover uses `fullGuard`. */
   guard: string;
+  /** Untruncated option wording. Empty when `guard` is empty (the
+   * question-level fallback is deliberately unlabelled on the canvas). */
+  fullGuard: string;
   priority: number;
   isDead: boolean;
   isBroken: boolean;
@@ -170,6 +177,10 @@ export interface EdgeData {
 
 export function questionLabel(question: Question): string {
   return `${trunc(question.prompt, 60)}\n${TYPE_GLYPH[question.answer_type]} ${question.code}`;
+}
+
+export function questionFullLabel(question: Question): string {
+  return `${question.prompt}\n${TYPE_GLYPH[question.answer_type]} ${question.code}`;
 }
 
 /** Break's `badgeClassFor`, `changeKind` standing in for its pending-new/
@@ -310,10 +321,14 @@ export function buildElements(
     if (section === undefined) continue;
     const collapsed = collapsedSectionIds.has(sectionId);
     const color = sectionColor.get(sectionId) ?? NO_SECTION_COLOR;
+    const label = collapsed
+      ? `${section.name}\n${members.length} questions`
+      : section.name;
     const data: NodeData = {
       id: sectionNodeId(sectionId),
       kind: "section",
-      label: collapsed ? `${section.name}\n${members.length} questions` : section.name,
+      label,
+      fullLabel: label,
       prompt: section.description === "" ? section.name : section.description,
       sectionColor: color,
       badgeKind: null,
@@ -372,6 +387,7 @@ export function buildElements(
       // with no behaviour at all.
       kind: archived ? "archived" : "question",
       label: questionLabel(question),
+      fullLabel: questionFullLabel(question),
       prompt: question.prompt,
       sectionColor: question.section
         ? (sectionColor.get(question.section) ?? NO_SECTION_COLOR)
@@ -416,6 +432,7 @@ export function buildElements(
       id: missingNodeId(missingId),
       kind: "missing",
       label: "Unknown question",
+      fullLabel: "Unknown question",
       prompt: `This version has no question with id ${missingId}.`,
       sectionColor: NO_SECTION_COLOR,
       badgeKind: null,
@@ -436,6 +453,7 @@ export function buildElements(
       id: END_NODE_ID,
       kind: "end",
       label: "End of flow",
+      fullLabel: "End of flow",
       prompt: "No further question is served.",
       sectionColor: NO_SECTION_COLOR,
       badgeKind: null,
@@ -467,12 +485,17 @@ export function buildElements(
       // wasn't one of those" without spelling it out. Truncated so the
       // guard still fits beside a fanned arrow; parallel edges also get
       // a lane (`assignParallelEdgeLanes`) so three options between the
-      // same pair do not share one label pile. The full guard is in the
-      // detail panel (`Options`).
+      // same pair do not share one label pile. Hovering the question
+      // swaps the native label to `fullGuard` when truncation actually
+      // cut the wording (same size, along the stroke).
       guard:
         edge.from_option === null
           ? ""
           : trunc(guardLabel(edge, questionsById.get(edge.from_question)), 32),
+      fullGuard:
+        edge.from_option === null
+          ? ""
+          : guardLabel(edge, questionsById.get(edge.from_question)),
       priority: edge.priority,
       isDead: deadEdges.has(edge.id),
       isBroken: brokenEdges.has(edge.id),

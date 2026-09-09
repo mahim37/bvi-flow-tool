@@ -8,6 +8,8 @@ import {
   containerHasUsableSize,
   dockAlongPercent,
   dockedPairSegment,
+  edgeLabelScreenOffset,
+  idsAddedToJoinedKey,
   isSectionCollapseToggle,
   lineSideExtents,
   nodeDockPoint,
@@ -18,6 +20,7 @@ import {
   parallelLanePolyline,
   pointInSectionToggle,
   pointOnPolyline,
+  rectFullyInView,
   segmentHitsRect,
   separateNodesFromEdges,
   shouldRepositionNewSiblings,
@@ -175,6 +178,29 @@ describe("isSectionCollapseToggle", () => {
   });
 });
 
+describe("idsAddedToJoinedKey", () => {
+  it("returns the newly collapsed section id", () => {
+    expect(idsAddedToJoinedKey("", "sec-a")).toEqual(["sec-a"]);
+    expect(idsAddedToJoinedKey("sec-a", "sec-a|sec-b")).toEqual(["sec-b"]);
+  });
+
+  it("returns nothing when a section is expanded", () => {
+    expect(idsAddedToJoinedKey("sec-a|sec-b", "sec-a")).toEqual([]);
+  });
+});
+
+describe("rectFullyInView", () => {
+  const extent = { x1: 0, y1: 0, x2: 400, y2: 300 };
+
+  it("is true when the box sits inside the padded viewport", () => {
+    expect(rectFullyInView({ x1: 40, y1: 40, x2: 80, y2: 80 }, extent, 24)).toBe(true);
+  });
+
+  it("is false when the box crosses the padded edge", () => {
+    expect(rectFullyInView({ x1: 10, y1: 40, x2: 80, y2: 80 }, extent, 24)).toBe(false);
+  });
+});
+
 describe("lineSideExtents", () => {
   it("reports a box sitting on a downward line as equal left and right half-widths", () => {
     const extent = lineSideExtents(0, 0, 0, 200, { x1: -40, y1: 60, x2: 40, y2: 100 });
@@ -301,6 +327,28 @@ describe("parallelLanePolyline", () => {
         pointOnPolyline(parallelLanePolyline(source, target, lane, 4, spacing), 0.5).x,
     );
     expect(new Set(mids.map((x) => Math.round(x * 100))).size).toBe(4);
+  });
+});
+
+describe("edgeLabelScreenOffset", () => {
+  it("leaves a docked fan's labels on the stroke", () => {
+    const ele = {
+      data: (name: string) =>
+        ({ outLaneCount: 3, outLane: 0, laneCount: 3, lane: 0 })[name],
+    };
+    expect(edgeLabelScreenOffset(ele)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("offsets an undocked parallel bundle perpendicular to the chord", () => {
+    const ele = {
+      data: (name: string) =>
+        ({ laneCount: 3, lane: 0, outLaneCount: 1, inLaneCount: 1 })[name],
+      source: () => ({ position: () => ({ x: 0, y: 0 }) }),
+      target: () => ({ position: () => ({ x: 0, y: 100 }) }),
+    };
+    const offset = edgeLabelScreenOffset(ele);
+    expect(offset.y).toBeCloseTo(0);
+    expect(offset.x).not.toBe(0);
   });
 });
 

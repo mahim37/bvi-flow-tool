@@ -1,8 +1,8 @@
 import type { Rect } from "./canvasLayout";
 
-export const MINIMAP_WIDTH = 176;
-export const MINIMAP_HEIGHT = 120;
-export const MINIMAP_PAD = 10;
+export const MINIMAP_WIDTH = 280;
+export const MINIMAP_HEIGHT = 196;
+export const MINIMAP_PAD = 12;
 
 export interface MiniTransform {
   s: number;

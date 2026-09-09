@@ -1,8 +1,7 @@
 import type { StylesheetCSS } from "cytoscape";
 
 import {
-  PARALLEL_LABEL_STAGGER,
-  parallelLaneOffset,
+  edgeLabelScreenOffset,
   sourceEndpointSpec,
   targetEndpointSpec,
 } from "./canvasLayout";
@@ -93,18 +92,6 @@ function toggleButtonUri(collapsed: boolean, fill: string): string {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-function laneData(ele: { data: (name: string) => unknown }): {
-  lane: number;
-  count: number;
-} {
-  const lane = ele.data("lane");
-  const count = ele.data("laneCount");
-  return {
-    lane: typeof lane === "number" ? lane : 0,
-    count: typeof count === "number" ? count : 1,
-  };
-}
-
 function badgeStyle(kind: string): Record<string, string> {
   // Every larger offset (11px, 14px, 22px, all tried on break's end)
   // made their vendored Cytoscape build silently stop rendering the
@@ -179,12 +166,12 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "border-opacity": 0.5,
       "text-valign": "top",
       "text-halign": "center",
-      "text-margin-y": 10,
-      "font-size": 11,
+      "text-margin-y": 28,
+      "font-size": 15,
       "font-weight": 700,
       color: "data(sectionColor)",
       "text-wrap": "wrap",
-      "text-max-width": "220px",
+      "text-max-width": "280px",
       "overlay-opacity": 0,
       "background-image": ((ele: { data: (name: string) => unknown }) =>
         toggleButtonUri(
@@ -209,7 +196,7 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     // inside the box (compound bounds include nodes, not edges).
     selector: ":parent",
     css: {
-      padding: "80px",
+      padding: "96px",
       "compound-sizing-wrt-labels": "include",
       "z-index": 0,
       "z-index-compare": "manual",
@@ -226,7 +213,7 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "text-valign": "center",
       "text-margin-y": 0,
       width: 210,
-      height: 78,
+      height: 88,
       "z-index": 20,
       "z-index-compare": "manual",
     },
@@ -354,6 +341,8 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "text-background-shape": "roundrectangle",
       "text-background-padding": "3px",
       "text-rotation": "autorotate",
+      // So hovering the truncated pill, not just the stroke, can select it.
+      "text-events": "yes",
     },
   },
   {
@@ -390,6 +379,9 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     // options shared one origin, crossed, and stacked arrowheads inside
     // the target. Split at the nodes: one dock per edge along the facing
     // side, then a straight stroke to that dock (no mid-path bow).
+    // Labels keep `autorotate` so they run along the stroke, same as a
+    // lone option; `text-rotation: none` was what parked a fan of guards
+    // as a horizontal stack beside the arrows.
     selector: "edge[outLaneCount > 1][!isBack], edge[inLaneCount > 1][!isBack]",
     css: {
       "curve-style": "straight",
@@ -397,16 +389,17 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
         sourceEndpointSpec(ele)) as unknown as string,
       "target-endpoint": ((ele: { data: (name: string) => unknown }) =>
         targetEndpointSpec(ele)) as unknown as string,
-      "text-rotation": "none",
     } as unknown as Record<string, string>,
   },
   {
-    selector: "edge[laneCount > 1]",
+    // Autorotated pills sit on the path midpoint. Extra screen-Y stagger
+    // was what dragged a diagonal bundle's labels onto neighbouring arrows.
+    selector: "edge[laneCount > 1], edge[outLaneCount > 1], edge[inLaneCount > 1]",
     css: {
-      "text-margin-y": ((ele: { data: (name: string) => unknown }) => {
-        const { lane, count } = laneData(ele);
-        return parallelLaneOffset(lane, count, PARALLEL_LABEL_STAGGER);
-      }) as unknown as number,
+      "text-margin-x": ((ele: { data: (name: string) => unknown }) =>
+        edgeLabelScreenOffset(ele).x) as unknown as number,
+      "text-margin-y": ((ele: { data: (name: string) => unknown }) =>
+        edgeLabelScreenOffset(ele).y) as unknown as number,
     } as unknown as Record<string, string>,
   },
   {
@@ -509,5 +502,22 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
   {
     selector: "edge.hl",
     css: { opacity: 1, width: 2.6, "z-index": 35 },
+  },
+  {
+    // Truncated option wording, same size and rotation as the resting
+    // pill. Not a hover card — the label just stops using the ellipsis.
+    selector: "edge.full-guard",
+    css: {
+      label: "data(fullGuard)",
+    },
+  },
+  {
+    // Hover HTML cards replace these; leaving the native text visible
+    // would double the wording under the larger overlay.
+    selector: ".expanded-label",
+    css: {
+      "text-opacity": 0,
+      "text-background-opacity": 0,
+    },
   },
 ];

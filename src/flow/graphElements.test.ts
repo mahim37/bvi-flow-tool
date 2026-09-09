@@ -6,6 +6,8 @@ import {
   buildElements,
   changeKindsFromDiff,
   missingNodeId,
+  questionFullLabel,
+  questionLabel,
   sectionNodeId,
 } from "./graphElements";
 import {
@@ -193,7 +195,30 @@ describe("edges", () => {
     const built = edges();
 
     expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("");
+    expect(built.get(E_Q2_TO_ARCHIVED)?.fullGuard).toBe("");
     expect(built.get(E_NO_TO_END)?.guard).toBe("No");
+    expect(built.get(E_NO_TO_END)?.fullGuard).toBe("No");
+  });
+
+  it("truncates a long option guard but keeps the full wording for hover", () => {
+    const long = "This option label is deliberately longer than thirty-two characters";
+    const original = makeGraph();
+    const graph = makeGraph({
+      questions: original.questions.map((question) =>
+        question.id !== Q1
+          ? question
+          : {
+              ...question,
+              options: question.options.map((option) =>
+                option.id === OPTION_YES ? { ...option, label: long } : option,
+              ),
+            },
+      ),
+    });
+    const built = edges(graph).get(E_YES_TO_Q2);
+    expect(built?.guard).toContain("…");
+    expect(built?.guard.length).toBeLessThanOrEqual(32);
+    expect(built?.fullGuard).toBe(long);
   });
 
   it("says so when the guard is an option the question does not offer", () => {
@@ -373,6 +398,30 @@ describe("section anchor", () => {
     expect(box?.label).toBe("Introduction");
     expect(built.get(Q1)?.parent).toBe(sectionNodeId(sectionId));
     expect(built.get(Q2)?.parent).toBe(sectionNodeId(sectionId));
+  });
+
+  it("keeps a truncated canvas label and the full prompt for hover", () => {
+    const long =
+      "This prompt is deliberately longer than sixty characters so the canvas box ellipsises it";
+    const original = makeGraph().questions.find((question) => question.id === Q1);
+    if (original === undefined) throw new Error("fixture is missing Q1");
+    const question = { ...original, prompt: long };
+    const graph = makeGraph({
+      questions: makeGraph().questions.map((item) =>
+        item.id === Q1 ? question : item,
+      ),
+    });
+    const node = nodes(graph).get(Q1);
+    expect(node?.label).toBe(questionLabel(question));
+    expect(node?.fullLabel).toBe(questionFullLabel(question));
+    expect(node?.label).toContain("…");
+    expect(node?.fullLabel).not.toBe(node?.label);
+  });
+
+  it("gives every node a fullLabel so hover can enlarge even a short one", () => {
+    for (const node of nodes().values()) {
+      expect(node.fullLabel.length).toBeGreaterThan(0);
+    }
   });
 
   it("hides members and rewires outside edges onto the box when collapsed", () => {
