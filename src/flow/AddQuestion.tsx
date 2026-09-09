@@ -41,6 +41,10 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const addQuestion = useAddQuestion(versionId);
+  // See QuestionEditor's own comment on this same check -- break has no
+  // `code` field to receive one, so breakShapedBodies.addQuestion drops it;
+  // this hides the control rather than collect a value nothing keeps.
+  const isBreakDraft = graph.change_request?.break_draft_version_id != null;
 
   const codeId = useId();
   const promptId = useId();
@@ -71,6 +75,11 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
               event.preventDefault();
               addQuestion.mutate(
                 {
+                  // Sent even when hidden (`isBreakDraft`): the field is
+                  // required on `NewQuestion`, but break has nothing to
+                  // receive it, so `breakShapedBodies.addQuestion` drops
+                  // it before the request goes out -- see that field's
+                  // own comment below.
                   code,
                   prompt,
                   answer_type: answerType,
@@ -90,16 +99,18 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
               );
             }}
           >
-            <Field label="QID" htmlFor={codeId}>
-              <Input
-                id={codeId}
-                value={code}
-                required
-                placeholder="Stable identifier"
-                {...(addQuestion.isPending ? { disabled: true } : {})}
-                onChange={(event) => setCode(event.target.value)}
-              />
-            </Field>
+            {!isBreakDraft && (
+              <Field label="QID" htmlFor={codeId}>
+                <Input
+                  id={codeId}
+                  value={code}
+                  required
+                  placeholder="Stable identifier"
+                  {...(addQuestion.isPending ? { disabled: true } : {})}
+                  onChange={(event) => setCode(event.target.value)}
+                />
+              </Field>
+            )}
 
             <Field label="Question text" htmlFor={promptId}>
               <Textarea
@@ -145,39 +156,46 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
               </select>
             </Field>
 
-            <div className={checkRow}>
-              <input
-                id={requiredId}
-                type="checkbox"
-                checked={isRequired}
-                disabled={addQuestion.isPending}
-                onChange={(event) => setIsRequired(event.target.checked)}
-              />
-              <label htmlFor={requiredId}>Required</label>
-            </div>
+            {!isBreakDraft && (
+              <div className={checkRow}>
+                <input
+                  id={requiredId}
+                  type="checkbox"
+                  checked={isRequired}
+                  disabled={addQuestion.isPending}
+                  onChange={(event) => setIsRequired(event.target.checked)}
+                />
+                <label htmlFor={requiredId}>Required</label>
+              </div>
+            )}
 
             {/* Offered here and nowhere else. `FlowToolQuestionSerializer` does
             not serve `show_raw_answer_to_advisor`, so an existing
             question's value cannot be read back -- an edit control would
             have to start from a guess and would silently overwrite whatever
             was really set. On a question being created there is no prior
-            value to misreport. */}
-            <div className={checkRow}>
-              <input
-                id={rawId}
-                type="checkbox"
-                checked={showRaw}
-                disabled={addQuestion.isPending}
-                onChange={(event) => setShowRaw(event.target.checked)}
-              />
-              <label htmlFor={rawId}>Show the raw answer to advisors</label>
-            </div>
+            value to misreport. break has no equivalent field at all, see
+            isBreakDraft's own comment above. */}
+            {!isBreakDraft && (
+              <div className={checkRow}>
+                <input
+                  id={rawId}
+                  type="checkbox"
+                  checked={showRaw}
+                  disabled={addQuestion.isPending}
+                  onChange={(event) => setShowRaw(event.target.checked)}
+                />
+                <label htmlFor={rawId}>Show the raw answer to advisors</label>
+              </div>
+            )}
 
             <Button
               variant="primary"
               type="submit"
               disabled={
-                addQuestion.isPending || code.trim() === "" || prompt.trim() === ""
+                addQuestion.isPending ||
+                (!isBreakDraft && code.trim() === "") ||
+                prompt.trim() === ""
               }
             >
               {addQuestion.isPending ? "Adding…" : "Add question"}

@@ -14,7 +14,14 @@ export type UUID = string;
 /** ISO-8601, as DRF renders `DateTimeField`. */
 export type Timestamp = string;
 
-export type RoutingModel = "sequence" | "graph";
+/** "external" is a shadow version whose real content lives on break-backend
+ * (`RoutingModel.EXTERNAL` there) -- its own `Section`/`Question`/`Edge`
+ * rows are always empty; the map's data is translated from break's own
+ * content instead (`break_graph.py`, bvi-backend). Nothing here has to
+ * branch on it directly: `ChangeRequest.break_draft_version_id` is the one
+ * field content-editing code actually checks, since that is what decides
+ * whether a write needs break-shaped request bodies. */
+export type RoutingModel = "sequence" | "graph" | "external";
 export type AnswerType = "single_choice" | "multi_choice" | "free_text" | "scale";
 /**
  * Where a proposal sits. Mirrors `ChangeRequestStatus` in
@@ -254,6 +261,12 @@ export interface ChangeRequest {
   reviews: ChangeRequestReview[];
   created: Timestamp;
   modified: Timestamp;
+  /** Null for every ordinary bvi-hosted proposal -- set only for a
+   * BREAK-hosted one (`version.routing_model === "external"`). The one
+   * field content-editing code checks to decide whether a write needs
+   * break-shaped request bodies instead of this app's own field names --
+   * see `api/breakShapedBodies.ts`. */
+  break_draft_version_id: number | null;
 }
 
 export interface GraphDiagnostics {

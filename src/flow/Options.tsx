@@ -579,6 +579,10 @@ interface OptionCardProps {
    * one-click "use it instead" in place of that edge. */
   hasFallback: boolean;
   isGuard: boolean;
+  /** Break has no `code` field on an option -- see `Options`' own comment
+   * on the same check. Hides the code input here rather than send an edit
+   * `breakShapedBodies.updateOption` would silently drop. */
+  isBreakDraft: boolean;
   editable: boolean;
   disabled: boolean;
   retargetingEdgeId: UUID | null;
@@ -611,6 +615,7 @@ function OptionCard({
   isUncovered,
   hasFallback,
   isGuard,
+  isBreakDraft,
   editable,
   disabled,
   retargetingEdgeId,
@@ -661,21 +666,25 @@ function OptionCard({
                 onChange={(event) => setLabel(event.target.value)}
               />
             </Field>
-            <Field label="Code" htmlFor={codeId} className="min-w-[120px]">
-              <Input
-                id={codeId}
-                value={code}
-                {...(pending ? { disabled: true } : {})}
-                onChange={(event) => setCode(event.target.value)}
-              />
-            </Field>
+            {!isBreakDraft && (
+              <Field label="Code" htmlFor={codeId} className="min-w-[120px]">
+                <Input
+                  id={codeId}
+                  value={code}
+                  {...(pending ? { disabled: true } : {})}
+                  onChange={(event) => setCode(event.target.value)}
+                />
+              </Field>
+            )}
           </div>
         ) : (
           <div className="mb-1.5 text-[13px] leading-snug">
             <span>{option.label}</span>{" "}
-            <code className="text-muted-foreground ml-2 text-[0.75rem]">
-              {option.code}
-            </code>
+            {!isBreakDraft && (
+              <code className="text-muted-foreground ml-2 text-[0.75rem]">
+                {option.code}
+              </code>
+            )}
             {optionChange !== undefined && <ChangeBadge kind={optionChange} />}
           </div>
         )}
@@ -842,6 +851,10 @@ export function Options({
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const addOption = useAddOption(versionId);
+  // Break has no `code` field on a question or an option -- see
+  // QuestionEditor's own comment on the identical check. Hides the code
+  // controls here rather than collect a value breakShapedBodies drops.
+  const isBreakDraft = graph.change_request?.break_draft_version_id != null;
 
   const optionCodeId = useId();
   const optionLabelId = useId();
@@ -1014,6 +1027,7 @@ export function Options({
               isUncovered={uncovered.has(option.id)}
               hasFallback={anyAnswerEdges.length > 0}
               isGuard={guardOptionIds.has(option.id)}
+              isBreakDraft={isBreakDraft}
               editable={editable}
               disabled={pending}
               retargetingEdgeId={retargetingEdgeId}
@@ -1055,6 +1069,10 @@ export function Options({
                   addOption.mutate(
                     {
                       question: question.id,
+                      // Sent even when hidden (`isBreakDraft`): required on
+                      // `NewOption`, but break has nothing to receive it,
+                      // so `breakShapedBodies.addOption` drops it -- see
+                      // that field's own comment.
                       code: newOptionCode,
                       label: newOptionLabel,
                     },
@@ -1079,23 +1097,25 @@ export function Options({
                     onChange={(event) => setNewOptionLabel(event.target.value)}
                   />
                 </Field>
-                <Field label="Code" htmlFor={optionCodeId}>
-                  <Input
-                    id={optionCodeId}
-                    value={newOptionCode}
-                    required
-                    placeholder="Stable identifier"
-                    {...(pending ? { disabled: true } : {})}
-                    onChange={(event) => setNewOptionCode(event.target.value)}
-                  />
-                </Field>
+                {!isBreakDraft && (
+                  <Field label="Code" htmlFor={optionCodeId}>
+                    <Input
+                      id={optionCodeId}
+                      value={newOptionCode}
+                      required
+                      placeholder="Stable identifier"
+                      {...(pending ? { disabled: true } : {})}
+                      onChange={(event) => setNewOptionCode(event.target.value)}
+                    />
+                  </Field>
+                )}
                 <div className={editorActions}>
                   <Button
                     variant="primary"
                     type="submit"
                     disabled={
                       pending ||
-                      newOptionCode.trim() === "" ||
+                      (!isBreakDraft && newOptionCode.trim() === "") ||
                       newOptionLabel.trim() === ""
                     }
                   >
