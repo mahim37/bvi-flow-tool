@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
-import type { Core, ElementDefinition, NodeSingular } from "cytoscape";
+import type { Core, EdgeSingular, ElementDefinition, NodeSingular } from "cytoscape";
 import dagre from "cytoscape-dagre";
 
 import {
   cameraNeedsReframe,
   containerHasUsableSize,
+  idsAddedToJoinedKey,
   isSectionCollapseToggle,
   pointInSectionToggle,
+  rectFullyInView,
   runGraphLayout,
   separateNodesFromEdges,
   shouldRepositionNewSiblings,
 } from "./canvasLayout";
 import { CANVAS_STYLE } from "./canvasStyle";
+import { sectionNodeId } from "./graphElements";
+import { type LabelTip, guardIsTruncated, labelTipForNodeData } from "./labelTips";
 import { Minimap } from "./Minimap";
 import { Button } from "@/components/ui/button";
 
@@ -51,6 +55,9 @@ function fitToChainStart(cy: Core, count: number) {
     .reduce((collected, node) => collected.union(node), cy.collection());
   cy.fit(framed, 40);
 }
+
+const CANVAS_LABEL_FONT =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 interface CanvasProps {
   elements: ElementDefinition[];
@@ -120,6 +127,69 @@ function applyHover(cy: Core, node: NodeSingular): void {
   if (parent.nonempty()) parent.removeClass("faded");
 }
 
+function applyEdgeHover(cy: Core, edge: EdgeSingular): void {
+  cy.elements().removeClass("faded hl");
+  let keep = edge.union(edge.connectedNodes());
+  edge.connectedNodes().forEach((node) => {
+    const parent = node.parent();
+    if (parent.nonempty()) keep = keep.union(parent);
+  });
+  cy.elements().difference(keep).addClass("faded");
+  edge.addClass("hl");
+  edge.connectedNodes().forEach((node) => {
+    if (node.data("kind") !== "section") node.addClass("hl");
+  });
+}
+
+function nodeLabelTip(
+  node: NodeSingular,
+  view: { width: number; height: number },
+): LabelTip | null {
+  return labelTipForNodeData(
+    {
+      id: node.id(),
+      kind: String(node.data("kind") ?? ""),
+      collapsed: node.data("collapsed") === true,
+      isParent: node.isParent(),
+      fullLabel: node.data("fullLabel"),
+      sectionColor: node.data("sectionColor"),
+      box: node.renderedBoundingBox({ includeOverlays: false, includeLabels: true }),
+    },
+    view,
+  );
+}
+
+/** Truncated guards on this question's arrows: swap to `fullGuard` in
+ * place (same size, still along the stroke). Sections and edges do not. */
+function syncFullGuards(cy: Core, node: NodeSingular | null): void {
+  cy.edges().removeClass("full-guard");
+  if (node === null || node.data("kind") === "section") return;
+  node.connectedEdges().forEach((edge) => {
+    if (guardIsTruncated(edge.data("guard"), edge.data("fullGuard"))) {
+      edge.addClass("full-guard");
+    }
+  });
+}
+
+/** Hovered question's own larger prompt. Option pills stay on the arrows. */
+function tipsForElement(
+  ele: NodeSingular | EdgeSingular,
+  view: { width: number; height: number },
+): LabelTip[] {
+  if (ele.isEdge()) return [];
+  if (ele.data("kind") === "section") return [];
+  const tip = nodeLabelTip(ele, view);
+  return tip === null ? [] : [tip];
+}
+
+function syncExpandedLabels(cy: Core, tips: readonly LabelTip[]): void {
+  cy.elements().removeClass("expanded-label");
+  for (const tip of tips) {
+    const ele = cy.getElementById(tip.id);
+    if (ele.nonempty()) ele.addClass("expanded-label");
+  }
+}
+
 /** Places a brand new question beside its section's own first question
  * instead of wherever dagre's own disconnected-component placement
  * happened to land it -- a new question has no edges yet, so dagre sees
@@ -183,6 +253,9 @@ export function Canvas({
   // without re-binding cytoscape's listeners on every mode change.
   const pickingRef = useRef(pickLabel !== null);
   pickingRef.current = pickLabel !== null;
+  const canvasRootRef = useRef<HTMLDivElement>(null);
+  const hoverRef = useRef<{ id: string; isNode: boolean } | null>(null);
+  const [labelTips, setLabelTips] = useState<LabelTip[]>([]);
 
   useEffect(() => {
     const host = containerRef.current;
@@ -195,9 +268,7 @@ export function Canvas({
       // which is the only place a selection goes.
       boxSelectionEnabled: false,
       selectionType: "single",
-      // 0.2 is the original rate: Cytoscape's default 1 (and the 3 that
-      // landed during canvas work) makes a single wheel notch a huge jump.
-      wheelSensitivity: 0.2,
+      wheelSensitivity: 2,
       minZoom: 1e-50,
       maxZoom: 2.5,
     });
@@ -246,17 +317,89 @@ export function Canvas({
     // (state.hover in app.js): fade everything except the hovered node's
     // own connected edges/neighbours, so tracing one question's routing
     // doesn't require clicking it first. stopPropagation keeps a question
-    // inside a section from also running the section hover.
-    cy.on("mouseover", "node", (event) => {
-      event.stopPropagation();
-      applyHover(cy, event.target);
-    });
-    cy.on("mouseout", "node", (event) => {
-      event.stopPropagation();
-      cy.elements().removeClass("faded hl");
+    // inside a section from also running the section hover. The HTML
+    // cards sit on the boxes they belong to and grow past them, so
+    // mouseout of the cytoscape hit-area is not enough on its own — if
+    // the pointer is still inside a card, keep the expansion.
+    const viewSize = () => {
+      const frame = cy.container();
+      return { width: frame?.clientWidth ?? 0, height: frame?.clientHeight ?? 0 };
+    };
+    const pointerInTips = (clientX: number, clientY: number): boolean => {
+      const root = canvasRootRef.current;
+      if (root === null) return false;
+      for (const el of root.querySelectorAll("[data-label-tip]")) {
+        const box = el.getBoundingClientRect();
+        if (
+          clientX >= box.left &&
+          clientX <= box.right &&
+          clientY >= box.top &&
+          clientY <= box.bottom
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const clearHover = () => {
+      hoverRef.current = null;
+      cy.elements().removeClass("faded hl expanded-label full-guard");
+      setLabelTips([]);
       const container = cy.container();
       if (container) container.style.cursor = "";
+    };
+    const showHover = (ele: NodeSingular | EdgeSingular) => {
+      hoverRef.current = { id: ele.id(), isNode: ele.isNode() };
+      if (ele.isNode()) {
+        applyHover(cy, ele);
+        syncFullGuards(cy, ele);
+      } else {
+        applyEdgeHover(cy, ele);
+        syncFullGuards(cy, null);
+      }
+      const tips = tipsForElement(ele, viewSize());
+      syncExpandedLabels(cy, tips);
+      setLabelTips(tips);
+    };
+    const resyncTips = () => {
+      const hover = hoverRef.current;
+      if (hover === null) return;
+      const ele = cy.getElementById(hover.id);
+      if (ele.empty() || (hover.isNode ? !ele.isNode() : !ele.isEdge())) {
+        clearHover();
+        return;
+      }
+      const tips = tipsForElement(ele as NodeSingular | EdgeSingular, viewSize());
+      syncExpandedLabels(cy, tips);
+      setLabelTips(tips);
+    };
+    cy.on("mouseover", "node", (event) => {
+      event.stopPropagation();
+      showHover(event.target);
     });
+    cy.on("mouseover", "edge", (event) => {
+      event.stopPropagation();
+      showHover(event.target);
+    });
+    cy.on("mouseout", "node, edge", (event) => {
+      event.stopPropagation();
+      const leavingId = event.target.id();
+      const orig = event.originalEvent as MouseEvent | undefined;
+      requestAnimationFrame(() => {
+        if (hoverRef.current?.id !== leavingId) return;
+        if (orig !== undefined && pointerInTips(orig.clientX, orig.clientY)) {
+          return;
+        }
+        clearHover();
+      });
+    });
+    cy.on("mousemove", (event) => {
+      if (hoverRef.current === null || event.target !== cy) return;
+      const orig = event.originalEvent as MouseEvent | undefined;
+      if (orig !== undefined && pointerInTips(orig.clientX, orig.clientY)) return;
+      clearHover();
+    });
+    cy.on("pan zoom position", resyncTips);
     cy.on("mousemove", 'node[kind = "section"]', (event) => {
       const container = cy.container();
       if (container === null) return;
@@ -318,6 +461,8 @@ export function Canvas({
       cy.destroy();
       cyRef.current = null;
       setCy(null);
+      hoverRef.current = null;
+      setLabelTips([]);
       // A destroyed cy's elements go with it, so the next instance (React
       // 18 StrictMode's dev double-mount, or a real remount) starts with no
       // layout run yet -- without this reset, the elements-sync effect sees
@@ -372,6 +517,8 @@ export function Canvas({
 
     const signature = nodeSignature(elements);
     if (signature !== signatureRef.current) {
+      hoverRef.current = null;
+      setLabelTips([]);
       const previousIds = idsFromSignature(signatureRef.current);
       const currentIds = idsFromSignature(signature);
       const keepCamera =
@@ -380,12 +527,15 @@ export function Canvas({
           isSectionCollapseToggle(previousIds, currentIds));
       const zoom = cy.zoom();
       const pan = { ...cy.pan() };
+      const newlyCollapsed = idsAddedToJoinedKey(
+        collapseKeyRef.current,
+        collapsedSectionKey,
+      );
       signatureRef.current = signature;
-      // Collapse can leave remaining nodes where they are. Expand still
-      // needs dagre so restored questions are not dumped at (0,0).
-      if (!keepCamera || currentIds.size > previousIds.size) {
-        runGraphLayout(cy);
-      }
+      // Collapse used to leave remaining boxes where they were, which kept
+      // the old rank gaps between categories. Re-run dagre on fold and
+      // unfold; zoom is restored below rather than fitting the chain start.
+      runGraphLayout(cy);
       // Incremental adds only. A draft is a whole new id set (Canvas
       // stays mounted), and treating every copied question as "new"
       // stacked them beside their section anchors. See
@@ -398,7 +548,23 @@ export function Canvas({
       }
       if (keepCamera) {
         cy.viewport({ zoom, pan });
-        separateNodesFromEdges(cy);
+        const focusId = newlyCollapsed[0];
+        if (focusId !== undefined) {
+          const collapsedBox = cy.getElementById(sectionNodeId(focusId));
+          if (collapsedBox.nonempty()) {
+            const box = collapsedBox.boundingBox({
+              includeOverlays: false,
+              includeLabels: true,
+            });
+            if (!rectFullyInView(box, cy.extent(), 48 / zoom)) {
+              cy.animate({
+                center: { eles: collapsedBox },
+                duration: 280,
+                easing: "ease-out",
+              });
+            }
+          }
+        }
       } else {
         const host = cy.container();
         if (
@@ -524,7 +690,10 @@ export function Canvas({
   }
 
   return (
-    <div className="canvas relative h-full min-h-0 min-w-0 overflow-hidden border-x border-border bg-[var(--canvas-bg)] bg-[radial-gradient(circle_at_1px_1px,var(--canvas-dot)_1.5px,transparent_0)] bg-size-[26px_26px] [background-position:0_0]">
+    <div
+      ref={canvasRootRef}
+      className="canvas relative h-full min-h-0 min-w-0 overflow-hidden border-x border-border bg-[var(--canvas-bg)] bg-[radial-gradient(circle_at_1px_1px,var(--canvas-dot)_1.5px,transparent_0)] bg-size-[26px_26px] [background-position:0_0]"
+    >
       <div
         className="canvas__stage absolute inset-0 h-full w-full"
         ref={containerRef}
@@ -653,6 +822,29 @@ export function Canvas({
           </svg>
         </Button>
       </div>
+
+      {labelTips.map((tip) => (
+        <div
+          key={tip.id}
+          data-label-tip={tip.id}
+          className={
+            tip.role === "node"
+              ? "pointer-events-none absolute z-9 max-w-[400px] rounded-lg border-2 bg-white px-3.5 py-3 text-[13.5px] leading-[1.35] font-semibold text-[#1c1a16] shadow-lg whitespace-pre-wrap"
+              : "pointer-events-none absolute z-8 max-w-[280px] rounded-md border bg-white px-2.5 py-1.5 text-[12.5px] leading-snug font-semibold text-[#4a473f] shadow-md whitespace-pre-wrap"
+          }
+          style={{
+            left: tip.left,
+            top: tip.top,
+            minWidth: tip.minWidth,
+            maxWidth: tip.maxWidth,
+            borderColor: tip.color,
+            fontFamily: CANVAS_LABEL_FONT,
+          }}
+          aria-hidden="true"
+        >
+          {tip.text}
+        </div>
+      ))}
 
       {cy !== null && <Minimap cy={cy} />}
 

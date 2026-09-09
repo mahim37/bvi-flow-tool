@@ -167,7 +167,8 @@ function isSubsetOf(small: ReadonlySet<string>, large: ReadonlySet<string>): boo
 }
 
 /** Collapse/expand hides or restores a section's questions; the boxes
- * stay. Fitting the camera again is what feels like the zoom resetting. */
+ * stay. Layout still re-runs so leftover rank gaps close, but the camera
+ * keeps its zoom — fitting the chain start again is what feels like a reset. */
 export function isSectionCollapseToggle(
   previousIds: ReadonlySet<string>,
   currentIds: ReadonlySet<string>,
@@ -201,6 +202,24 @@ export function isSectionCollapseToggle(
   return !shouldRepositionNewSiblings(previousIds, currentIds);
 }
 
+/** Ids that appeared in a `|`-joined key (collapsed section uuids). */
+export function idsAddedToJoinedKey(previous: string, next: string): string[] {
+  const prev = new Set(previous === "" ? [] : previous.split("|"));
+  if (next === "") return [];
+  return next.split("|").filter((id) => id !== "" && !prev.has(id));
+}
+
+/** Whether `rect` sits fully inside `extent`, with `padding` in the same
+ * coordinate space (model units when used with `cy.extent()`). */
+export function rectFullyInView(rect: Rect, extent: Rect, padding: number): boolean {
+  return (
+    rect.x1 >= extent.x1 + padding &&
+    rect.y1 >= extent.y1 + padding &&
+    rect.x2 <= extent.x2 - padding &&
+    rect.y2 <= extent.y2 - padding
+  );
+}
+
 const CLEARANCE = 16;
 const MAX_SEPARATION_PASSES = 10;
 
@@ -216,7 +235,48 @@ export function parallelLaneOffset(
   return (lane - (count - 1) / 2) * spacing;
 }
 
-export const PARALLEL_LABEL_STAGGER = 18;
+export const PARALLEL_LABEL_STAGGER = 22;
+
+/**
+ * Screen-space nudge for an autorotated edge label.
+ *
+ * `text-margin-x/y` are unrotated pixels, then the pill spins around that
+ * point. A vertical stagger on a diagonal bundle therefore slides every
+ * label onto a neighbour's stroke. Docked fans already have distinct
+ * path midpoints, so they get no extra margin. Undocked same-pair
+ * beziers still share a chord — those get a perpendicular offset.
+ */
+export function edgeLabelScreenOffset(ele: {
+  data: (name: string) => unknown;
+  source?: () => { position: () => Point };
+  target?: () => { position: () => Point };
+}): Point {
+  const outCount = ele.data("outLaneCount");
+  const inCount = ele.data("inLaneCount");
+  if (
+    (typeof outCount === "number" && outCount > 1) ||
+    (typeof inCount === "number" && inCount > 1)
+  ) {
+    return { x: 0, y: 0 };
+  }
+
+  const laneCount = ele.data("laneCount");
+  const lane = ele.data("lane");
+  if (typeof laneCount !== "number" || laneCount < 2 || typeof lane !== "number") {
+    return { x: 0, y: 0 };
+  }
+
+  const distance = parallelLaneOffset(lane, laneCount, PARALLEL_LABEL_STAGGER);
+  const source = ele.source?.().position();
+  const target = ele.target?.().position();
+  if (source === undefined || target === undefined) {
+    return { x: 0, y: distance };
+  }
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: (-dy / len) * distance, y: (dx / len) * distance };
+}
 
 /** Stations along the chord for a parallel bundle. Two identical offsets
  * (not one mid-path bow) so sibling strokes split and stay split. */

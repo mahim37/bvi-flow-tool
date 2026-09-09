@@ -140,14 +140,14 @@ input[type="radio"] {
 
 .minimap__edge {
   stroke: #2f6fd6;
-  stroke-width: 1;
-  stroke-opacity: 0.35;
+  stroke-width: 1.35;
+  stroke-opacity: 0.5;
 }
 
 .minimap__view {
-  fill: rgba(47, 111, 214, 0.16);
-  stroke: #2f6fd6;
-  stroke-width: 1.5;
+  fill: rgba(154, 82, 9, 0.2);
+  stroke: #9a5209;
+  stroke-width: 2.25;
   pointer-events: none;
 }
 
