@@ -14,13 +14,14 @@ export type UUID = string;
 /** ISO-8601, as DRF renders `DateTimeField`. */
 export type Timestamp = string;
 
-/** "external" is a shadow version whose real content lives on break-backend
- * (`RoutingModel.EXTERNAL` there) -- its own `Section`/`Question`/`Edge`
- * rows are always empty; the map's data is translated from break's own
- * content instead (`break_graph.py`, bvi-backend). Nothing here has to
- * branch on it directly: `ChangeRequest.break_draft_version_id` is the one
- * field content-editing code actually checks, since that is what decides
- * whether a write needs break-shaped request bodies. */
+/** "external" is legacy: a shadow version whose real content lived
+ * entirely on break-backend, with empty local `Section`/`Question`/`Edge`
+ * rows -- the write-proxy design BREAK integration used before bvi-backend
+ * started copying BREAK's content into real local rows at draft-open time
+ * (`RoutingModel.EXTERNAL`'s own docstring, bvi-backend). Nothing creates
+ * an "external" version any more; a current BREAK-hosted draft is an
+ * ordinary "graph" version like any other product's. The value stays here
+ * only because a handful of historical rows still carry it. */
 export type RoutingModel = "sequence" | "graph" | "external";
 export type AnswerType = "single_choice" | "multi_choice" | "free_text" | "scale";
 /**
@@ -261,11 +262,14 @@ export interface ChangeRequest {
   reviews: ChangeRequestReview[];
   created: Timestamp;
   modified: Timestamp;
-  /** Null for every ordinary bvi-hosted proposal -- set only for a
-   * BREAK-hosted one (`version.routing_model === "external"`). The one
-   * field content-editing code checks to decide whether a write needs
-   * break-shaped request bodies instead of this app's own field names --
-   * see `api/breakShapedBodies.ts`. */
+  /** Null for every ordinary bvi-hosted proposal, and for a BREAK-hosted
+   * one before it has been submitted. Set once `submit` pushes a
+   * BREAK-hosted proposal's local content to a fresh break draft --
+   * break's own id for that draft, used by bvi-backend's own
+   * `publish_blocker`/`publish` to validate/activate against break's real
+   * content. Not something this app's own content-editing code branches
+   * on: a BREAK-hosted draft is an ordinary "graph" version, edited
+   * through the same requests as any other product's. */
   break_draft_version_id: number | null;
 }
 

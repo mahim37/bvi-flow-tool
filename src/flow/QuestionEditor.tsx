@@ -57,13 +57,6 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const updateQuestion = useUpdateQuestion(versionId);
-  // A BREAK-hosted question's `code` is synthesized server-side (`q{id}`,
-  // break_graph.py) purely so this app has something to display -- break
-  // has no such field to receive an edit, so `breakShapedBodies.updateQuestion`
-  // silently drops it rather than send an edit nothing would apply. Hiding
-  // the control here is the honest version of that: an input a save
-  // visibly ignores is worse than no input.
-  const isBreakDraft = graph.change_request?.break_draft_version_id != null;
 
   const promptId = useId();
   const codeId = useId();
@@ -97,7 +90,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
   function changed(): QuestionChanges {
     const changes: QuestionChanges = {};
     if (draft.prompt !== question.prompt) changes.prompt = draft.prompt;
-    if (!isBreakDraft && draft.code !== question.code) changes.code = draft.code;
+    if (draft.code !== question.code) changes.code = draft.code;
     if (draft.answer_type !== question.answer_type) {
       changes.answer_type = draft.answer_type;
     }
@@ -143,20 +136,18 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
             />
           </Field>
 
-          {!isBreakDraft && (
-            <Field
-              label="QID"
-              htmlFor={codeId}
-              hint="Editable only on something this draft introduced. Renaming an inherited code reads as a removal and an addition in the review screen, so the server refuses it — retire the question and add its replacement instead."
-            >
-              <Input
-                id={codeId}
-                value={draft.code}
-                {...(pending ? { disabled: true } : {})}
-                onChange={(event) => setDraft({ ...draft, code: event.target.value })}
-              />
-            </Field>
-          )}
+          <Field
+            label="QID"
+            htmlFor={codeId}
+            hint="Editable only on something this draft introduced. Renaming an inherited code reads as a removal and an addition in the review screen, so the server refuses it — retire the question and add its replacement instead."
+          >
+            <Input
+              id={codeId}
+              value={draft.code}
+              {...(pending ? { disabled: true } : {})}
+              onChange={(event) => setDraft({ ...draft, code: event.target.value })}
+            />
+          </Field>
 
           <Field label="Answer type" htmlFor={typeId}>
             <select

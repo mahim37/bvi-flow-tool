@@ -29,11 +29,8 @@ const STAFF_AUTH = "/api/staff/auth";
 /** Every write verb is nested under its version, matching
  * `questionnaires/api/flow_tool/urls.py` -- the version id is what the
  * "is this a draft, and may you edit it" check reads, so it is in the path
- * rather than re-derived. Exported so `breakShapedBodies.ts` can address the
- * exact same URLs with break-shaped bodies instead -- a BREAK-hosted
- * draft's content still lives behind this app's own routes (bvi-backend
- * proxies to break-backend internally), only the field names differ. */
-export const version = (versionId: UUID) => `${FLOW_TOOL}/versions/${versionId}`;
+ * rather than re-derived. */
+const version = (versionId: UUID) => `${FLOW_TOOL}/versions/${versionId}`;
 
 export const login = (email: string, password: string) =>
   request<StaffIdentity>(`${STAFF_AUTH}/login/`, {

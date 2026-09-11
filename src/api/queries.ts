@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import * as breakApi from "./breakShapedBodies";
 import * as api from "./endpoints";
 import type {
   NewEdge,
@@ -11,14 +10,7 @@ import type {
   QuestionChanges,
 } from "./endpoints";
 import { ApiError } from "./client";
-import type {
-  Edge,
-  Graph,
-  PreviewAnswer,
-  QuestionOption,
-  SectionRecord,
-  UUID,
-} from "./types";
+import type { Edge, PreviewAnswer, QuestionOption, SectionRecord, UUID } from "./types";
 
 /** Keyed on the questionnaire filter, because the server applies it -- two
  * filters are two different lists, not one list read twice. */
@@ -99,23 +91,6 @@ export function useHistory(filters: api.HistoryFilters) {
     queryFn: ({ signal }) => api.listHistory(filters, signal),
     retry: retryUnlessRefused,
   });
-}
-
-/**
- * Whether a content-CRUD write against `versionId` needs break-shaped
- * request bodies (`breakShapedBodies.ts`) instead of this app's own.
- *
- * Read off the already-cached `graph/` response rather than a prop or a
- * second fetch: every mutation hook below only ever runs while a
- * component holding that same version's `graph` is mounted (that graph is
- * what the edit controls are drawn from), so the cache is guaranteed
- * populated and current at the moment a write actually fires -- no new
- * data dependency, no risk of it disagreeing with what the editor is
- * showing.
- */
-function isBreakDraft(client: QueryClient, versionId: UUID): boolean {
-  const graph = client.getQueryData<Graph>(graphKey(versionId));
-  return graph?.change_request?.break_draft_version_id != null;
 }
 
 /**
@@ -201,13 +176,7 @@ export function useDiscardDraft() {
 export function useAddEdge(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (edge: NewEdge) => {
-      if (isBreakDraft(client, versionId)) {
-        await breakApi.addEdge(versionId, edge);
-        return;
-      }
-      await api.addEdge(versionId, edge);
-    },
+    mutationFn: (edge: NewEdge) => api.addEdge(versionId, edge),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
@@ -215,19 +184,13 @@ export function useAddEdge(versionId: UUID) {
 export function useUpdateEdge(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       edgeId,
       changes,
     }: {
       edgeId: UUID;
       changes: Partial<Pick<Edge, "from_option" | "to_question">>;
-    }) => {
-      if (isBreakDraft(client, versionId)) {
-        await breakApi.updateEdge(versionId, edgeId, changes);
-        return;
-      }
-      await api.updateEdge(versionId, edgeId, changes);
-    },
+    }) => api.updateEdge(versionId, edgeId, changes),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
@@ -408,10 +371,7 @@ export function useRemoveSection(versionId: UUID) {
 export function useAddQuestion(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (question: NewQuestion) =>
-      isBreakDraft(client, versionId)
-        ? breakApi.addQuestion(versionId, question)
-        : api.addQuestion(versionId, question),
+    mutationFn: (question: NewQuestion) => api.addQuestion(versionId, question),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
@@ -419,19 +379,13 @@ export function useAddQuestion(versionId: UUID) {
 export function useUpdateQuestion(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       questionId,
       changes,
     }: {
       questionId: UUID;
       changes: QuestionChanges;
-    }) => {
-      if (isBreakDraft(client, versionId)) {
-        await breakApi.updateQuestion(versionId, questionId, changes);
-        return;
-      }
-      await api.updateQuestion(versionId, questionId, changes);
-    },
+    }) => api.updateQuestion(versionId, questionId, changes),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
@@ -455,13 +409,7 @@ export function useReorderQuestions(versionId: UUID) {
 export function useAddOption(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (option: NewOption) => {
-      if (isBreakDraft(client, versionId)) {
-        await breakApi.addOption(versionId, option);
-        return;
-      }
-      await api.addOption(versionId, option);
-    },
+    mutationFn: (option: NewOption) => api.addOption(versionId, option),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
@@ -469,19 +417,13 @@ export function useAddOption(versionId: UUID) {
 export function useUpdateOption(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       optionId,
       changes,
     }: {
       optionId: UUID;
       changes: Partial<Pick<QuestionOption, "code" | "label">>;
-    }) => {
-      if (isBreakDraft(client, versionId)) {
-        await breakApi.updateOption(versionId, optionId, changes);
-        return;
-      }
-      await api.updateOption(versionId, optionId, changes);
-    },
+    }) => api.updateOption(versionId, optionId, changes),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
