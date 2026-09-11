@@ -513,6 +513,12 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               </Banner>
             ))}
 
+          {!isAuthor && isOpen && (
+            <Banner tone="info">
+              Only {changeRequest.created_by_email} can submit this for review.
+            </Banner>
+          )}
+
           {!isAuthor && !isOpen && (
             <Banner tone="info">
               Only {changeRequest.created_by_email} can discard or withdraw this
@@ -571,8 +577,12 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               rather than an instant click: submitting still freezes the
               draft for editing and, for a BREAK-hosted one, pushes its
               content to break for real -- not nothing, even with no
-              input left to fill in. */}
-        {isOpen && (
+              input left to fill in. Author-only, same restriction
+              Withdraw already has (`editing.submit`'s own
+              `_require_author`) -- a draft may be edited by more than one
+              person, but deciding it is ready for review is the author's
+              call. */}
+        {isOpen && isAuthor && (
           <ConfirmAction
             message={`Submit for review? ${REQUIRED_REVIEWER_EMAILS.join(" and ")} will both need to approve before this publishes.`}
             confirmLabel="Submit for review"
