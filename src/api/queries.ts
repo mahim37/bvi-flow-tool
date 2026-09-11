@@ -2,15 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import * as api from "./endpoints";
-import type {
-  NewEdge,
-  NewOption,
-  NewQuestion,
-  NewSection,
-  QuestionChanges,
-} from "./endpoints";
+import type { NewEdge, NewOption, NewQuestion, QuestionChanges } from "./endpoints";
 import { ApiError } from "./client";
-import type { Edge, PreviewAnswer, QuestionOption, SectionRecord, UUID } from "./types";
+import type { Edge, PreviewAnswer, QuestionOption, UUID } from "./types";
 
 /** Keyed on the questionnaire filter, because the server applies it -- two
  * filters are two different lists, not one list read twice. */
@@ -337,36 +331,6 @@ export function usePreviewPathTo(versionId: UUID) {
 /* per-option guard hanging off it. All three are recomputed by          */
 /* `diagnostics` from the new rows, and none of them are derivable here. */
 /* ------------------------------------------------------------------ */
-
-export function useAddSection(versionId: UUID) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (section: NewSection) => api.addSection(versionId, section),
-    onSuccess: () => invalidateGraph(client, versionId),
-  });
-}
-
-export function useUpdateSection(versionId: UUID) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      sectionId,
-      changes,
-    }: {
-      sectionId: UUID;
-      changes: Partial<Omit<SectionRecord, "id">>;
-    }) => api.updateSection(versionId, sectionId, changes),
-    onSuccess: () => invalidateGraph(client, versionId),
-  });
-}
-
-export function useRemoveSection(versionId: UUID) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (sectionId: UUID) => api.removeSection(versionId, sectionId),
-    onSuccess: () => invalidateGraph(client, versionId),
-  });
-}
 
 export function useAddQuestion(versionId: UUID) {
   const client = useQueryClient();

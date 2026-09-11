@@ -16,7 +16,6 @@ import type {
   QuestionOption,
   QuestionRecord,
   ReviewPayload,
-  SectionRecord,
   StaffIdentity,
   UUID,
   Version,
@@ -242,35 +241,6 @@ export const previewPathTo = (
 /* operation, and they take the whole list. `Section.display_order` has  */
 /* no such constraint, so a section may be moved directly.               */
 /* ------------------------------------------------------------------ */
-
-export interface NewSection {
-  code: string;
-  name: string;
-  description?: string;
-  /** Null means "put it last". */
-  display_order?: number | null;
-}
-
-export const addSection = (versionId: UUID, section: NewSection) =>
-  request<SectionRecord>(`${version(versionId)}/sections/`, {
-    method: "POST",
-    body: section,
-  });
-
-export const updateSection = (
-  versionId: UUID,
-  sectionId: UUID,
-  changes: Partial<Omit<SectionRecord, "id">>,
-) =>
-  request<SectionRecord>(`${version(versionId)}/sections/${sectionId}/`, {
-    method: "PATCH",
-    body: changes,
-  });
-
-/** Hard delete, and only of an empty heading: the server refuses one that
- * still has questions filed under it rather than orphaning them. */
-export const removeSection = (versionId: UUID, sectionId: UUID) =>
-  request<void>(`${version(versionId)}/sections/${sectionId}/`, { method: "DELETE" });
 
 export interface NewQuestion {
   code: string;
