@@ -61,12 +61,12 @@ describe("paths", () => {
 });
 
 describe("submit", () => {
-  it("names the two reviewers in the body", async () => {
-    await api.submitDraft("v1", "r1", "r2");
+  it("posts with no body -- the two reviewers are fixed, not chosen", async () => {
+    await api.submitDraft("v1");
 
     const call = lastCall();
     expect(call.url).toBe("/api/staff/flow-tool/versions/v1/submit/");
-    expect(call.body).toEqual({ reviewer_1: "r1", reviewer_2: "r2" });
+    expect(call.method).toBe("POST");
   });
 });
 

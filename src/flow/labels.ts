@@ -12,6 +12,18 @@ import type {
 } from "../api/types";
 import { trunc } from "./graphElements";
 
+/** The two people every proposal is reviewed by -- locked down, not a
+ * choice `submit` offers any more. Mirrors bvi-backend's own
+ * `flow_tool.editing.REQUIRED_REVIEWER_EMAILS` exactly; there is no
+ * endpoint exposing this (removed along with the reviewer picker it used
+ * to populate), so this is duplicated rather than fetched -- two email
+ * addresses is not worth a round trip, but a change to who these two are
+ * has to land in both places. */
+export const REQUIRED_REVIEWER_EMAILS = [
+  "boaz.salik@fischerjordan.com",
+  "info@bizziegold.com",
+] as const;
+
 const ANSWER_TYPE_LABELS: Record<AnswerType, string> = {
   single_choice: "Single choice",
   multi_choice: "Multi choice",

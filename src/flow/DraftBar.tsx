@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import type { Graph, UUID, VersionListItem } from "../api/types";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
-import { Field, nativeSelectClassName } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TabsLink, TabsNav } from "@/components/ui/nav-tabs";
 import { editorBox, mutedHint } from "@/lib/chrome";
@@ -14,7 +14,6 @@ import {
   useCreateDraft,
   useDiscardDraft,
   useReleaseLock,
-  useReviewers,
   useSpawnProduct,
   useSubmitDraft,
   useWithdrawDraft,
@@ -22,7 +21,13 @@ import {
 import { useAuth } from "../auth/useAuth";
 import { ConfirmAction } from "./ConfirmAction";
 import { EditorDropdown } from "./EditorDropdown";
-import { formatTimestamp, statusLabel, statusMeaning, versionLabel } from "./labels";
+import {
+  REQUIRED_REVIEWER_EMAILS,
+  formatTimestamp,
+  statusLabel,
+  statusMeaning,
+  versionLabel,
+} from "./labels";
 import {
   useReviewErrorHandler,
   useWriteErrorHandler,
@@ -138,12 +143,6 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   const spawnCodeId = useId();
   const [spawnName, setSpawnName] = useState("");
   const [spawnCode, setSpawnCode] = useState("");
-
-  const reviewer1Id = useId();
-  const reviewer2Id = useId();
-  const [reviewer1, setReviewer1] = useState<UUID | "">("");
-  const [reviewer2, setReviewer2] = useState<UUID | "">("");
-  const reviewers = useReviewers();
 
   const createDraft = useCreateDraft();
   const discardDraft = useDiscardDraft();
@@ -428,42 +427,42 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // refusal. `editing.discard_draft` is wider (see `isPublisher` below);
   // `isAuthor` alone still gates Withdraw, which stayed author-only.
   const isAuthor = changeRequest.created_by_email === identity?.email;
-  // Whether *this* account holds `publish_flow_tool` at all -- not
+  // Whether *this* account is one of the two required reviewers -- not
   // `isNamedReviewer` below, which only answers "is one of *this*
   // proposal's two," a fact that does not exist yet for an OPEN draft
-  // (`submit` is what names them). `reviewers` already lists everyone
-  // holding the grant (fetched for the submit form's picker), so this
-  // reads it rather than adding a second source of truth or falling back
-  // to guess-by-refusal (`reviewRefused`), which is one-way -- it only
-  // ever turns true after a refusal, so it cannot positively confirm
-  // anyone holds the grant before they have tried and failed to use it.
-  const isPublisher = (reviewers.data ?? []).some(
-    (reviewer) => reviewer.email === identity?.email,
-  );
+  // (`submit` is what names them, and it always names the same two
+  // people). Checked against `REQUIRED_REVIEWER_EMAILS` directly rather
+  // than a `reviewers/` list call -- there is no longer a picker for that
+  // endpoint to populate, and with only ever two possible people, a fetch
+  // buys nothing a constant doesn't already have.
+  const isPublisher =
+    identity !== null &&
+    (REQUIRED_REVIEWER_EMAILS as readonly string[]).includes(identity.email);
   const isOpen = changeRequest.status === "open";
   // Withdrawing accepts both, and drops an approval rather than banking
   // it: what comes back is an editable proposal, and an approval of an
   // older draft is not an approval of the next one.
   const isFrozen =
     changeRequest.status === "submitted" || changeRequest.status === "approved";
-  // Mirrors `ReviewView`'s own `isNamedReviewer`/`canApprove`/`canReject`/
-  // `canPublish` -- not re-deriving a routing decision (spec 1.3 is about
-  // the graph, not this), just the same client-side echo of who may act
-  // that this file already keeps for Discard/Withdraw. `editing.approve`/
-  // `editing.reject` refuse anyone but the two named reviewers while
-  // submitted; `editing.publish` has no such check once approved -- any
-  // publish_flow_tool holder, including the author, may press it. Without
-  // this, the button below reads "Review and publish" for someone who can
-  // do neither, which is the same misleading-primary-button shape this
-  // app already avoids elsewhere.
+  // Mirrors `ReviewView`'s own `isNamedReviewer`/`canApprove`/`canReject` --
+  // not re-deriving a routing decision (spec 1.3 is about the graph, not
+  // this), just the same client-side echo of who may act that this file
+  // already keeps for Discard/Withdraw. There is no more `canPublish` to
+  // mirror: publishing is automatic the moment the second required
+  // reviewer approves (`editing.approve`), not a separate action anybody
+  // presses. `submitted` *or* `approved` both still mean "something for a
+  // reviewer to do" now -- `approved` means one of the two has cleared it
+  // and the other one still can, where it used to mean "anyone holding
+  // publish may press Publish."
   const isNamedReviewer =
     identity !== null &&
     (changeRequest.reviewer_1_email === identity.email ||
       changeRequest.reviewer_2_email === identity.email);
   const canActOnReview =
     !reviewRefused &&
-    (changeRequest.status === "approved" ||
-      (changeRequest.status === "submitted" && !isAuthor && isNamedReviewer));
+    !isAuthor &&
+    isNamedReviewer &&
+    (changeRequest.status === "submitted" || changeRequest.status === "approved");
   const busy =
     submitDraft.isPending ||
     withdrawDraft.isPending ||
@@ -556,111 +555,39 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
       <div className="flex flex-wrap items-center gap-2">
         {/* Quiet while there's a more primary action beside it (Submit
               for review) or while this signed-in account cannot actually
-              approve, reject or publish this proposal -- everyone with
-              view access may still open it to read the diff, but only
-              `canActOnReview` earns the same visual weight Submit/Publish
-              get elsewhere and the wording that promises an action. */}
+              approve or reject this proposal -- everyone with view access
+              may still open it to read the diff, but only
+              `canActOnReview` earns the same visual weight Submit gets
+              elsewhere and the wording that promises an action. */}
         <Button asChild variant={isOpen || !canActOnReview ? "ghost" : "primary"}>
           <Link to={`/versions/${versionId}/review`}>
-            {isOpen || !canActOnReview ? "Check the diff" : "Review and publish"}
+            {isOpen || !canActOnReview ? "Check the diff" : "Review"}
           </Link>
         </Button>
 
+        {/* No more reviewer picker -- `submit` always sends this to the
+              same two required people (`REQUIRED_REVIEWER_EMAILS`), so
+              there is nothing left for a form to ask. A plain confirm
+              rather than an instant click: submitting still freezes the
+              draft for editing and, for a BREAK-hosted one, pushes its
+              content to break for real -- not nothing, even with no
+              input left to fill in. */}
         {isOpen && (
-          <EditorDropdown trigger="Submit for review" disabled={busy || editRefused}>
-            {(close) => (
-              <form
-                className={editorBox}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (reviewer1 === "" || reviewer2 === "") return;
-                  submitDraft.mutate(
-                    { reviewer1Id: reviewer1, reviewer2Id: reviewer2 },
-                    {
-                      onError: onWriteError,
-                      onSuccess: () => {
-                        close();
-                        setReviewer1("");
-                        setReviewer2("");
-                      },
-                    },
-                  );
-                }}
+          <ConfirmAction
+            message={`Submit for review? ${REQUIRED_REVIEWER_EMAILS.join(" and ")} will both need to approve before this publishes.`}
+            confirmLabel="Submit for review"
+            onConfirm={() => submitDraft.mutate(undefined, { onError: onWriteError })}
+          >
+            {(open) => (
+              <Button
+                variant="primary"
+                disabled={busy || editRefused}
+                onClick={open}
               >
-                <Field label="First reviewer" htmlFor={reviewer1Id}>
-                  <select
-                    id={reviewer1Id}
-                    className={nativeSelectClassName}
-                    value={reviewer1}
-                    required
-                    onChange={(event) => setReviewer1(event.target.value)}
-                  >
-                    <option value="" disabled>
-                      Choose a reviewer
-                    </option>
-                    {(reviewers.data ?? [])
-                      .filter(
-                        (candidate) =>
-                          candidate.id !== changeRequest.created_by &&
-                          candidate.id !== reviewer2,
-                      )
-                      .map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>
-                          {candidate.email}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
-                <Field label="Second reviewer" htmlFor={reviewer2Id}>
-                  <select
-                    id={reviewer2Id}
-                    className={nativeSelectClassName}
-                    value={reviewer2}
-                    required
-                    onChange={(event) => setReviewer2(event.target.value)}
-                  >
-                    <option value="" disabled>
-                      Choose a reviewer
-                    </option>
-                    {(reviewers.data ?? [])
-                      .filter(
-                        (candidate) =>
-                          candidate.id !== changeRequest.created_by &&
-                          candidate.id !== reviewer1,
-                      )
-                      .map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>
-                          {candidate.email}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
-                <Button
-                  variant="primary"
-                  type="submit"
-                  disabled={
-                    submitDraft.isPending ||
-                    reviewer1 === "" ||
-                    reviewer2 === "" ||
-                    reviewer1 === reviewer2
-                  }
-                >
-                  {submitDraft.isPending ? "Submitting…" : "Submit for review"}
-                </Button>
-                {/* Two named reviewers are required, so a group with
-                      fewer than two publish-flow-tool holders cannot
-                      submit anything at all -- worth saying here rather
-                      than leaving both selects empty with no explanation. */}
-                {reviewers.data !== undefined && reviewers.data.length < 2 && (
-                  <p className={mutedHint}>
-                    Fewer than two people currently hold the publish grant, so there is
-                    nobody eligible to name. Ask whoever manages staff accounts to grant
-                    it before submitting.
-                  </p>
-                )}
-              </form>
+                {submitDraft.isPending ? "Submitting…" : "Submit for review"}
+              </Button>
             )}
-          </EditorDropdown>
+          </ConfirmAction>
         )}
 
         {/* Discard accepts the author or anyone holding the publish

@@ -249,27 +249,10 @@ export function useReorderEdges(versionId: UUID) {
   });
 }
 
-/** Populates the "Submit for review" form's two reviewer pickers.
- * Unpaginated, like `useVersions`: the eligible group is a handful of
- * people, not a list that grows without bound. */
-export function useReviewers() {
-  return useQuery({
-    queryKey: ["reviewers"] as const,
-    queryFn: ({ signal }) => api.listReviewers(signal),
-    retry: retryUnlessRefused,
-  });
-}
-
 export function useSubmitDraft(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      reviewer1Id,
-      reviewer2Id,
-    }: {
-      reviewer1Id: UUID;
-      reviewer2Id: UUID;
-    }) => api.submitDraft(versionId, reviewer1Id, reviewer2Id),
+    mutationFn: () => api.submitDraft(versionId),
     onSuccess: () => invalidateGraph(client, versionId),
   });
 }
@@ -299,11 +282,26 @@ export function useReleaseLock(versionId: UUID) {
 /* "Submit for review" on something already approved.                   */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Approving no longer stops at "cleared" -- the moment the *second*
+ * required reviewer approves, the server publishes in the same call (see
+ * `editing.approve`), so this has to invalidate the way publishing always
+ * has: every version's graph, not just this one, since a publish changes
+ * what's live and re-answers `is_stale` for every other open sandbox on
+ * the same questionnaire. Checked on the response's own `status` rather
+ * than assumed, since a first approval (still `approved`, waiting on the
+ * other reviewer) only ever changes this one proposal.
+ */
 export function useApproveDraft(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (note: string) => api.approveDraft(versionId, note),
-    onSuccess: () => invalidateGraph(client, versionId),
+    onSuccess: async (data) => {
+      await invalidateGraph(client, versionId);
+      if (data.status === "published") {
+        await client.invalidateQueries({ queryKey: ["graph"] });
+      }
+    },
   });
 }
 
@@ -312,27 +310,6 @@ export function useRejectDraft(versionId: UUID) {
   return useMutation({
     mutationFn: (note: string) => api.rejectDraft(versionId, note),
     onSuccess: () => invalidateGraph(client, versionId),
-  });
-}
-
-/**
- * Publishing invalidates every version, not just this one.
- *
- * It is the one call in the tool that changes what a respondent is asked:
- * the draft becomes live and whatever was live stops being so, which
- * re-answers `is_stale` for every other open sandbox on the same
- * questionnaire. `invalidateGraph` already drops the whole `versions`
- * prefix, and the previously-live version's own map is dropped here
- * because its `is_active` has just changed underneath it.
- */
-export function usePublishDraft(versionId: UUID) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.publishDraft(versionId),
-    onSuccess: async () => {
-      await invalidateGraph(client, versionId);
-      await client.invalidateQueries({ queryKey: ["graph"] });
-    },
   });
 }
 

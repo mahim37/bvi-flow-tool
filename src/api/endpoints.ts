@@ -16,7 +16,6 @@ import type {
   QuestionOption,
   QuestionRecord,
   ReviewPayload,
-  Reviewer,
   SectionRecord,
   StaffIdentity,
   UUID,
@@ -141,20 +140,11 @@ export const reorderEdges = (versionId: UUID, questionId: UUID, edgeIds: UUID[])
     body: { edge_ids: edgeIds },
   });
 
-/** Everyone eligible to be named a reviewer: holds `publish_flow_tool`.
- * Gated on view access alone, so the picker can be populated before a
- * proposal is submitted -- `editing.submit` is the real gate, this list
- * just exists so a client does not have to guess who would pass it. */
-export const listReviewers = (signal?: AbortSignal) =>
-  request<Reviewer[]>(`${FLOW_TOOL}/reviewers/`, signal ? { signal } : {});
-
-/** Two distinct people, neither the author, both holding the publish
- * grant -- `editing.submit` refuses anything else. See `listReviewers`. */
-export const submitDraft = (versionId: UUID, reviewer1Id: UUID, reviewer2Id: UUID) =>
-  request<ChangeRequest>(`${version(versionId)}/submit/`, {
-    method: "POST",
-    body: { reviewer_1: reviewer1Id, reviewer_2: reviewer2Id },
-  });
+/** No body -- who reviews it is no longer a choice this call makes.
+ * `editing.submit` always resolves the same two required reviewers
+ * itself (see `labels.ts`'s `REQUIRED_REVIEWER_EMAILS`). */
+export const submitDraft = (versionId: UUID) =>
+  request<ChangeRequest>(`${version(versionId)}/submit/`, { method: "POST" });
 
 export const withdrawDraft = (versionId: UUID) =>
   request<ChangeRequest>(`${version(versionId)}/withdraw/`, { method: "POST" });
@@ -205,16 +195,6 @@ export const rejectDraft = (versionId: UUID, note: string) =>
     method: "POST",
     body: { note },
   });
-
-/**
- * Make the approved draft the live questionnaire.
- *
- * No body, deliberately: everything it needs was decided by the approval,
- * and a publish that took parameters would be a publish that could change
- * something nobody reviewed.
- */
-export const publishDraft = (versionId: UUID) =>
-  request<ChangeRequest>(`${version(versionId)}/publish/`, { method: "POST" });
 
 /* ------------------------------------------------------------------ */
 /* Preview (phase 6).                                                  */
