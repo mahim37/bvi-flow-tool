@@ -136,9 +136,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   const changeRequest = graph.change_request;
 
   const labelId = useId();
-  const summaryId = useId();
   const [label, setLabel] = useState("");
-  const [summary, setSummary] = useState("");
 
   const spawnNameId = useId();
   const [spawnName, setSpawnName] = useState("");
@@ -163,13 +161,16 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   function startProposal(event: React.FormEvent, close: () => void) {
     event.preventDefault();
     createDraft.mutate(
-      { versionId, label, summary },
+      // The server takes `summary` as an optional second line of context,
+      // but the dialog no longer asks for it -- one field to fill is
+      // simpler than two, and it was always freeform "why", never load-
+      // bearing the way the name is.
+      { versionId, label, summary: "" },
       {
         onError: onWriteError,
         onSuccess: (created) => {
           close();
           setLabel("");
-          setSummary("");
           // Straight into the copy. Staying on the source would leave the
           // editor looking at a version its controls no longer apply to.
           onOpenVersion(created.draft_version);
@@ -310,20 +311,12 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                     A draft is a whole copy of this version. Only one may be open at a
                     time.
                   </p>
-                  <Field label="Name" htmlFor={labelId}>
+                  <Field label="What's this draft for?" htmlFor={labelId}>
                     <Input
                       id={labelId}
                       value={label}
-                      placeholder="What this proposal is called"
+                      placeholder='e.g. "Reword Q4" or "Add a new risk question"'
                       onChange={(event) => setLabel(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Summary" htmlFor={summaryId}>
-                    <Input
-                      id={summaryId}
-                      value={summary}
-                      placeholder="Why it exists"
-                      onChange={(event) => setSummary(event.target.value)}
                     />
                   </Field>
                   <Button
