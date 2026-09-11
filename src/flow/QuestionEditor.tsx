@@ -221,7 +221,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
           </div>
         </form>
       ) : (
-        <p className="mt-1.5 text-[16.5px] leading-snug font-medium">
+        <h2 className="text-base leading-snug font-medium">
           {question.prompt}{" "}
           <Button
             variant="outline"
@@ -231,7 +231,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
           >
             Edit
           </Button>
-        </p>
+        </h2>
       )}
 
       {error !== null && (

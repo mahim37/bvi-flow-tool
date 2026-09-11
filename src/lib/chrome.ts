@@ -25,7 +25,8 @@ export const checkRow = "mb-2.5 flex items-center gap-2";
 
 export const optCard = "gap-0 rounded-[10px] p-3 ring-border [--card-spacing:0.75rem]";
 
-export const destChip =
-  "bg-background inline-flex max-w-full items-center gap-1.5 rounded-[7px] border border-border px-2.5 py-1 text-xs text-foreground/80";
-
-export const destChipEnd = "text-destructive border-[rgba(240,114,107,0.3)]";
+/** Destination / source question links in the detail sheet: wrap instead of
+ * ellipsizing, and left-align so a multi-line prompt still reads as a
+ * sentence. Overrides `Button variant="link"`'s nowrap. */
+export const questionLink =
+  "h-auto min-h-0 max-w-full justify-start whitespace-normal text-left";

@@ -6,6 +6,7 @@ import { useAddEdge, useReview, useUpdateEdge } from "../api/queries";
 import type { UUID } from "../api/types";
 import { Canvas } from "./Canvas";
 import { DetailPanel } from "./DetailPanel";
+import { RouteChoicesPanel } from "./RouteChoicesPanel";
 import { Sidebar } from "./Sidebar";
 import { useVersionContext } from "./versionContext";
 import { useWriteErrorHandler } from "./useWriteError";
@@ -33,6 +34,7 @@ export function MapView() {
   const onWriteError = useWriteErrorHandler();
 
   const [selectedQuestionId, setSelectedQuestionId] = useState<UUID | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<UUID | null>(null);
   const [highlightedIds, setHighlightedIds] = useState<readonly string[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pick, setPick] = useState<CanvasPick | null>(null);
@@ -46,6 +48,7 @@ export function MapView() {
   const focusId = searchParams.get("question");
   useEffect(() => {
     setSelectedQuestionId(focusId);
+    setSelectedEdgeId(null);
     setHighlightedIds(focusId === null ? [] : [focusId]);
     if (focusId === null) return;
     const focused = graph.questions.find((question) => question.id === focusId);
@@ -130,18 +133,35 @@ export function MapView() {
     );
   }, [graph.questions, selectedQuestionId]);
 
+  const selectedEdge = useMemo(() => {
+    if (selectedEdgeId === null) return null;
+    return graph.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
+  }, [graph.edges, selectedEdgeId]);
+
+  useEffect(() => {
+    if (selectedEdgeId !== null && selectedEdge === null) setSelectedEdgeId(null);
+  }, [selectedEdge, selectedEdgeId]);
+
+  function selectQuestion(id: UUID | null) {
+    setSelectedEdgeId(null);
+    setSelectedQuestionId(id);
+  }
+
+  const detailOpen = selectedQuestionId !== null || selectedEdge !== null;
+
   // Ported from break-backend's `.detail`/`.detail.open` (styles.css
   // ~L660-673) -- the panel is a closed drawer whenever nothing is
   // selected, sharing the same grid-column-collapse technique as the
   // sidebar toggle above rather than break's flex+margin-right, since
-  // `.layout` is a grid here.
+  // `.layout` is a grid here. A default-route sheet uses the same column
+  // as the question detail panel.
   const layoutClassName = cn(
     "layout grid min-h-0 w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden transition-[grid-template-columns] duration-200",
-    sidebarCollapsed && selectedQuestionId === null
+    sidebarCollapsed && !detailOpen
       ? "grid-cols-[0_minmax(0,1fr)_0] [&>nav]:min-w-0 [&>nav]:overflow-hidden [&>nav]:p-0 [&>aside]:overflow-hidden [&>aside]:p-0"
       : sidebarCollapsed
         ? "grid-cols-[0_minmax(0,1fr)_var(--detail-width)] [&>nav]:min-w-0 [&>nav]:overflow-hidden [&>nav]:p-0"
-        : selectedQuestionId === null
+        : !detailOpen
           ? "grid-cols-[var(--sidebar-width)_minmax(0,1fr)_0] [&>aside]:overflow-hidden [&>aside]:p-0"
           : "grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--detail-width)]",
   );
@@ -151,21 +171,28 @@ export function MapView() {
       <Sidebar
         graph={graph}
         selectedId={selectedQuestionId}
-        onSelectQuestion={setSelectedQuestionId}
+        onSelectQuestion={selectQuestion}
         onHighlight={setHighlightedIds}
       />
       <Canvas
         elements={elements}
         selectedId={selectedQuestionId}
+        selectedEdgeId={selectedEdgeId}
         highlightedIds={highlightedIds}
         onSelectNode={(id) =>
-          setSelectedQuestionId(
+          selectQuestion(
             id !== null && !isSyntheticNode(id) && !isSectionNode(id) ? id : null,
           )
         }
         onSelectEdge={(edgeId) => {
           const edge = graph.edges.find((candidate) => candidate.id === edgeId);
-          if (edge) setSelectedQuestionId(edge.from_question);
+          if (edge === undefined) return;
+          if (edge.from_option === null) {
+            setSelectedQuestionId(null);
+            setSelectedEdgeId(edge.id);
+            return;
+          }
+          selectQuestion(edge.from_question);
         }}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((collapsed) => !collapsed)}
@@ -174,6 +201,7 @@ export function MapView() {
         onCancelPick={() => setPick(null)}
         collapsedSectionKey={[...collapsedSections].sort().join("|")}
         onToggleSection={(sectionId) => {
+          const collapsing = !collapsedSections.has(sectionId);
           setCollapsedSections((current) => {
             const next = new Set(current);
             if (next.has(sectionId)) next.delete(sectionId);
@@ -184,25 +212,47 @@ export function MapView() {
             (question) => question.id === selectedQuestionId,
           );
           if (selected?.section === sectionId) setSelectedQuestionId(null);
+          if (collapsing && selectedEdge !== null) {
+            const from = graph.questions.find(
+              (question) => question.id === selectedEdge.from_question,
+            );
+            const to =
+              selectedEdge.to_question === null
+                ? undefined
+                : graph.questions.find(
+                    (question) => question.id === selectedEdge.to_question,
+                  );
+            if (from?.section === sectionId && to?.section === sectionId) {
+              setSelectedEdgeId(null);
+            }
+          }
         }}
       />
-      <DetailPanel
-        graph={graph}
-        question={selectedQuestion}
-        editable={editable}
-        changeKinds={changeKinds}
-        retargetingEdgeId={pick?.kind === "retarget" ? pick.edgeId : null}
-        addingRouteOptionId={pick?.kind === "add" ? pick.optionId : null}
-        onSelectQuestion={setSelectedQuestionId}
-        onStartRetarget={(edgeId, label) =>
-          setPick({ kind: "retarget", edgeId, label })
-        }
-        onStartAddRoute={(questionId, optionId, label) =>
-          setPick({ kind: "add", questionId, optionId, label })
-        }
-        onCancelPick={() => setPick(null)}
-        onClose={() => setSelectedQuestionId(null)}
-      />
+      {selectedEdge !== null ? (
+        <RouteChoicesPanel
+          graph={graph}
+          edge={selectedEdge}
+          onClose={() => setSelectedEdgeId(null)}
+        />
+      ) : (
+        <DetailPanel
+          graph={graph}
+          question={selectedQuestion}
+          editable={editable}
+          changeKinds={changeKinds}
+          retargetingEdgeId={pick?.kind === "retarget" ? pick.edgeId : null}
+          addingRouteOptionId={pick?.kind === "add" ? pick.optionId : null}
+          onSelectQuestion={selectQuestion}
+          onStartRetarget={(edgeId, label) =>
+            setPick({ kind: "retarget", edgeId, label })
+          }
+          onStartAddRoute={(questionId, optionId, label) =>
+            setPick({ kind: "add", questionId, optionId, label })
+          }
+          onCancelPick={() => setPick(null)}
+          onClose={() => setSelectedQuestionId(null)}
+        />
+      )}
     </div>
   );
 }

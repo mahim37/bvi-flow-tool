@@ -188,16 +188,88 @@ describe("edges", () => {
     expect(edges().get(E_FOREIGN_TO_Q2)?.source).toBe(missingNodeId(FOREIGN_QUESTION));
   });
 
-  it("names an option's own guard but leaves the question-level one blank", () => {
-    // Every *specific* option gets a label; the one left unlabelled at a
-    // node already reads as "whatever wasn't one of those" without
-    // spelling out "anything else" on the canvas itself.
+  it("names an option's own guard and a count on the question-level fallback", () => {
     const built = edges();
 
-    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("");
-    expect(built.get(E_Q2_TO_ARCHIVED)?.fullGuard).toBe("");
+    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("Any answer");
+    expect(built.get(E_Q2_TO_ARCHIVED)?.fullGuard).toBe("Any answer");
     expect(built.get(E_NO_TO_END)?.guard).toBe("No");
     expect(built.get(E_NO_TO_END)?.fullGuard).toBe("No");
+  });
+
+  it("counts leftover answers on a choice question's default route", () => {
+    const optionOther = "bbbbbbbb-0000-4000-8000-000000000099";
+    const fallbackId = "cccccccc-0000-4000-8000-000000000099";
+    const original = makeGraph();
+    const graph = makeGraph({
+      questions: original.questions.map((question) =>
+        question.id !== Q1
+          ? question
+          : {
+              ...question,
+              options: [
+                ...question.options,
+                {
+                  id: optionOther,
+                  code: "other",
+                  label: "Other",
+                  display_order: 2,
+                },
+              ],
+            },
+      ),
+      edges: [
+        ...original.edges,
+        {
+          id: fallbackId,
+          from_question: Q1,
+          from_option: null,
+          to_question: Q2,
+          priority: 10,
+        },
+      ],
+    });
+
+    expect(edges(graph).get(fallbackId)?.guard).toBe("1 choice");
+    expect(edges(graph).get(fallbackId)?.fullGuard).toBe("1 choice");
+  });
+
+  it("says Anything else when every listed answer already has its own arrow", () => {
+    const fallbackId = "cccccccc-0000-4000-8000-000000000098";
+    const original = makeGraph();
+    const graph = makeGraph({
+      edges: [
+        ...original.edges,
+        {
+          id: fallbackId,
+          from_question: Q1,
+          from_option: null,
+          to_question: Q2,
+          priority: 10,
+        },
+      ],
+    });
+
+    expect(edges(graph).get(fallbackId)?.guard).toBe("Anything else");
+  });
+
+  it("counts every listed answer when the default route is the only way out", () => {
+    const fallbackId = "cccccccc-0000-4000-8000-000000000097";
+    const original = makeGraph();
+    const graph = makeGraph({
+      edges: [
+        ...original.edges.filter((item) => item.from_question !== Q1),
+        {
+          id: fallbackId,
+          from_question: Q1,
+          from_option: null,
+          to_question: Q2,
+          priority: 0,
+        },
+      ],
+    });
+
+    expect(edges(graph).get(fallbackId)?.guard).toBe("2 choices");
   });
 
   it("truncates a long option guard but keeps the full wording for hover", () => {
@@ -398,6 +470,17 @@ describe("section anchor", () => {
     expect(box?.label).toBe("Introduction");
     expect(built.get(Q1)?.parent).toBe(sectionNodeId(sectionId));
     expect(built.get(Q2)?.parent).toBe(sectionNodeId(sectionId));
+  });
+
+  it("lets a drag on the section box pan the canvas instead of moving the category", () => {
+    const graph = graphWithSharedSection();
+    const sectionId = graph.sections[0]?.id;
+    if (sectionId === undefined) throw new Error("fixture has no section");
+    const box = buildElements(graph).find(
+      (element) => element.data.id === sectionNodeId(sectionId),
+    );
+    expect(box?.grabbable).toBe(false);
+    expect(box?.pannable).toBe(true);
   });
 
   it("keeps a truncated canvas label and the full prompt for hover", () => {

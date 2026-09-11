@@ -1,13 +1,15 @@
 import type { ElementDefinition } from "cytoscape";
 
-import type {
-  AnswerType,
-  Edge,
-  Graph,
-  Question,
-  Section,
-  UUID,
-  VersionDiff,
+import {
+  CHOICE_ANSWER_TYPES,
+  type AnswerType,
+  type Edge,
+  type Graph,
+  type Question,
+  type QuestionOption,
+  type Section,
+  type UUID,
+  type VersionDiff,
 } from "../api/types";
 
 /**
@@ -161,12 +163,11 @@ export interface EdgeData {
   id: string;
   source: string;
   target: string;
-  /** The guard, in words: an option's label, or "anything else" for the
-   * question-level edge. Both are real routing behaviour, so neither is
-   * left blank. Truncated for the arrow; hover uses `fullGuard`. */
+  /** The guard, in words: an option's label, or a choice-count for the
+   * question-level default route ("4 choices"). Truncated for the arrow;
+   * hover uses `fullGuard`. */
   guard: string;
-  /** Untruncated option wording. Empty when `guard` is empty (the
-   * question-level fallback is deliberately unlabelled on the canvas). */
+  /** Untruncated option wording, or the same short default-route label. */
   fullGuard: string;
   priority: number;
   isDead: boolean;
@@ -263,6 +264,41 @@ export function guardLabel(edge: Edge, question: Question | undefined): string {
   return option ? option.label : "unknown option";
 }
 
+/** Answers on `question` that actually take this question-level fallback:
+ * anything without a per-option edge of better priority (lower number).
+ * Listed in `display_order` so the canvas count and the route sheet agree. */
+export function optionsCoveredByFallback(
+  question: Question,
+  outgoing: readonly Edge[],
+  fallback: Edge,
+): QuestionOption[] {
+  const claimed = new Set(
+    outgoing
+      .filter((edge) => edge.from_option !== null && edge.priority < fallback.priority)
+      .map((edge) => edge.from_option as UUID),
+  );
+  return [...question.options]
+    .sort((a, b) => a.display_order - b.display_order)
+    .filter((option) => !claimed.has(option.id));
+}
+
+/** Canvas wording for a `from_option === null` arrow. Choice questions
+ * show how many listed answers take the route; free-text/scale have no
+ * list, so they read as "Any answer". Zero remaining options is the
+ * catch-all after every answer already has its own arrow. */
+export function fallbackCanvasLabel(
+  question: Question | undefined,
+  outgoing: readonly Edge[],
+  fallback: Edge,
+): string {
+  if (question === undefined || !CHOICE_ANSWER_TYPES.has(question.answer_type)) {
+    return "Any answer";
+  }
+  const count = optionsCoveredByFallback(question, outgoing, fallback).length;
+  if (count === 0) return "Anything else";
+  return count === 1 ? "1 choice" : `${count} choices`;
+}
+
 export function buildElements(
   graph: Graph,
   diff?: VersionDiff,
@@ -343,7 +379,7 @@ export function buildElements(
       collapsed,
       questionCount: members.length,
     };
-    elements.push({ data, group: "nodes" });
+    elements.push({ data, group: "nodes", grabbable: false, pannable: true });
   }
 
   function endpointFor(questionId: UUID | null): string {
@@ -468,6 +504,13 @@ export function buildElements(
     elements.push({ data, group: "nodes" });
   }
 
+  const outgoingByQuestion = new Map<UUID, Edge[]>();
+  for (const edge of graph.edges) {
+    const siblings = outgoingByQuestion.get(edge.from_question);
+    if (siblings === undefined) outgoingByQuestion.set(edge.from_question, [edge]);
+    else siblings.push(edge);
+  }
+
   for (const edge of graph.edges) {
     const source = endpointFor(edge.from_question);
     const target = endpointFor(edge.to_question);
@@ -475,27 +518,25 @@ export function buildElements(
     // collapsed section would be a self-loop on the box. Drop it: the
     // box is the black-box, and those routes are internal.
     if (source === target) continue;
+    const sourceQuestion = questionsById.get(edge.from_question);
+    const outgoing = outgoingByQuestion.get(edge.from_question) ?? [];
+    // Specific options keep their own wording. The question-level
+    // fallback used to sit blank so it read as "whatever wasn't one of
+    // those"; it now names how many listed answers actually take it
+    // ("4 choices"), which is what the right-hand sheet lists on click.
+    // Truncated so a long option still fits beside a fanned arrow;
+    // hovering the question swaps the native label to `fullGuard` when
+    // truncation actually cut the wording.
+    const routeLabel =
+      edge.from_option === null
+        ? fallbackCanvasLabel(sourceQuestion, outgoing, edge)
+        : guardLabel(edge, sourceQuestion);
     const data: EdgeData = {
       id: edge.id,
       source,
       target,
-      // Blank for the question-level fallback rather than the literal
-      // "anything else" -- every *specific* option gets a label, so the
-      // one edge left unlabelled at a node already reads as "whatever
-      // wasn't one of those" without spelling it out. Truncated so the
-      // guard still fits beside a fanned arrow; parallel edges also get
-      // a lane (`assignParallelEdgeLanes`) so three options between the
-      // same pair do not share one label pile. Hovering the question
-      // swaps the native label to `fullGuard` when truncation actually
-      // cut the wording (same size, along the stroke).
-      guard:
-        edge.from_option === null
-          ? ""
-          : trunc(guardLabel(edge, questionsById.get(edge.from_question)), 32),
-      fullGuard:
-        edge.from_option === null
-          ? ""
-          : guardLabel(edge, questionsById.get(edge.from_question)),
+      guard: trunc(routeLabel, 32),
+      fullGuard: routeLabel,
       priority: edge.priority,
       isDead: deadEdges.has(edge.id),
       isBroken: brokenEdges.has(edge.id),

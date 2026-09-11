@@ -49,6 +49,24 @@ export function cameraNeedsReframe(
   return !Number.isFinite(width) || !Number.isFinite(height) || width < 8 || height < 8;
 }
 
+/** Screen-space rectangle around a rendered cytoscape box, grown by `pad`. */
+export function paddedScreenBox(
+  box: Rect,
+  pad: number,
+): { left: number; top: number; width: number; height: number } | null {
+  const width = box.x2 - box.x1;
+  const height = box.y2 - box.y1;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
+    return null;
+  }
+  return {
+    left: box.x1 - pad,
+    top: box.y1 - pad,
+    width: width + pad * 2,
+    height: height + pad * 2,
+  };
+}
+
 export interface Rect {
   x1: number;
   y1: number;

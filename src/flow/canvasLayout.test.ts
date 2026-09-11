@@ -6,6 +6,7 @@ import {
   assignParallelEdgeLanes,
   cameraNeedsReframe,
   containerHasUsableSize,
+  paddedScreenBox,
   dockAlongPercent,
   dockedPairSegment,
   edgeLabelScreenOffset,
@@ -51,6 +52,21 @@ describe("cameraNeedsReframe", () => {
 
   it("is false for a normal reading viewport", () => {
     expect(cameraNeedsReframe(0.8, { x1: 0, y1: 0, x2: 800, y2: 600 })).toBe(false);
+  });
+});
+
+describe("paddedScreenBox", () => {
+  it("grows a rendered box by pad on every side", () => {
+    expect(paddedScreenBox({ x1: 10, y1: 20, x2: 40, y2: 50 }, 8)).toEqual({
+      left: 2,
+      top: 12,
+      width: 46,
+      height: 46,
+    });
+  });
+
+  it("drops a degenerate box", () => {
+    expect(paddedScreenBox({ x1: 0, y1: 0, x2: 0, y2: 10 }, 4)).toBeNull();
   });
 });
 

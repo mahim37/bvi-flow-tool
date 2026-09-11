@@ -8,6 +8,7 @@ import {
   containerHasUsableSize,
   idsAddedToJoinedKey,
   isSectionCollapseToggle,
+  paddedScreenBox,
   pointInSectionToggle,
   rectFullyInView,
   runGraphLayout,
@@ -18,11 +19,14 @@ import { CANVAS_STYLE } from "./canvasStyle";
 import { sectionNodeId } from "./graphElements";
 import { type LabelTip, guardIsTruncated, labelTipForNodeData } from "./labelTips";
 import { Minimap } from "./Minimap";
+import { MapIndexDialog } from "./MapIndexDialog";
 import { Button } from "@/components/ui/button";
 
 cytoscape.use(dagre);
 
 const INITIAL_VIEW_QUESTION_COUNT = 10;
+/** Keep `Minimap.tsx` and its geometry; just stop mounting it for now. */
+const SHOW_MINIMAP = false;
 
 /** Frames the camera on roughly the first `count` questions of the chain
  * from the entry point, rather than the whole graph -- BFS over the
@@ -59,9 +63,45 @@ function fitToChainStart(cy: Core, count: number) {
 const CANVAS_LABEL_FONT =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
+/** Direct DOM write so the highlight tracks pan/zoom on the same frame.
+ * React state on `pan` lagged a frame behind the stroke (or missed the
+ * drag entirely), leaving the box parked where the click happened. */
+function paintEdgeBox(
+  el: HTMLDivElement | null,
+  cy: Core,
+  edgeId: string | null,
+): void {
+  if (el === null) return;
+  if (edgeId === null) {
+    el.style.display = "none";
+    return;
+  }
+  const edge = cy.getElementById(edgeId);
+  if (edge.empty() || !edge.isEdge()) {
+    el.style.display = "none";
+    return;
+  }
+  const box = paddedScreenBox(
+    edge.renderedBoundingBox({ includeOverlays: false, includeLabels: true }),
+    10,
+  );
+  if (box === null) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "block";
+  el.style.left = `${box.left}px`;
+  el.style.top = `${box.top}px`;
+  el.style.width = `${box.width}px`;
+  el.style.height = `${box.height}px`;
+}
+
 interface CanvasProps {
   elements: ElementDefinition[];
   selectedId: string | null;
+  /** A default-route arrow currently opening the choices sheet. Exclusive
+   * with `selectedId` -- MapView never sets both. */
+  selectedEdgeId: string | null;
   /** Ids the sidebar or a diagnostic list is pointing at. The camera pans
    * and fits to show them; nothing about the elements' own styling changes. */
   highlightedIds: readonly string[];
@@ -218,6 +258,7 @@ function repositionNewSiblings(cy: Core, newNodeIds: ReadonlySet<string>) {
 export function Canvas({
   elements,
   selectedId,
+  selectedEdgeId,
   highlightedIds,
   onSelectNode,
   onSelectEdge,
@@ -253,7 +294,10 @@ export function Canvas({
   // without re-binding cytoscape's listeners on every mode change.
   const pickingRef = useRef(pickLabel !== null);
   pickingRef.current = pickLabel !== null;
+  const selectedEdgeIdRef = useRef(selectedEdgeId);
+  selectedEdgeIdRef.current = selectedEdgeId;
   const canvasRootRef = useRef<HTMLDivElement>(null);
+  const edgeBoxElRef = useRef<HTMLDivElement>(null);
   const hoverRef = useRef<{ id: string; isNode: boolean } | null>(null);
   const [labelTips, setLabelTips] = useState<LabelTip[]>([]);
 
@@ -373,6 +417,9 @@ export function Canvas({
       syncExpandedLabels(cy, tips);
       setLabelTips(tips);
     };
+    const resyncEdgeBox = () => {
+      paintEdgeBox(edgeBoxElRef.current, cy, selectedEdgeIdRef.current);
+    };
     cy.on("mouseover", "node", (event) => {
       event.stopPropagation();
       showHover(event.target);
@@ -400,6 +447,7 @@ export function Canvas({
       clearHover();
     });
     cy.on("pan zoom position", resyncTips);
+    cy.on("viewport render", resyncEdgeBox);
     cy.on("mousemove", 'node[kind = "section"]', (event) => {
       const container = cy.container();
       if (container === null) return;
@@ -439,6 +487,7 @@ export function Canvas({
       recordSize(rect.width, rect.height);
       if (!containerHasUsableSize(rect.width, rect.height)) return;
       cy.resize();
+      resyncEdgeBox();
       if (cy.nodes().empty()) return;
       const graphBox = cy.nodes().boundingBox({
         includeOverlays: false,
@@ -463,6 +512,7 @@ export function Canvas({
       setCy(null);
       hoverRef.current = null;
       setLabelTips([]);
+      paintEdgeBox(edgeBoxElRef.current, cy, null);
       // A destroyed cy's elements go with it, so the next instance (React
       // 18 StrictMode's dev double-mount, or a real remount) starts with no
       // layout run yet -- without this reset, the elements-sync effect sees
@@ -514,6 +564,7 @@ export function Canvas({
         }
       }
     });
+    cy.nodes('[kind = "section"]').ungrabify().panify();
 
     const signature = nodeSignature(elements);
     if (signature !== signatureRef.current) {
@@ -587,20 +638,19 @@ export function Canvas({
     if (cy === null) return;
     cy.batch(() => {
       cy.elements().unselect();
-      if (selectedId !== null) cy.getElementById(selectedId).select();
+      if (selectedEdgeId !== null) cy.getElementById(selectedEdgeId).select();
+      else if (selectedId !== null) cy.getElementById(selectedId).select();
     });
-    // Ported from break-backend's tap handler (setFocus("pin", ..., {
-    // center: true }) -- selecting a question from anywhere (sidebar,
-    // search, a diagnostic chip, canvas tap itself) pans/zooms the camera
-    // to it, so "select" always means "look at this" rather than leaving
-    // the node wherever it happened to land off-screen. Capped at both
-    // ends -- not just floored at 0.7 -- because the current zoom can
-    // already be well past 1 the moment a fresh map lands here straight
-    // from "Show on map" (`fitToChainStart` frames just the first 10
-    // questions, not the whole graph, so it can zoom in more than this
-    // is meant to on its own): without the ceiling, centering on the
-    // target would keep whatever tight zoom that framing happened to
-    // produce instead of a normal reading distance.
+    // A default-route click opens the right-hand sheet and shrinks this
+    // pane. Centering/zooming on the arrow at the old size, then resizing,
+    // blanks the viewport for a beat. Keep the camera; the faint box
+    // marks which arrow is open. Question selection still pans/zooms so
+    // a sidebar/search pick lands on-screen.
+    if (selectedEdgeId !== null) {
+      paintEdgeBox(edgeBoxElRef.current, cy, selectedEdgeId);
+      return;
+    }
+    paintEdgeBox(edgeBoxElRef.current, cy, null);
     if (selectedId !== null) {
       const node = cy.getElementById(selectedId);
       if (node.nonempty()) {
@@ -611,7 +661,7 @@ export function Canvas({
         });
       }
     }
-  }, [selectedId]);
+  }, [selectedId, selectedEdgeId]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -781,47 +831,32 @@ export function Canvas({
             />
           </svg>
         </Button>
-        <div className="bg-border mx-2 my-0.5 h-px" role="separator" />
         <Button
           size="icon"
-          title="Reset node positions"
-          aria-label="Reset node positions"
+          title="Reset"
+          aria-label="Reset"
           onClick={resetNodePositions}
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <rect
-              x="4"
-              y="3"
-              width="16"
-              height="5"
-              rx="1.5"
+            <path
+              d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-            />
-            <rect
-              x="4"
-              y="10"
-              width="16"
-              height="5"
-              rx="1.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            />
-            <rect
-              x="4"
-              y="17"
-              width="16"
-              height="4"
-              rx="1.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </svg>
         </Button>
+        <MapIndexDialog />
       </div>
+
+      <div
+        ref={edgeBoxElRef}
+        className="pointer-events-none absolute z-5 rounded-md border border-foreground/12 bg-foreground/[0.04]"
+        style={{ display: "none" }}
+        aria-hidden="true"
+      />
 
       {labelTips.map((tip) => (
         <div
@@ -846,17 +881,7 @@ export function Canvas({
         </div>
       ))}
 
-      {cy !== null && <Minimap cy={cy} />}
-
-      <div
-        className="pointer-events-none absolute bottom-4 left-1/2 z-6 -translate-x-1/2 rounded-md border border-border bg-card/95 px-4 py-1.5 text-xs text-foreground/80 shadow-md whitespace-nowrap backdrop-blur-sm"
-        aria-hidden="true"
-      >
-        <strong>Click</strong> a question for details ·{" "}
-        <strong>The section chevron</strong> collapses it · <strong>Hover</strong> to
-        trace its paths · <strong>Drag the canvas</strong> to pan ·{" "}
-        <strong>Drag a question</strong> to move it · <strong>Scroll</strong> to zoom
-      </div>
+      {SHOW_MINIMAP && cy !== null && <Minimap cy={cy} />}
     </div>
   );
 }

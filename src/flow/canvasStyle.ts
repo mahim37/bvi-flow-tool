@@ -19,8 +19,8 @@ import {
  * here: a badge icon (not a border colour, which is section's alone) for
  * entry/terminal/branch/unreachable, and a shape/line-style change for
  * archived/end/missing/dead/broken. The full legend is rendered as text
- * in the sidebar, because a vocabulary nobody can look up is not much
- * better than colour alone.
+ * in the canvas Index dialog, because a vocabulary nobody can look up is
+ * not much better than colour alone.
  *
  * One deliberate deviation: `hasFault`/dead/broken edges are this app's
  * own diagnostics (`dead_edge_ids`/`broken_edge_ids`), which break's own
@@ -154,7 +154,7 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
     // Section chrome shared by the expanded compound and the collapsed
     // stand-in. Fill is tinted enough to tell sections apart, not a slab
     // over the questions. The chevron is a real control (see Canvas tap
-    // hit-test); clicking the rest of the box does nothing.
+    // hit-test); dragging the rest of the box pans the canvas.
     selector: 'node[kind = "section"]',
     css: {
       shape: "round-rectangle",

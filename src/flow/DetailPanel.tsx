@@ -1,12 +1,16 @@
 import { useMemo } from "react";
 
+import { XIcon } from "lucide-react";
+
 import { useArchiveQuestion } from "../api/queries";
 import type { Edge, Graph, Question, UUID } from "../api/types";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { emptyText, mutedHint, panelSection, subCount, subHeading } from "@/lib/chrome";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { emptyText, mutedHint, questionLink, subCount, subHeading } from "@/lib/chrome";
+import { cn } from "@/lib/utils";
 import { ConfirmAction } from "./ConfirmAction";
 import type { ChangeKinds } from "./graphElements";
 import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
@@ -51,17 +55,26 @@ interface DetailPanelProps {
   changeKinds?: ChangeKinds | undefined;
 }
 
+function incomingVia(guards: string[]): string {
+  if (guards.length === 1 && guards[0] === "Default route") {
+    return "Via the default route";
+  }
+  if (guards.length === 1) {
+    return `When ${guards[0] ?? ""}`;
+  }
+  return `When ${guards.join(", ")}`;
+}
+
 /** Ported from break-backend's `.flag` + per-kind modifiers (styles.css
  * ~L690-733) -- colour by what the flag means, not one flat pill style.
- * "neutral" is this app's own addition (break has no equivalent to
- * "nothing to report"); it borrows the muted look break gives `.flag.deleted`.
  * "added"/"changed" reuse the exact green/gold `--entry`/`--branch` already
- * use, not a third colour pair. */
+ * use, not a third colour pair. Empty "nothing to report" is omitted:
+ * silence is the clean state, not a pill that says so. */
 function Flag({
   kind,
   children,
 }: {
-  kind: "entry" | "branch" | "term" | "unreach" | "neutral" | "added" | "changed";
+  kind: "entry" | "branch" | "term" | "unreach" | "added" | "changed";
   children: React.ReactNode;
 }) {
   return <Badge tone={kind}>{children}</Badge>;
@@ -78,7 +91,7 @@ function SubHeading({
   children: React.ReactNode;
 }) {
   return (
-    <h3 id={id} className={subHeading}>
+    <h3 id={id} className={cn(subHeading, "mb-0")}>
       {children} <span className={subCount}>{count}</span>
     </h3>
   );
@@ -98,11 +111,11 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
   const error = writeErrorMessage(archiveQuestion.error);
 
   return (
-    <section className={panelSection} aria-labelledby="danger-heading">
-      <h3 id="danger-heading" className={subHeading}>
+    <section className="flex flex-col gap-3" aria-labelledby="danger-heading">
+      <h3 id="danger-heading" className={cn(subHeading, "mb-0")}>
         Danger zone
       </h3>
-      <div className="mb-[22px]">
+      <div>
         <ConfirmAction
           message={`Retire ${question.code}? It stops being served, stays drawn while anything still points at it, and there is no way to bring it back except discarding the draft.`}
           confirmLabel="Retire this question"
@@ -188,7 +201,7 @@ export function DetailPanel({
   if (question === null) {
     return (
       <aside
-        className="panel relative h-full min-h-0 min-w-0 overflow-y-auto bg-background p-5"
+        className="panel relative h-full min-h-0 min-w-0 overflow-y-auto bg-background p-4"
         aria-label="Question detail"
         aria-hidden="true"
       >
@@ -207,103 +220,94 @@ export function DetailPanel({
   // exactly what put it here, and it already gets the banner below
   // instead of this flag row at all.
   const questionChange = changeKinds.questions.get(question.id);
+  const flags =
+    question.archived_at !== null || audit === null
+      ? []
+      : [
+          ...(questionChange === "added"
+            ? [{ kind: "added" as const, label: "New" }]
+            : []),
+          ...(questionChange === "changed"
+            ? [{ kind: "changed" as const, label: "Changed" }]
+            : []),
+          ...(audit.is_entry ? [{ kind: "entry" as const, label: "Entry point" }] : []),
+          ...(audit.is_decision_point
+            ? [{ kind: "branch" as const, label: "Decision point" }]
+            : []),
+          ...(audit.is_terminal
+            ? [{ kind: "term" as const, label: "Can end the flow" }]
+            : []),
+          ...(!audit.is_reachable
+            ? [{ kind: "unreach" as const, label: "Unreachable" }]
+            : []),
+        ];
 
   return (
     <aside
-      className="panel relative h-full min-h-0 min-w-0 overflow-y-auto bg-background p-5"
+      className="panel relative flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto bg-background p-4"
       aria-label={`Detail for ${question.code}`}
     >
       {onClose !== undefined && (
-        // Ported from break-backend's #detailClose (index.html ~L369-371,
-        // same "✕" glyph and icon Button as the canvas's own zoom
-        // controls). Closing just clears the map's selection -- there is
-        // no separate open/closed state to keep in sync with it.
         <Button
-          size="icon"
+          variant="ghost"
+          size="icon-sm"
           className="absolute top-3 right-3 z-3"
-          title="Close"
           aria-label="Close detail panel"
           onClick={onClose}
         >
-          ✕
+          <XIcon />
         </Button>
       )}
 
-      {/* Flags first, no heading -- ported from break-backend's
-          `.d-flags` (openDetail, ~L1203-1225), which leads with exactly
-          this: what kind of question this is, before anything about its
-          content. An archived question gets the "why is this here" banner
-          in the same slot instead, matching break's own "Deleted
-          placeholder" flag substituting for the rest of the row. */}
-      {question.archived_at !== null ? (
-        <Banner tone="warn">
-          Archived on {formatTimestamp(question.archived_at)}. It is shown only because
-          an edge still points at it, and the resolver raises rather than serving it.
-          Nothing here describes routing behaviour, because it has none.
-        </Banner>
-      ) : (
-        audit !== null && (
-          <div className="mb-3.5 flex flex-wrap gap-1.5" aria-label="Diagnostics">
-            {questionChange === "added" && <Flag kind="added">New</Flag>}
-            {questionChange === "changed" && <Flag kind="changed">Changed</Flag>}
-            {audit.is_entry && <Flag kind="entry">Entry point</Flag>}
-            {audit.is_decision_point && <Flag kind="branch">Decision point</Flag>}
-            {audit.is_terminal && <Flag kind="term">Can end the flow</Flag>}
-            {!audit.is_reachable && <Flag kind="unreach">Unreachable</Flag>}
-            {questionChange === undefined &&
-              !audit.is_entry &&
-              !audit.is_decision_point &&
-              !audit.is_terminal &&
-              audit.is_reachable && <Flag kind="neutral">Nothing to report</Flag>}
-          </div>
-        )
-      )}
-
-      {/* Ported from break-backend's `.d-meta` (openDetail, ~L1343-1348):
-          a coloured section badge (same dot-plus-tint look as the
-          diagnostics badge) followed by small muted chips. Requiredness
-          has no break equivalent -- it is this app's own field -- so it
-          gets the same meta Badge chip rather than a new style.
-          Shown as "Optional" only when true, not "Required" when true:
-          every question is required right now, so a chip that fires on
-          the common case would just be noise on every card. */}
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <Badge
-          tone="section"
-          style={{ background: `${sectionColor}22`, color: sectionColor }}
-        >
-          <span
-            className="inline-block size-2.5 shrink-0 rounded-full"
-            style={{ background: sectionColor }}
-          />
-          {section ? section.name : "No section"}
-        </Badge>
-        <Badge tone="meta">{answerTypeLabel(question.answer_type)}</Badge>
-        {!question.is_required && <Badge tone="meta">Optional</Badge>}
-      </div>
-
-      <header className="mt-4">
-        <div className="text-muted-foreground text-xs tabular-nums">
-          QID {question.code}
-        </div>
-        {editable && live ? (
-          <QuestionEditor graph={graph} question={question} />
+      <header className="flex flex-col gap-3 pr-8">
+        {question.archived_at !== null ? (
+          <Banner tone="warn">
+            Archived on {formatTimestamp(question.archived_at)}. It is shown only
+            because an edge still points at it, and the resolver raises rather than
+            serving it. Nothing here describes routing behaviour, because it has none.
+          </Banner>
         ) : (
-          <p className="mt-1.5 text-[16.5px] leading-snug font-medium">
-            {question.prompt}
-          </p>
+          flags.length > 0 && (
+            <ul
+              className="flex list-none flex-wrap gap-1.5 p-0"
+              aria-label="Diagnostics"
+            >
+              {flags.map((flag) => (
+                <li key={flag.label}>
+                  <Flag kind={flag.kind}>{flag.label}</Flag>
+                </li>
+              ))}
+            </ul>
+          )
         )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            tone="section"
+            style={{ background: `${sectionColor}22`, color: sectionColor }}
+          >
+            <span
+              className="inline-block size-2.5 shrink-0 rounded-full"
+              style={{ background: sectionColor }}
+            />
+            {section ? section.name : "No section"}
+          </Badge>
+          <Badge tone="meta">{answerTypeLabel(question.answer_type)}</Badge>
+          {!question.is_required && <Badge tone="meta">Optional</Badge>}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground text-xs tabular-nums">{question.code}</p>
+          {editable && live ? (
+            <QuestionEditor graph={graph} question={question} />
+          ) : (
+            <h2 className="text-base leading-snug font-medium">{question.prompt}</h2>
+          )}
+        </div>
       </header>
 
-      {/* One section for a question's whole answer set: what each answer
-          is called, and (nested inside the same card) where it leads --
-          combining what used to be a read-only Options list, a separate
-          "Edit options" form, and `EdgeEditor`'s own "Outgoing edges"
-          list. Archived questions get no editing controls at all -- spec
-          4.2 gives the canvas nothing that resurrects one, and every
-          content verb refuses them -- but the read-only cards (`editable`
-          gates only the controls inside `Options`, not the section
-          itself) still show what routing existed. */}
+      <Separator />
+
       <Options
         graph={graph}
         question={question}
@@ -317,18 +321,20 @@ export function DetailPanel({
         onCancelPick={onCancelPick}
       />
 
-      <section className={panelSection} aria-labelledby="incoming-heading">
+      <Separator />
+
+      <section className="flex flex-col gap-3" aria-labelledby="incoming-heading">
         <SubHeading id="incoming-heading" count={incomingBySource.size}>
           Reached from
         </SubHeading>
         {incoming.length === 0 ? (
-          <p className={emptyText}>
+          <p className={cn(emptyText, "my-0")}>
             {audit?.is_entry === true
               ? "Nothing routes here. It is the entry point, so it runs first anyway."
               : "Nothing routes here, so this question is never served."}
           </p>
         ) : (
-          <ul className="flex list-none flex-col gap-1.5 p-0">
+          <ul className="flex list-none flex-col gap-2 p-0">
             {[...incomingBySource.entries()].map(([fromId, edgesFromSource]) => {
               const source = questionsById.get(fromId);
               const swatch =
@@ -340,38 +346,31 @@ export function DetailPanel({
               );
               return (
                 <li key={fromId}>
-                  <Card
-                    size="sm"
-                    className="flex-row items-start gap-2.5 rounded-[9px] p-2.5 ring-border hover:ring-[var(--accent-2)]"
-                  >
-                    <span
-                      className="mt-1 size-2 shrink-0 rounded-full"
-                      style={{ background: swatch }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <Button variant="link" onClick={() => onSelectQuestion(fromId)}>
-                        {sourceLabel(source)}
-                      </Button>
-                      <br />
-                      <span className="text-muted-foreground text-[11.5px]">
-                        {guards.length === 1 ? (
-                          <>
-                            when{" "}
-                            {guards[0] !== undefined && <strong>{guards[0]}</strong>}
-                          </>
+                  <Card size="sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-start gap-2 text-sm">
+                        <span
+                          className="mt-1.5 size-2 shrink-0 rounded-full"
+                          style={{ background: swatch }}
+                          aria-hidden="true"
+                        />
+                        {source !== undefined ? (
+                          <Button
+                            variant="link"
+                            className={questionLink}
+                            aria-label={`Go to ${source.code}: ${source.prompt}`}
+                            onClick={() => onSelectQuestion(fromId)}
+                          >
+                            {source.prompt}
+                          </Button>
                         ) : (
-                          <>
-                            when:
-                            {guards.map((guard, index) => (
-                              <span key={index}>
-                                <br />
-                                {index + 1}. <strong>{guard}</strong>
-                              </span>
-                            ))}
-                          </>
+                          sourceLabel(source)
                         )}
-                      </span>
-                    </span>
+                      </CardTitle>
+                      <CardDescription className="pl-4">
+                        {incomingVia(guards)}
+                      </CardDescription>
+                    </CardHeader>
                   </Card>
                 </li>
               );
@@ -381,7 +380,10 @@ export function DetailPanel({
       </section>
 
       {editable && live && (
-        <DangerZone versionId={graph.version.id} question={question} />
+        <>
+          <Separator />
+          <DangerZone versionId={graph.version.id} question={question} />
+        </>
       )}
     </aside>
   );

@@ -48,6 +48,7 @@ describe("a live question", () => {
     expect(screen.getByText("Entry point")).toBeInTheDocument();
     expect(screen.getByText("Decision point")).toBeInTheDocument();
     expect(screen.getByText("Can end the flow")).toBeInTheDocument();
+    expect(screen.queryByText(/^QID /)).not.toBeInTheDocument();
   });
 
   it("groups each answer's edge under that answer, regardless of edge order", () => {
@@ -77,6 +78,94 @@ describe("a live question", () => {
       .map((row) => within(row).getByText(/^(Yes|No)$/).textContent);
 
     expect(guards).toEqual(["Yes", "No"]);
+    expect(within(section).queryByText("yes")).not.toBeInTheDocument();
+    expect(within(section).queryByText("no")).not.toBeInTheDocument();
+  });
+
+  it("nests leftover answers inside the default route they actually take", () => {
+    // Screenshot case: Yes has no edge of its own so it takes the
+    // question-level route to Q2; No still has its own edge. Yes belongs
+    // in the default-route card with that shared destination, not as an
+    // empty sibling card.
+    const graph = makeGraph();
+    graph.edges = [
+      ...graph.edges.filter((item) => item.id !== E_YES_TO_Q2),
+      {
+        id: "fallback-edge",
+        from_question: Q1,
+        from_option: null,
+        to_question: Q2,
+        priority: 2,
+      },
+    ];
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable={false}
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
+      />,
+    );
+
+    const defaultCard = screen
+      .getByText("Default route")
+      .closest("[data-slot=card]") as HTMLElement;
+    expect(within(defaultCard).getByText("Yes")).toBeInTheDocument();
+    expect(within(defaultCard).getByText("Prompt for Q2")).toBeInTheDocument();
+    expect(
+      within(defaultCard).getByRole("list", { name: /Takes this route/ }),
+    ).toBeInTheDocument();
+    expect(within(defaultCard).queryByText("No")).not.toBeInTheDocument();
+
+    const noRow = screen.getByText("No").closest("li") as HTMLElement;
+    expect(defaultCard.contains(noRow)).toBe(false);
+    expect(within(noRow).getByText("End of flow")).toBeInTheDocument();
+  });
+
+  it("groups every leftover answer under one default route when none have their own", () => {
+    const graph = makeGraph();
+    graph.edges = [
+      ...graph.edges.filter((item) => item.from_question !== Q1),
+      {
+        id: "fallback-edge",
+        from_question: Q1,
+        from_option: null,
+        to_question: Q2,
+        priority: 0,
+      },
+    ];
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable={false}
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
+      />,
+    );
+
+    const defaultCard = screen
+      .getByText("Default route")
+      .closest("[data-slot=card]") as HTMLElement;
+    const leftover = within(defaultCard).getByRole("list", {
+      name: /Takes this route/,
+    });
+    expect(within(leftover).getByText("Yes")).toBeInTheDocument();
+    expect(within(leftover).getByText("No")).toBeInTheDocument();
+    expect(within(defaultCard).getAllByText("Prompt for Q2")).toHaveLength(1);
   });
 
   it("names an end-of-flow target rather than leaving it blank", () => {
@@ -101,6 +190,13 @@ describe("a live question", () => {
     panelFor(Q2);
 
     expect(screen.getByText(/fail instead of continuing/)).toBeInTheDocument();
+  });
+
+  it("omits a Nothing to report pill when the question has no diagnostic flags", () => {
+    panelFor(Q2);
+
+    expect(screen.queryByText("Nothing to report")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Diagnostics")).not.toBeInTheDocument();
   });
 });
 
@@ -465,7 +561,7 @@ describe("edit controls", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "This route applies no matter what's answered.",
+        name: "What the default route does",
       }),
     ).toBeInTheDocument();
 
