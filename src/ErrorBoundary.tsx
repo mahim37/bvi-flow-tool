@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         </h1>
         <p className="text-muted-foreground m-0">
           The app hit an unexpected error and cannot keep going from here. Reloading
-          starts fresh -- if your session had expired, this takes you back to sign-in.
+          starts fresh. If your session had expired, this takes you back to sign-in.
         </p>
         <Button variant="primary" onClick={() => window.location.reload()}>
           Reload

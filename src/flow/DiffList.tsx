@@ -1,8 +1,9 @@
-import type { DiffKind, ItemDiff } from "../api/types";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { panelHeading } from "@/lib/chrome";
+import { ArrowUpRight } from "lucide-react";
+
+import type { DiffChange, DiffKind, FieldChange, ItemDiff } from "../api/types";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { subCount, subHeading } from "@/lib/chrome";
+import { cn } from "@/lib/utils";
 import { diffChangeLabel, diffKindLabel, diffValue, fieldLabel } from "./labels";
 
 interface DiffListProps {
@@ -12,6 +13,49 @@ interface DiffListProps {
    * hangs off no question, and for a removed item whose question the draft
    * no longer contains -- `question_id` is null in both cases. */
   onShowOnMap: (questionId: string) => void;
+}
+
+const MARKER: Record<Exclude<DiffChange, "changed">, string> = {
+  added: "+",
+  removed: "−",
+};
+
+const MARKER_TONE: Record<Exclude<DiffChange, "changed">, string> = {
+  added: "text-green",
+  removed: "text-destructive",
+};
+
+/** One side of a unified diff. `<ins>`/`<del>` carry the meaning; colour
+ * and the +/- gutter are the same signal GitHub uses, not a second one. */
+function DiffLine({ side, children }: { side: "added" | "removed"; children: string }) {
+  const Comp = side === "added" ? "ins" : "del";
+  return (
+    <Comp
+      className={cn(
+        "flex gap-2 px-2.5 py-1 font-mono text-[13px] leading-snug no-underline",
+        side === "added"
+          ? "bg-green/10 text-green"
+          : "bg-destructive/10 text-destructive",
+      )}
+    >
+      <span className="w-3 shrink-0 select-none" aria-hidden="true">
+        {side === "added" ? "+" : "−"}
+      </span>
+      <span className="min-w-0 whitespace-pre-wrap">{children}</span>
+    </Comp>
+  );
+}
+
+function FieldHunk({ field }: { field: FieldChange }) {
+  return (
+    <div className="overflow-hidden rounded-md ring-1 ring-border">
+      <p className="bg-muted text-muted-foreground m-0 px-2.5 py-1 font-mono text-[11px] tracking-wide">
+        {fieldLabel(field.field)}
+      </p>
+      <DiffLine side="removed">{diffValue(field.base)}</DiffLine>
+      <DiffLine side="added">{diffValue(field.draft)}</DiffLine>
+    </div>
+  );
 }
 
 /**
@@ -25,68 +69,101 @@ interface DiffListProps {
  * Every row is keyed by `code`, never by id -- the server matched them
  * that way, because a draft is a whole copy and an id comparison would
  * report the entire questionnaire as removed and re-added.
+ *
+ * Field pairs render as a unified diff (`−` then `+`) so a reviewer can
+ * read them the same way they already read git. A row that hangs off a
+ * question is itself the map link: the key carries the underline and
+ * arrow that used to live on a separate "Show on map" control.
  */
 export function DiffList({ kind, items, onShowOnMap }: DiffListProps) {
   if (items.length === 0) return null;
 
   return (
-    <Card
-      size="sm"
-      className="gap-3 rounded-lg p-4 ring-border"
-      aria-labelledby={`diff-${kind}`}
-    >
-      <h3 id={`diff-${kind}`} className={panelHeading}>
-        {diffKindLabel(kind)}
-        <span className="bg-secondary text-foreground/80 ml-2 rounded-full px-2 py-px text-[0.75rem] font-bold">
-          {items.length}
-        </span>
-      </h3>
-      <ul className="list-none p-0">
-        {items.map((item) => (
-          <li
-            key={`${item.change}:${item.key}`}
-            className="border-t border-border pt-2.5 mt-2.5 first:mt-0 first:border-t-0 first:pt-0"
-          >
-            <div className="flex flex-wrap items-center gap-2.5">
-              <Badge tone={item.change}>{diffChangeLabel(item.change)}</Badge>
-              <code className="font-mono text-[0.85rem] font-bold">{item.key}</code>
-              {item.question_id !== null && (
-                <Button
-                  variant="link"
-                  onClick={() => onShowOnMap(item.question_id as string)}
-                >
-                  Show on map
-                </Button>
-              )}
-            </div>
+    <Card size="sm" className="gap-0 py-0" aria-labelledby={`diff-${kind}`}>
+      <CardHeader className="border-b px-3 py-2 [.border-b]:pb-2">
+        <h3 id={`diff-${kind}`} className={cn(subHeading, "mb-0")}>
+          {diffKindLabel(kind)} <span className={subCount}>{items.length}</span>
+        </h3>
+      </CardHeader>
+      <CardContent className="p-0">
+        <ul className="divide-border m-0 list-none divide-y p-0">
+          {items.map((item) => {
+            const questionId = item.question_id;
+            const clickable = questionId !== null;
+            const label = clickable
+              ? `${diffChangeLabel(item.change)} ${item.key}. Open on the map`
+              : `${diffChangeLabel(item.change)} ${item.key}`;
+            const body = (
+              <>
+                <header className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  {item.change !== "changed" && (
+                    <span
+                      className={cn(
+                        "w-3 font-mono text-sm font-bold",
+                        MARKER_TONE[item.change],
+                      )}
+                      aria-hidden="true"
+                    >
+                      {MARKER[item.change]}
+                    </span>
+                  )}
+                  <span className="inline-flex min-w-0 items-baseline gap-1">
+                    <code
+                      className={cn(
+                        "font-mono text-[0.85rem] font-bold",
+                        clickable &&
+                          "underline decoration-foreground/40 underline-offset-2",
+                      )}
+                    >
+                      {item.key}
+                    </code>
+                    {clickable && (
+                      <ArrowUpRight
+                        className="mb-px inline size-3.5 shrink-0 stroke-[2.25] align-text-bottom"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                </header>
 
-            {item.fields.length > 0 && (
-              // Only rendered for a change: an added or removed item has
-              // no pair to show, and listing every one of its fields
-              // against "not set" would bury the four that a reviewer
-              // actually has to read.
-              <dl className="mt-2 grid gap-1">
-                {item.fields.map((field) => (
-                  <div
-                    key={field.field}
-                    className="grid grid-cols-[130px_minmax(0,1fr)] gap-2.5 text-[0.88rem]"
-                  >
-                    <dt className="text-muted-foreground">{fieldLabel(field.field)}</dt>
-                    <dd className="m-0">
-                      <span className="text-muted-foreground line-through">
-                        {diffValue(field.base)}
-                      </span>
-                      <span aria-hidden="true"> → </span>
-                      <span className="sr-only">changed to</span>
-                      <span className="font-semibold">{diffValue(field.draft)}</span>
-                    </dd>
+                {item.fields.length > 0 && (
+                  // Only rendered for a change: an added or removed item has
+                  // no pair to show, and listing every one of its fields
+                  // against "not set" would bury the four that a reviewer
+                  // actually has to read.
+                  <div className="flex flex-col gap-1.5">
+                    {item.fields.map((field) => (
+                      <FieldHunk key={field.field} field={field} />
+                    ))}
                   </div>
-                ))}
-              </dl>
-            )}
-          </li>
-        ))}
-      </ul>
+                )}
+              </>
+            );
+
+            return (
+              <li key={`${item.change}:${item.key}`}>
+                {clickable ? (
+                  <button
+                    type="button"
+                    className="hover:bg-muted/50 flex w-full cursor-pointer flex-col gap-1.5 px-3 py-2 text-left"
+                    aria-label={label}
+                    onClick={() => onShowOnMap(questionId)}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <article
+                    className="flex flex-col gap-1.5 px-3 py-2"
+                    aria-label={label}
+                  >
+                    {body}
+                  </article>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </CardContent>
     </Card>
   );
 }

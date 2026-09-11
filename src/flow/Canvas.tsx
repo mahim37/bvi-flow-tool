@@ -764,7 +764,7 @@ export function Canvas({
 
       {pickLabel !== null && (
         <div
-          className="absolute top-4 left-1/2 z-7 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-gold bg-gold/12 px-4 py-2 text-[12.5px] shadow-md"
+          className="absolute top-4 left-1/2 z-7 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-gold bg-card px-4 py-2 text-[12.5px] shadow-md"
           role="status"
         >
           <span>Click a question for {pickLabel}, or press Esc to cancel.</span>

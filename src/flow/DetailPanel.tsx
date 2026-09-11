@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { XIcon } from "lucide-react";
+import { ArrowUpRight, XIcon } from "lucide-react";
 
 import { useArchiveQuestion } from "../api/queries";
 import type { Edge, Graph, Question, UUID } from "../api/types";
@@ -137,8 +137,8 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
         <p className={mutedHint}>
           Retiring archives rather than deletes, and there is no un-archive: an archival
           made by mistake is undone by discarding the draft. Edges pointing at it are
-          left alone on purpose — they become broken edges, which is what keeps the
-          arrow into nowhere visible until somebody deals with it.
+          left alone on purpose. They become broken edges, which is what keeps the arrow
+          into nowhere visible until somebody deals with it.
         </p>
       </div>
       {error !== null && (
@@ -174,9 +174,8 @@ export function DetailPanel({
   }, [graph.edges, question]);
 
   // The same per-section colour the canvas draws that section's node
-  // borders in (`graphElements.ts`), so the section badge below and the
-  // "Reached from" swatches match the map instead of inventing a second
-  // palette for this one panel.
+  // borders in (`graphElements.ts`), so the section badge below matches
+  // the map instead of inventing a second palette for this one panel.
   const sectionColors = useMemo(
     () => sectionColorMap(graph.sections),
     [graph.sections],
@@ -337,10 +336,6 @@ export function DetailPanel({
           <ul className="flex list-none flex-col gap-2 p-0">
             {[...incomingBySource.entries()].map(([fromId, edgesFromSource]) => {
               const source = questionsById.get(fromId);
-              const swatch =
-                source?.section !== undefined && source.section !== null
-                  ? (sectionColors.get(source.section) ?? NO_SECTION_COLOR)
-                  : NO_SECTION_COLOR;
               const guards = edgesFromSource.map((edge) =>
                 optionLabel(source, edge.from_option),
               );
@@ -348,12 +343,7 @@ export function DetailPanel({
                 <li key={fromId}>
                   <Card size="sm">
                     <CardHeader>
-                      <CardTitle className="flex items-start gap-2 text-sm">
-                        <span
-                          className="mt-1.5 size-2 shrink-0 rounded-full"
-                          style={{ background: swatch }}
-                          aria-hidden="true"
-                        />
+                      <CardTitle className="min-w-0 text-sm">
                         {source !== undefined ? (
                           <Button
                             variant="link"
@@ -361,15 +351,16 @@ export function DetailPanel({
                             aria-label={`Go to ${source.code}: ${source.prompt}`}
                             onClick={() => onSelectQuestion(fromId)}
                           >
-                            {source.prompt}
+                            <span className="underline underline-offset-2">
+                              {source.prompt}
+                            </span>
+                            <ArrowUpRight aria-hidden="true" />
                           </Button>
                         ) : (
                           sourceLabel(source)
                         )}
                       </CardTitle>
-                      <CardDescription className="pl-4">
-                        {incomingVia(guards)}
-                      </CardDescription>
+                      <CardDescription>{incomingVia(guards)}</CardDescription>
                     </CardHeader>
                   </Card>
                 </li>

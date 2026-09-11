@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { LogOut } from "lucide-react";
 import {
   Link,
   Outlet,
@@ -14,6 +15,7 @@ import croppedLogo from "../assets/predmind-logo - cropped.webp";
 import { useAuth } from "../auth/useAuth";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading";
 import {
   Select,
   SelectContent,
@@ -24,7 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { AddQuestion } from "./AddQuestion";
+import { AlertsButton } from "./AlertsButton";
+import type { ChromeAlert } from "./AlertsButton";
+import { CreateProductDialog } from "./CreateProductDialog";
 import { DraftBar } from "./DraftBar";
 import { versionLabel } from "./labels";
 import type { VersionContext } from "./versionContext";
@@ -75,10 +79,10 @@ function versionOptionLabel(version: VersionListItem): string {
     ? " (latest)"
     : version.is_draft
       ? version.is_stale
-        ? " (draft — behind latest)"
+        ? " (draft, behind latest)"
         : " (draft)"
       : "";
-  return `${versionLabel(version)}${state} — ${version.question_count} questions`;
+  return `${versionLabel(version)}${state} · ${version.question_count} questions`;
 }
 
 /** The picker's only view of a spawned product's lineage (phase 10):
@@ -103,7 +107,7 @@ const toolbarSelectTrigger =
 export function VersionLayout() {
   const { versionId } = useParams<{ versionId: string }>();
   const navigate = useNavigate();
-  const { identity, signOut, noteApiError } = useAuth();
+  const { identity, signOut, noteApiError, editRefused, reviewRefused } = useAuth();
 
   // The filter lives in the URL rather than in state, so a link to a
   // narrowed picker survives a reload and can be shared.
@@ -185,6 +189,26 @@ export function VersionLayout() {
     graphData.version.is_draft &&
     graphData.change_request?.status === "open";
 
+  const publishedAlerts: ChromeAlert[] = [];
+  if (graphData !== undefined && !graphData.version.is_draft) {
+    if (editRefused) {
+      publishedAlerts.push({
+        id: "edit-refused",
+        tone: "warn",
+        children: "Your account can view the flow tool but not propose changes.",
+      });
+    }
+    if (reviewRefused) {
+      publishedAlerts.push({
+        id: "review-refused",
+        tone: "warn",
+        children: graphData.version.is_active
+          ? "Your account can view the flow tool but not create a product from it."
+          : "Your account can view the flow tool but not create a product or activate a version.",
+      });
+    }
+  }
+
   const versionsError = versions.error;
   // `!isUnauthenticated`: an expired/invalid session answers this same
   // 403, and showing "you don't have permission" for that would be
@@ -222,21 +246,9 @@ export function VersionLayout() {
         <header className="flex h-14 items-center gap-3 px-4">
           <div className="flex shrink-0 items-center gap-2.5">
             <img className="block h-7 w-auto" src={croppedLogo} alt="" />
-            <div>
-              <h1 className="m-0 text-[15px] font-semibold tracking-[0.2px] whitespace-nowrap">
-                Flow Tool
-              </h1>
-              {graphData !== undefined && (
-                <p className="text-muted-foreground m-0 mt-px text-[11.5px] whitespace-nowrap">
-                  {graphData.version.questionnaire_name} ·{" "}
-                  {graphData.version.is_draft
-                    ? "draft"
-                    : graphData.version.is_active
-                      ? "latest"
-                      : "published"}
-                </p>
-              )}
-            </div>
+            <h1 className="m-0 text-[15px] font-semibold tracking-[0.2px] whitespace-nowrap">
+              Flow Tool
+            </h1>
           </div>
 
           {questionnaires.length > 1 && effectiveQuestionnaireId !== null && (
@@ -287,31 +299,30 @@ export function VersionLayout() {
             </SelectContent>
           </Select>
 
-          {graphData !== undefined && editable && (
-            <div className="flex shrink-0 gap-2">
-              <AddQuestion
-                graph={graphData}
-                onAdded={(id) =>
-                  navigate(`/versions/${graphData.version.id}?question=${id}`)
-                }
+          {graphData !== undefined && graphData.version.is_draft === false && (
+            <div className="flex shrink-0 items-center gap-2">
+              <AlertsButton items={publishedAlerts} />
+              <CreateProductDialog
+                versionId={graphData.version.id}
+                disabled={reviewRefused}
+                onCreated={(next) => navigate(`/versions/${next}`)}
               />
+              {graphData.version.is_active && (
+                <Button
+                  asChild
+                  className="border-transparent bg-[var(--accent-2)] text-white hover:bg-[var(--accent-2)]/90"
+                >
+                  <a
+                    href="https://bvi-product-preview.vercel.app/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Product preview
+                    <ExternalLinkIcon />
+                  </a>
+                </Button>
+              )}
             </div>
-          )}
-
-          {graphData !== undefined && graphData.version.is_active && (
-            <Button
-              asChild
-              className="border-transparent bg-[var(--accent-2)] text-white hover:bg-[var(--accent-2)]/90"
-            >
-              <a
-                href="https://bvi-product-preview.vercel.app/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Product preview
-                <ExternalLinkIcon />
-              </a>
-            </Button>
           )}
 
           <div className="ml-auto flex shrink-0 items-center gap-2.5">
@@ -319,8 +330,14 @@ export function VersionLayout() {
               {identity?.email}
             </span>
             <Separator orientation="vertical" className="h-5" />
-            <Button variant="ghost" onClick={() => void signOut()}>
-              Sign out
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => void signOut()}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut />
             </Button>
           </div>
         </header>
@@ -334,12 +351,6 @@ export function VersionLayout() {
             </Banner>
           )}
 
-        {graph.isPending && versionId !== undefined && (
-          <Banner tone="info" className="mx-4 mt-0 mb-2">
-            Loading the map…
-          </Banner>
-        )}
-
         {graph.isError &&
           (graph.error instanceof ApiError && graph.error.isNotFound ? (
             // The one case where a URL that worked a moment ago stops
@@ -351,8 +362,8 @@ export function VersionLayout() {
             // this does, the same way `StaleDraftError`'s banner names an
             // actual version rather than just saying "stale."
             <Banner tone="error" role="alert" className="mx-4 mt-0 mb-2">
-              This version no longer exists — most likely a draft that has since been
-              discarded. <Link to="/">Go to the latest version</Link>.
+              This version no longer exists. It is most likely a draft that has since
+              been discarded. <Link to="/">Go to the latest version</Link>.
             </Banner>
           ) : (
             <Banner tone="error" role="alert" className="mx-4 mt-0 mb-2">
@@ -378,6 +389,10 @@ export function VersionLayout() {
           />
         )}
       </div>
+
+      {graph.isPending && versionId !== undefined && (
+        <LoadingStatus centered>Loading the map…</LoadingStatus>
+      )}
 
       {graph.data !== undefined && (
         <Outlet
@@ -435,7 +450,7 @@ export function VersionLanding() {
   return (
     <main className="mx-auto flex min-h-svh max-w-[520px] flex-col items-center justify-center gap-2.5 bg-background p-6 text-center">
       {versions.isPending ? (
-        <p>Loading versions…</p>
+        <LoadingStatus>Loading versions…</LoadingStatus>
       ) : versions.data?.length === 0 ? (
         <>
           <h1 className="m-0 text-xl font-extrabold tracking-tight">

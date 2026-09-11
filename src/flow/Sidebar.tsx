@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LoadingStatus } from "@/components/ui/loading";
 import { Separator } from "@/components/ui/separator";
 import { emptyText } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
@@ -153,7 +154,8 @@ function HistoryPanel({ questionnaireId }: { questionnaireId: UUID }) {
     if (history.error) noteApiError(history.error);
   }, [history.error, noteApiError]);
 
-  if (history.isPending) return <p className={emptyText}>Loading…</p>;
+  if (history.isPending)
+    return <LoadingStatus className={emptyText}>Loading…</LoadingStatus>;
   if (history.isError)
     return <p className={emptyText}>Could not load the activity trail.</p>;
 

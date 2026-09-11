@@ -26,7 +26,9 @@ export const checkRow = "mb-2.5 flex items-center gap-2";
 export const optCard = "gap-0 rounded-[10px] p-3 ring-border [--card-spacing:0.75rem]";
 
 /** Destination / source question links in the detail sheet: wrap instead of
- * ellipsizing, and left-align so a multi-line prompt still reads as a
- * sentence. Overrides `Button variant="link"`'s nowrap. */
+ * ellipsizing, and start flush left (no section swatch indent). A trailing
+ * arrow marks them as navigation, not static text. `inline` so that arrow
+ * sits after the last word when the prompt wraps. Overrides the link
+ * button's nowrap and its own underline so the glyph isn't scored through. */
 export const questionLink =
-  "h-auto min-h-0 max-w-full justify-start whitespace-normal text-left";
+  "inline h-auto min-h-0 max-w-full p-0 px-0 py-0 whitespace-normal text-left no-underline hover:text-foreground [&>svg]:pointer-events-none [&>svg]:ml-1 [&>svg]:inline [&>svg]:size-3.5 [&>svg]:stroke-[2.25] [&>svg]:align-text-bottom";

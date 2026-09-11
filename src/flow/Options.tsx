@@ -1,6 +1,15 @@
 import { useId, useMemo, useState, type ReactNode } from "react";
 
-import { CircleHelp } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  CircleHelp,
+  Pencil,
+  Trash2,
+  Unlink,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { ApiError } from "../api/client";
 import {
@@ -13,9 +22,8 @@ import {
 } from "../api/queries";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
 import type { Edge, Graph, Question, QuestionOption, UUID } from "../api/types";
-import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -33,14 +41,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { BlockingList } from "./BlockingList";
+import { ConfirmAction } from "./ConfirmAction";
 import { EditorDropdown } from "./EditorDropdown";
 import type { ChangeKind, ChangeKinds } from "./graphElements";
-import {
-  NO_SECTION_COLOR,
-  optionsCoveredByFallback,
-  sectionColorMap,
-} from "./graphElements";
-import { diffChangeLabel, targetLabel } from "./labels";
+import { optionsCoveredByFallback } from "./graphElements";
+import { targetLabel } from "./labels";
 import {
   emptyText,
   editorActions,
@@ -79,13 +84,21 @@ interface OptionsProps {
   changeKinds?: ChangeKinds;
 }
 
-/** A small "Added"/"Changed" pill, the same Badge primitive and wording
- * (`diffChangeLabel`) Review uses, rather than a second badge language. */
-function ChangeBadge({ kind }: { kind: ChangeKind }) {
+/** Icon-only chrome. `label` is the accessible name and the hover
+ * tooltip, so a pictogram never sits mute. */
+function IconAction({
+  label,
+  icon: Icon,
+  title,
+  ...props
+}: {
+  label: string;
+  icon: LucideIcon;
+} & Omit<ButtonProps, "children" | "size">) {
   return (
-    <Badge tone={kind} className="ml-1.5">
-      {diffChangeLabel(kind)}
-    </Badge>
+    <Button size="icon-sm" aria-label={label} title={title ?? label} {...props}>
+      <Icon />
+    </Button>
   );
 }
 
@@ -117,7 +130,6 @@ function HelpHint({ label, text }: { label: string; text: string }) {
  * card. */
 interface EdgeContext {
   questionsById: ReadonlyMap<UUID, Question>;
-  sectionColors: ReadonlyMap<UUID, string>;
   targets: Question[];
   deadEdges: ReadonlySet<UUID>;
   brokenEdges: ReadonlySet<UUID>;
@@ -128,9 +140,9 @@ interface EdgeContext {
 /** One route's destination chip and its "Change destination" popup
  * (shown whenever `editable` -- it acts immediately and isn't
  * destructive, so there's no need to hide it behind a confirmation
- * step), and -- only once the card it lives in is opened for editing via
- * `expanded` -- its remove control, destructive enough to want that
- * extra step. Ported from break-backend's own destination picker
+ * step). Removing the route is an icon with a confirm step, same as
+ * deleting an answer: both destroy data, both ask first.
+ * Ported from break-backend's own destination picker
  * (question_graph_editor/app.js's `openDestinationPicker`): one
  * plain-language "what should happen after this answer" popup instead of
  * separate Retarget/Clear-jump/End buttons competing for space on the
@@ -141,12 +153,10 @@ function EdgeRow({
   selectLabel,
   ctx,
   editable,
-  expanded,
   disabled,
   retargetingEdgeId,
   hasFallback,
   hideDeadNote,
-  onEditText,
   onSelectQuestion,
   onStartRetarget,
   onCancelPick,
@@ -159,9 +169,6 @@ function EdgeRow({
   selectLabel: string;
   ctx: EdgeContext;
   editable: boolean;
-  /** Whether the card this row lives in has its own "Edit" toggle open --
-   * gates only Remove, not "Change destination". */
-  expanded: boolean;
   disabled: boolean;
   /** The edge currently mid-retarget (clicking a question on the canvas
    * sets its target), if any. Compared by id rather than passing a
@@ -170,18 +177,14 @@ function EdgeRow({
   retargetingEdgeId: UUID | null;
   /** Whether this row's question has a default route (question-level
    * edge) -- offers a one-click way to delete a per-option edge in favour
-   * of it, instead of "Remove" (behind Edit) plus knowing that's what an
-   * empty card does. `false` for `EdgeGroupCard`'s rows: removing the
-   * default route itself doesn't fall through to itself. */
+   * of it, instead of knowing that's what an empty card does. `false` for
+   * `EdgeGroupCard`'s rows: removing the default route itself doesn't
+   * fall through to itself. */
   hasFallback: boolean;
   /** Set by `EdgeGroupCard`: every row it renders is dead for the same
    * reason its own card-level note already states, so the row doesn't
    * repeat it a second time per route. */
   hideDeadNote?: boolean;
-  /** Present only for an answer's own row (`OptionCard`) -- there's no
-   * text to rename on the default-route or dead-guard groups, so those
-   * callers leave it out and "Edit text" doesn't render. */
-  onEditText?: (() => void) | undefined;
   onSelectQuestion: (id: UUID) => void;
   onStartRetarget: (edgeId: UUID, label: string) => void;
   onCancelPick: () => void;
@@ -199,44 +202,32 @@ function EdgeRow({
   const isRetargeting = retargetingEdgeId === edge.id;
   const targetQuestion =
     edge.to_question !== null ? ctx.questionsById.get(edge.to_question) : undefined;
-  const targetColor =
-    targetQuestion?.section != null
-      ? (ctx.sectionColors.get(targetQuestion.section) ?? NO_SECTION_COLOR)
-      : NO_SECTION_COLOR;
-  const edgeChange = ctx.edgeChangeKinds.get(edge.id);
 
   return (
     <div className="flex flex-col gap-2">
       <div
         className={cn(
-          "flex min-w-0 items-start gap-2 text-sm",
+          "min-w-0 text-sm",
           edge.to_question === null && "text-destructive",
         )}
       >
-        {edge.to_question !== null && (
-          <span
-            className="mt-1.5 size-2 shrink-0 rounded-full"
-            style={{ background: targetColor }}
-            aria-hidden="true"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          {edge.to_question !== null && targetQuestion !== undefined ? (
-            <Button
-              variant="link"
-              className={questionLink}
-              aria-label={`Go to ${targetQuestion.code}: ${targetQuestion.prompt}`}
-              onClick={() => onSelectQuestion(edge.to_question as UUID)}
-            >
+        {edge.to_question !== null && targetQuestion !== undefined ? (
+          <Button
+            variant="link"
+            className={questionLink}
+            aria-label={`Go to ${targetQuestion.code}: ${targetQuestion.prompt}`}
+            onClick={() => onSelectQuestion(edge.to_question as UUID)}
+          >
+            <span className="underline underline-offset-2">
               {targetQuestion.archived_at === null
                 ? targetQuestion.prompt
                 : `${targetQuestion.prompt} (archived)`}
-            </Button>
-          ) : (
-            targetLabel(edge, ctx.questionsById)
-          )}
-          {edgeChange !== undefined && <ChangeBadge kind={edgeChange} />}
-        </div>
+            </span>
+            <ArrowUpRight aria-hidden="true" />
+          </Button>
+        ) : (
+          targetLabel(edge, ctx.questionsById)
+        )}
       </div>
 
       {isBroken && (
@@ -262,81 +253,83 @@ function EdgeRow({
       {editable && (
         <div className="flex flex-wrap items-center gap-1.5">
           {isRetargeting ? (
-            <Button
+            <IconAction
+              label="Cancel retarget"
+              icon={X}
               variant="outline"
-              size="sm"
               pressed
               disabled={pending}
               onClick={onCancelPick}
-            >
-              Cancel retarget
-            </Button>
+            />
           ) : (
-            <EditorDropdown
-              trigger={
-                <Button variant="outline" size="sm">
-                  Change destination
-                </Button>
-              }
-              {...(pending ? { disabled: true } : {})}
-            >
-              {(close) => (
-                <div className="flex flex-col items-start gap-2">
-                  <p className={mutedHint}>What should happen after this answer?</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      onStartRetarget(edge.id, selectLabel);
-                      close();
-                    }}
-                  >
-                    Jump to a specific question
+            <>
+              <EditorDropdown
+                trigger={
+                  <Button variant="outline" size="sm">
+                    Change destination
                   </Button>
-                  {edge.from_option !== null && hasFallback && (
+                }
+                {...(pending ? { disabled: true } : {})}
+              >
+                {(close) => (
+                  <div className="flex flex-col items-start gap-2">
+                    <p className={mutedHint}>What should happen after this answer?</p>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        removeEdge.mutate(edge.id, { onError: onWriteError });
+                        onStartRetarget(edge.id, selectLabel);
                         close();
                       }}
                     >
-                      Use the default route instead
+                      Jump to a specific question
                     </Button>
-                  )}
-                  <Button
+                    {edge.from_option !== null && hasFallback && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          removeEdge.mutate(edge.id, { onError: onWriteError });
+                          close();
+                        }}
+                      >
+                        Use the default route instead
+                      </Button>
+                    )}
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={edge.to_question === null}
+                      onClick={() => {
+                        updateEdge.mutate(
+                          { edgeId: edge.id, changes: { to_question: null } },
+                          { onError: onWriteError },
+                        );
+                        close();
+                      }}
+                    >
+                      End the flow here
+                    </Button>
+                  </div>
+                )}
+              </EditorDropdown>
+              <ConfirmAction
+                message="Remove this route?"
+                confirmLabel="Remove route"
+                danger
+                onConfirm={() => removeEdge.mutate(edge.id, { onError: onWriteError })}
+              >
+                {(open) => (
+                  <IconAction
+                    label="Remove route"
+                    icon={Unlink}
                     variant="danger"
-                    size="sm"
-                    disabled={edge.to_question === null}
-                    onClick={() => {
-                      updateEdge.mutate(
-                        { edgeId: edge.id, changes: { to_question: null } },
-                        { onError: onWriteError },
-                      );
-                      close();
-                    }}
-                  >
-                    End the flow here
-                  </Button>
-                </div>
-              )}
-            </EditorDropdown>
-          )}
-          {onEditText && (
-            <Button variant="outline" size="sm" disabled={pending} onClick={onEditText}>
-              Edit text
-            </Button>
-          )}
-          {expanded && (
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={pending}
-              onClick={() => removeEdge.mutate(edge.id, { onError: onWriteError })}
-            >
-              Remove
-            </Button>
+                    disabled={pending}
+                    onClick={open}
+                  />
+                )}
+              </ConfirmAction>
+            </>
           )}
         </div>
       )}
@@ -350,13 +343,11 @@ function EdgeRow({
   );
 }
 
-/** A collapsed reveal for a block of routes that has no label/code of its
- * own to edit -- today just "Can't be used" (dead-guard edges; the
- * question-level route has its own dedicated `DefaultRouteSection`
- * instead, since it isn't one more answer). An Edit/Done toggle around
- * the same `EdgeRow` Remove control `OptionCard` gates the same way
- * ("Change destination" shows regardless, per `EdgeRow`'s own doc
- * comment). */
+/** A block of routes that has no label/code of its own to edit -- today
+ * just "Can't be used" (dead-guard edges; the question-level route has
+ * its own dedicated `DefaultRouteSection` instead, since it isn't one
+ * more answer). Route remove lives on each `EdgeRow`, so this card has
+ * no extra Edit toggle. */
 function EdgeGroupCard({
   heading,
   note,
@@ -384,24 +375,11 @@ function EdgeGroupCard({
   onStartRetarget: (edgeId: UUID, label: string) => void;
   onCancelPick: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-
   return (
     <li>
       <Card size="sm">
         <CardHeader className="border-b">
           <CardTitle>{heading}</CardTitle>
-          {editable && (
-            <CardAction>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditing((value) => !value)}
-              >
-                {editing ? "Done" : "Edit"}
-              </Button>
-            </CardAction>
-          )}
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {note !== undefined && (
@@ -415,7 +393,6 @@ function EdgeGroupCard({
               selectLabel={selectLabel}
               ctx={ctx}
               editable={editable}
-              expanded={editing}
               disabled={disabled}
               retargetingEdgeId={retargetingEdgeId}
               hasFallback={false}
@@ -468,15 +445,14 @@ function DefaultRouteSection({
   const onWriteError = useWriteErrorHandler();
   const addEdge = useAddEdge(versionId);
   const addTargetId = useId();
-  const [editing, setEditing] = useState(false);
   const [addingEdge, setAddingEdge] = useState(false);
   const [newTarget, setNewTarget] = useState<string>(END_OF_FLOW);
 
   const hasBody = edges.length > 0 || (editable && edges.length === 0);
 
   return (
-    <Card size="sm">
-      <CardHeader className={hasBody ? "border-b" : undefined}>
+    <Card size="sm" className="gap-2">
+      <CardHeader className={hasBody ? "border-b pb-2" : undefined}>
         <h4 className={cn(subHeading, "mb-0")}>Default route</h4>
         <CardAction className="flex items-center gap-1">
           <HelpHint
@@ -487,20 +463,11 @@ function DefaultRouteSection({
                 : "This route applies no matter what's answered."
             }
           />
-          {editable && edges.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditing((value) => !value)}
-            >
-              {editing ? "Done" : "Edit"}
-            </Button>
-          )}
         </CardAction>
       </CardHeader>
 
       {edges.length > 0 && (
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 px-2.5 pt-0">
           {edges.map((edge) => (
             <EdgeRow
               key={edge.id}
@@ -509,7 +476,6 @@ function DefaultRouteSection({
               selectLabel="Where the default route leads"
               ctx={ctx}
               editable={editable}
-              expanded={editing}
               disabled={disabled}
               retargetingEdgeId={retargetingEdgeId}
               hasFallback={false}
@@ -565,7 +531,8 @@ function DefaultRouteSection({
                 <Button
                   variant="primary"
                   type="submit"
-                  disabled={addEdge.isPending || disabled}
+                  loading={addEdge.isPending}
+                  disabled={disabled}
                 >
                   Add route
                 </Button>
@@ -622,16 +589,12 @@ interface OptionCardProps {
 }
 
 /** One answer, one card: what it's called, what leads from it, and (when
- * editable) every control for both. Label/code rename and delete stay
- * collapsed behind one "Edit text" until asked for, matching
- * `QuestionEditor`'s own text-edit toggle; so does a route's own Remove
- * (see `EdgeRow`). "Change destination" and adding a new route for this
- * answer do not -- they act immediately and aren't destructive, so hiding
- * them behind Edit would just be an extra click for no protection.
- * Combines what were three separate places (a read-only Options list, a
- * separate "Edit options" form, and `EdgeEditor`'s own "Outgoing edges"
- * list) into the one place somebody actually thinks about an answer:
- * together with where it goes. */
+ * editable) every control for both. Rename sits behind a pencil; delete
+ * sits next to it and asks first. Route remove lives on `EdgeRow` the
+ * same way. Combines what were three separate places (a read-only
+ * Options list, a separate "Edit options" form, and `EdgeEditor`'s own
+ * "Outgoing edges" list) into the one place somebody actually thinks
+ * about an answer: together with where it goes. */
 function OptionCard({
   versionId,
   questionId,
@@ -681,29 +644,80 @@ function OptionCard({
     setEditing(false);
   }
 
+  function save() {
+    updateOption.mutate(
+      {
+        optionId: option.id,
+        changes: isDraftNew ? { label, code: slugify(label) } : { label },
+      },
+      { onError: onWriteError, onSuccess: () => setEditing(false) },
+    );
+  }
+
   const hasBody =
     isUncovered ||
-    editing ||
     error !== null ||
     edges.length > 0 ||
     (editable && edges.length === 0);
 
-  const title = editing ? (
-    <div className="flex flex-wrap gap-2.5">
-      <Field label="Label" htmlFor={labelId} className="min-w-[120px]">
-        <Input
-          id={labelId}
-          value={label}
-          {...(pending ? { disabled: true } : {})}
-          onChange={(event) => setLabel(event.target.value)}
+  const toolbar = editable ? (
+    editing ? (
+      <div className="flex items-center gap-1">
+        <IconAction
+          label="Save"
+          icon={Check}
+          variant="primary"
+          loading={updateOption.isPending}
+          disabled={!dirty || removeOption.isPending || disabled}
+          onClick={save}
         />
-      </Field>
-    </div>
+        <IconAction label="Cancel" icon={X} disabled={pending} onClick={cancel} />
+      </div>
+    ) : (
+      <div className="flex items-center gap-1">
+        <IconAction
+          label="Edit answer"
+          icon={Pencil}
+          variant="outline"
+          disabled={pending}
+          onClick={() => setEditing(true)}
+        />
+        <ConfirmAction
+          message={`Delete "${option.label}"?`}
+          confirmLabel="Delete answer"
+          danger
+          onConfirm={() => removeOption.mutate(option.id, { onError: onWriteError })}
+        >
+          {(open) => (
+            <IconAction
+              label="Delete answer"
+              icon={Trash2}
+              variant="danger"
+              disabled={pending || isGuard}
+              title={
+                isGuard
+                  ? "A route still uses this answer. Remove that route first."
+                  : "Delete answer"
+              }
+              onClick={open}
+            />
+          )}
+        </ConfirmAction>
+      </div>
+    )
+  ) : null;
+
+  const title = editing ? (
+    <Input
+      id={labelId}
+      aria-label="Label"
+      value={label}
+      className="min-w-[120px]"
+      {...(pending ? { disabled: true } : {})}
+      onChange={(event) => setLabel(event.target.value)}
+    />
   ) : (
-    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium leading-snug">
-      <span>{option.label}</span>
-      {optionChange !== undefined && <ChangeBadge kind={optionChange} />}
-    </p>
+    <span className="text-sm font-medium leading-snug">{option.label}</span>
   );
 
   const body = (
@@ -712,57 +726,6 @@ function OptionCard({
         <p className="text-destructive text-xs">
           No route covers this answer yet, so choosing it ends the flow.
         </p>
-      )}
-
-      {editing && (
-        <>
-          <div className="flex flex-wrap gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              pressed
-              disabled={pending || !dirty}
-              onClick={() =>
-                updateOption.mutate(
-                  {
-                    optionId: option.id,
-                    changes: isDraftNew ? { label, code: slugify(label) } : { label },
-                  },
-                  { onError: onWriteError, onSuccess: () => setEditing(false) },
-                )
-              }
-            >
-              Save
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={pending || isGuard}
-              {...(isGuard
-                ? {
-                    title:
-                      "A route still uses this answer. Deleting it would break that route without warning, so remove the route first.",
-                  }
-                : {})}
-              onClick={() => removeOption.mutate(option.id, { onError: onWriteError })}
-            >
-              Delete
-            </Button>
-            <Button variant="outline" size="sm" disabled={pending} onClick={cancel}>
-              Cancel
-            </Button>
-          </div>
-
-          {isGuard && (
-            // Refused rather than cascaded, and the edge may leave another
-            // question entirely -- the dead-edge case the draft copy
-            // deliberately preserves.
-            <p className={cn(mutedHint, "mb-0")}>
-              A route still uses this answer, so it can't be deleted yet. Remove that
-              route first.
-            </p>
-          )}
-        </>
       )}
 
       {error !== null && (
@@ -789,11 +752,9 @@ function OptionCard({
           selectLabel={`Where "${option.label}" leads`}
           ctx={ctx}
           editable={editable}
-          expanded={editing}
           disabled={disabled}
           retargetingEdgeId={retargetingEdgeId}
           hasFallback={hasFallback}
-          onEditText={editing ? undefined : () => setEditing(true)}
           onSelectQuestion={onSelectQuestion}
           onStartRetarget={onStartRetarget}
           onCancelPick={onCancelPick}
@@ -804,33 +765,30 @@ function OptionCard({
         <>
           {isAddingRoute && (
             <p className={cn(mutedHint, "mb-0")} role="status">
-              Click a question on the canvas to route this answer there, or press Esc
-              to cancel.
+              Click a question on the canvas to route this answer there, or press Esc to
+              cancel.
             </p>
           )}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isAddingRoute ? (
-              <Button variant="outline" size="sm" pressed onClick={onCancelPick}>
-                Cancel specific route
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={disabled}
-                onClick={() =>
-                  onStartAddRoute(questionId, option.id, `"${option.label}"'s new route`)
-                }
-              >
-                Add a specific route
-              </Button>
-            )}
-            {!editing && (
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                Edit text
-              </Button>
-            )}
-          </div>
+          {isAddingRoute ? (
+            <IconAction
+              label="Cancel specific route"
+              icon={X}
+              variant="outline"
+              pressed
+              onClick={onCancelPick}
+            />
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              onClick={() =>
+                onStartAddRoute(questionId, option.id, `"${option.label}"'s new route`)
+              }
+            >
+              Add a specific route
+            </Button>
+          )}
         </>
       )}
     </>
@@ -839,7 +797,10 @@ function OptionCard({
   if (nested) {
     return (
       <li className="flex flex-col gap-2 rounded-[10px] bg-background p-2.5 ring-1 ring-border">
-        {title}
+        <div className="flex items-start justify-between gap-2">
+          {title}
+          {toolbar}
+        </div>
         {hasBody && body}
       </li>
     );
@@ -852,11 +813,9 @@ function OptionCard({
           {editing ? (
             title
           ) : (
-            <CardTitle className="flex flex-wrap items-center gap-1.5 text-sm leading-snug">
-              <span>{option.label}</span>
-              {optionChange !== undefined && <ChangeBadge kind={optionChange} />}
-            </CardTitle>
+            <CardTitle className="text-sm leading-snug">{title}</CardTitle>
           )}
+          {toolbar !== null && <CardAction>{toolbar}</CardAction>}
         </CardHeader>
         {hasBody && <CardContent className="flex flex-col gap-2">{body}</CardContent>}
       </Card>
@@ -921,10 +880,6 @@ export function Options({
     () => new Map(graph.questions.map((item) => [item.id, item])),
     [graph.questions],
   );
-  const sectionColors = useMemo(
-    () => sectionColorMap(graph.sections),
-    [graph.sections],
-  );
   const targets = useMemo(
     () =>
       graph.questions
@@ -942,7 +897,6 @@ export function Options({
   );
   const ctx: EdgeContext = {
     questionsById,
-    sectionColors,
     targets,
     deadEdges,
     brokenEdges,
@@ -1129,7 +1083,7 @@ export function Options({
             <ul className="flex list-none flex-col gap-2 p-0">
               <EdgeGroupCard
                 heading="Can't be used"
-                note="Tied to an answer this question doesn't have anymore, so these can never happen -- only removed."
+                note="Tied to an answer this question doesn't have anymore, so these can never happen. They can only be removed."
                 versionId={versionId}
                 edges={deadGuardEdges}
                 ctx={ctx}
@@ -1184,9 +1138,10 @@ export function Options({
                   <Button
                     variant="primary"
                     type="submit"
-                    disabled={pending || newOptionLabel.trim() === ""}
+                    loading={addOption.isPending}
+                    disabled={newOptionLabel.trim() === ""}
                   >
-                    {addOption.isPending ? "Adding…" : "Add option"}
+                    Add option
                   </Button>
                   <Button
                     variant="ghost"
@@ -1201,7 +1156,7 @@ export function Options({
                     which is what the up/down controls above do. */}
                 <p className={mutedHint}>
                   Added last. A new answer with no route yet just ends the flow if
-                  picked -- that's fine, and it's not refused, because answers are added
+                  picked. That's fine, and it's not refused, because answers are added
                   before the routes that lead from them.
                 </p>
               </form>
@@ -1212,8 +1167,8 @@ export function Options({
             )
           ) : (
             <p className={mutedHint}>
-              This question's answers don't use separate options -- like a written
-              response or a number -- so there's nothing to add here.
+              This question's answers don't use separate options, like a written
+              response or a number, so there's nothing to add here.
             </p>
           )}
         </div>

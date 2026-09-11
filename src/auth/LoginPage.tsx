@@ -89,10 +89,10 @@ export function LoginPage() {
               variant="primary"
               type="submit"
               className="w-full"
-              disabled={busy}
+              loading={busy}
               {...(error !== null ? { "aria-describedby": errorId } : {})}
             >
-              {busy ? "Signing in…" : "Sign in"}
+              Sign in
             </Button>
           </form>
         </CardContent>

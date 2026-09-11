@@ -123,7 +123,7 @@ export function MapLegendList() {
   return (
     <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
       <li className={row}>
-        <b>Border color</b> — the question's section
+        <b>Border color</b>: the question's section
       </li>
       <li className={row}>
         <BadgeIcon kind="added" />
@@ -143,35 +143,35 @@ export function MapLegendList() {
       </li>
       <li className={row}>
         <BadgeIcon kind="branch" />
-        Decision point — different next question per answer (corner badge)
+        Decision point: different next question per answer (corner badge)
       </li>
       <li className={row}>
         <BadgeIcon kind="unreachable" />
-        Unreachable — no path currently leads here (corner badge)
+        Unreachable: no path currently leads here (corner badge)
       </li>
       <li className={row}>
         <KeySwatch kind="archived" />
-        Archived — kept on the map only because something still points at it
+        Archived: kept on the map only because something still points at it
       </li>
       <li className={row}>
         <KeySwatch kind="end" />
-        End of flow — the shared destination every "flow ends here" edge points at
+        End of flow: the shared destination every "flow ends here" edge points at
       </li>
       <li className={row}>
         <KeySwatch kind="missing" />
-        Missing — an edge points at a question this version does not contain
+        Missing: an edge points at a question this version does not contain
       </li>
       <li className={row}>
         <KeySwatch kind="fault" />
-        Red border — this question has a dead or broken route leaving it
+        Red border: this question has a dead or broken route leaving it
       </li>
       <li className={row}>
         <KeySwatch kind="dead" />
-        Dashed arrow — dead route, tied to an answer this question doesn't offer anymore
+        Dashed arrow: dead route, tied to an answer this question doesn't offer anymore
       </li>
       <li className={row}>
         <KeySwatch kind="broken" />
-        Dotted arrow — broken route, leads to a question that's archived or removed
+        Dotted arrow: broken route, leads to a question that's archived or removed
       </li>
     </ul>
   );

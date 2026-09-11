@@ -139,7 +139,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
           <Field
             label="QID"
             htmlFor={codeId}
-            hint="Editable only on something this draft introduced. Renaming an inherited code reads as a removal and an addition in the review screen, so the server refuses it — retire the question and add its replacement instead."
+            hint="Editable only on something this draft introduced. Renaming an inherited code reads as a removal and an addition in the review screen, so the server refuses it. Retire the question and add its replacement instead."
           >
             <Input
               id={codeId}
@@ -205,8 +205,8 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
           </div>
 
           <div className={editorActions}>
-            <Button variant="primary" type="submit" disabled={pending || !dirty}>
-              {updateQuestion.isPending ? "Saving…" : "Save changes"}
+            <Button variant="primary" type="submit" loading={pending} disabled={!dirty}>
+              Save changes
             </Button>
             <Button
               variant="ghost"

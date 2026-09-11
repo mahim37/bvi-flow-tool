@@ -243,5 +243,5 @@ export function versionLabel(version: Version): string {
   // here -- `types.ts` promises `number | null` and cannot promise which
   // of those two absences a live deployment actually sends.
   if (version.number == null) return version.label || version.name;
-  return version.label ? `v${version.number} — ${version.label}` : `v${version.number}`;
+  return version.label ? `v${version.number} · ${version.label}` : `v${version.number}`;
 }

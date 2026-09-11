@@ -10,6 +10,7 @@ import { useAuth } from "../auth/useAuth";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LoadingStatus } from "@/components/ui/loading";
 import { Segment, SegmentOption } from "@/components/ui/segment";
 import { useVersionContext } from "./versionContext";
 import { previewInstruction, questionRefLabel } from "./labels";
@@ -249,7 +250,7 @@ export function PreviewView() {
       {mode === "changes" && currentChange !== null && (
         <Banner as="div" tone="info" className="preview__changebar" role="status">
           <p>
-            Change {changeIndex + 1} of {changedQuestionIds.length} — previewing{" "}
+            Change {changeIndex + 1} of {changedQuestionIds.length}. Previewing{" "}
             <strong>QID {questionRefLabel(currentChange)}</strong>
           </p>
           <div className="preview__changenav">
@@ -311,7 +312,7 @@ export function PreviewView() {
               look unfinished. */}
           <span className="preview__progressnote">
             {" "}
-            — of the questions reachable from the entry point
+            of the questions reachable from the entry point
           </span>
         </p>
       )}
@@ -336,7 +337,7 @@ export function PreviewView() {
 
             <div className="preview__content">
               {state === null && walk.isPending && (
-                <p className={emptyText}>Starting…</p>
+                <LoadingStatus className={emptyText}>Starting…</LoadingStatus>
               )}
 
               {state?.is_complete === true && (
@@ -365,7 +366,7 @@ export function PreviewView() {
                         {previewInstruction(question.answer_type)}
                         {question.is_required
                           ? ""
-                          : " Optional — you can continue without picking one."}
+                          : " Optional. You can continue without picking one."}
                       </p>
                       <ul className="preview__options">
                         {question.options.map((option) => {
@@ -428,10 +429,11 @@ export function PreviewView() {
                     <Button
                       variant="primary"
                       className="preview__next"
-                      disabled={walk.isPending || (isChoice && chosen.length === 0)}
+                      loading={walk.isPending}
+                      disabled={isChoice && chosen.length === 0}
                       onClick={answer}
                     >
-                      {walk.isPending ? "Walking…" : "Answer and continue"}
+                      Answer and continue
                     </Button>
                   </div>
                 </>

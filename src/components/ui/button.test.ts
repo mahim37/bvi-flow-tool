@@ -11,6 +11,12 @@ describe("buttonVariants", () => {
     expect(buttonVariants({ size: "icon" })).toContain("size-9");
     expect(buttonVariants({ variant: "primary" })).not.toContain("rounded-full");
   });
+
+  it("does not keep size padding on a link, so destination prompts sit flush", () => {
+    const classes = cn(buttonVariants({ variant: "link" }));
+    expect(classes).toContain("px-0");
+    expect(classes).not.toMatch(/(?:^|\s)px-3\.5(?:\s|$)/);
+  });
 });
 
 describe("badgeVariants", () => {

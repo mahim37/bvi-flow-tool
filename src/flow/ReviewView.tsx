@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
@@ -6,19 +7,26 @@ import { useApproveDraft, useRejectDraft, useReview } from "../api/queries";
 import type { ChangeRequest, DiffKind, ItemDiff, UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { DiffList } from "./DiffList";
+import { AlertsButton } from "./AlertsButton";
+import type { ChromeAlert } from "./AlertsButton";
+import { draftIssues } from "./draftIssues";
+import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { LoadingStatus } from "@/components/ui/loading";
 import { Textarea } from "@/components/ui/textarea";
 import { emptyText, mutedHint, panelHeading, panelSection } from "@/lib/chrome";
+import { cn } from "@/lib/utils";
 import { useVersionContext } from "./versionContext";
-import {
-  decisionLabel,
-  formatTimestamp,
-  statusLabel,
-  statusMeaning,
-  versionLabel,
-} from "./labels";
+import { decisionLabel, formatTimestamp, versionLabel } from "./labels";
 import { useReviewErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const KINDS: DiffKind[] = ["question", "option", "edge", "section"];
@@ -30,25 +38,24 @@ function ReviewHistory({ changeRequest }: { changeRequest: ChangeRequest }) {
       <h3 id="review-history" className={panelHeading}>
         Review history
       </h3>
-      <ol className="list-none p-0">
+      <ol className="flex list-none flex-col gap-2 p-0">
         {changeRequest.reviews.map((review) => (
-          <li
-            key={review.id}
-            className={
-              review.decision === "approved"
-                ? "mt-2 rounded-lg border border-border border-l-4 border-l-green bg-card p-3 first:mt-0"
-                : "mt-2 rounded-lg border border-border border-l-4 border-l-emphasis bg-card p-3 first:mt-0"
-            }
-          >
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <span className="font-extrabold">{decisionLabel(review.decision)}</span>
-              <span className="text-muted-foreground text-[0.85rem]">
-                by {review.reviewer_email} on {formatTimestamp(review.created)}
-              </span>
-            </div>
-            {review.note !== "" && (
-              <p className="mt-1.5 mb-0 whitespace-pre-wrap">{review.note}</p>
-            )}
+          <li key={review.id}>
+            <Card size="sm">
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  {decisionLabel(review.decision)}
+                </CardTitle>
+                <CardDescription>
+                  by {review.reviewer_email} on {formatTimestamp(review.created)}
+                </CardDescription>
+              </CardHeader>
+              {review.note !== "" && (
+                <CardContent>
+                  <p className="m-0 whitespace-pre-wrap">{review.note}</p>
+                </CardContent>
+              )}
+            </Card>
           </li>
         ))}
       </ol>
@@ -80,8 +87,8 @@ export function ReviewView() {
 
   if (review.isPending) {
     return (
-      <main className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-15">
-        <Banner tone="info">Working out what changed…</Banner>
+      <main className="flex min-h-0 flex-1 flex-col">
+        <LoadingStatus centered>Working out what changed…</LoadingStatus>
       </main>
     );
   }
@@ -172,106 +179,84 @@ export function ReviewView() {
     edge: diff.edges,
   };
 
+  const issueItems: ChromeAlert[] = version.is_draft
+    ? draftIssues(graph, publish_blocker).map((issue) => {
+        const questionId = issue.questionId;
+        const body: ChromeAlert = {
+          id: issue.id,
+          tone: "error",
+          children:
+            issue.tags.length === 0 ? (
+              issue.title
+            ) : (
+              <>
+                <span className="text-destructive inline-flex items-baseline gap-1 font-medium">
+                  <span className="underline decoration-current/40 underline-offset-2">
+                    {issue.title}
+                  </span>
+                  <ArrowUpRight
+                    className="mb-px inline size-3.5 shrink-0 stroke-[2.25] align-text-bottom"
+                    aria-hidden="true"
+                  />
+                </span>
+                <span className="mt-0.5 block">{issue.tags.join(" · ")}</span>
+              </>
+            ),
+        };
+        if (questionId !== null) {
+          body.onSelect = () => showOnMap(questionId);
+          body.actionLabel = `Open ${issue.title} on the map`;
+        }
+        return body;
+      })
+    : [];
+
   return (
     <main className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-15">
-      <header className="mb-4">
-        <h2 className="mb-1 text-[1.3rem] font-extrabold tracking-tight">
-          {version.is_draft ? "Review" : "What this version changed"}
-        </h2>
-        <p className="text-muted-foreground m-0 max-w-[72ch]">
-          {versionLabel(version)}
-          {base_version === null ? (
-            // A draft with no parent is the first version of a new
-            // questionnaire, so everything in it is an addition. Saying so
-            // beats a diff that silently reports the whole questionnaire
-            // as added and leaves the reader guessing why.
-            <> — compared against nothing, because it has no earlier version.</>
-          ) : (
-            <> — compared against {versionLabel(base_version)}.</>
-          )}
-        </p>
-      </header>
-
-      {changeRequest !== null && (
-        <div className="mb-3.5 rounded-lg border border-border bg-card p-3.5">
-          <p className="m-0 mb-1">
-            <strong>{statusLabel(changeRequest.status)}</strong> —{" "}
-            {statusMeaning(changeRequest.status)}
+      <header className="mb-5 flex flex-col gap-3">
+        <div>
+          <div className="mb-1 flex flex-wrap items-center gap-2.5">
+            <h2 className="m-0 text-[1.3rem] font-extrabold tracking-tight">
+              {version.is_draft ? "Review" : "What this version changed"}
+            </h2>
+            <AlertsButton kind="Issues" items={issueItems} />
+          </div>
+          <p className="text-muted-foreground m-0 max-w-[72ch]">
+            {base_version === null
+              ? `${versionLabel(version)}. This is the first version, so everything here is new.`
+              : `${versionLabel(version)}, compared with ${versionLabel(base_version)}.`}
           </p>
-          <p className="text-muted-foreground m-0 text-[0.88rem]">
-            Proposed by {changeRequest.created_by_email}
-            {changeRequest.summary !== "" && ` — ${changeRequest.summary}`}
-            {changeRequest.submitted_at !== null &&
-              `. Submitted ${formatTimestamp(changeRequest.submitted_at)}`}
-            {changeRequest.published_at !== null &&
-              `. Published ${formatTimestamp(changeRequest.published_at)}`}
-          </p>
-          {changeRequest.reviewer_1_email !== null &&
-            changeRequest.reviewer_2_email !== null && (
-              <p className="text-muted-foreground m-0 text-[0.88rem]">
-                Reviewers: {changeRequest.reviewer_1_email} and{" "}
-                {changeRequest.reviewer_2_email}
-              </p>
-            )}
         </div>
-      )}
-
-      {version.is_stale && (
-        // Surfaced here as well as on the draft bar, because this is the
-        // screen where somebody is about to approve it. A reviewer who
-        // clears a stale draft finds out at publish, which wastes the one
-        // round trip through a second person the whole workflow is for.
-        <Banner tone="warn" role="alert">
-          Somebody published underneath this draft: the version it was copied from is no
-          longer the latest one. Publishing is refused rather than silently reinstating
-          whatever landed in between. Open a new draft from the latest version and
-          re-apply these changes.
-        </Banner>
-      )}
-
-      {publish_blocker !== null && (
-        <Banner tone="error" role="alert">
-          <strong>This cannot be published as it stands.</strong> {publish_blocker}
-        </Banner>
-      )}
-
-      <section className={panelSection} aria-labelledby="diff-summary">
-        <h3 id="diff-summary" className={panelHeading}>
-          Summary
-        </h3>
         {diff.is_empty ? (
-          // Said plainly, because opening a draft and changing nothing is
-          // a thing people do, and an empty list otherwise reads as "the
-          // diff failed to load".
-          <p className={emptyText}>
+          <p className={cn(emptyText, "my-0")}>
             Nothing has changed. This version still says exactly what the one it was
             copied from says.
           </p>
         ) : (
-          <ul className="text-muted-foreground m-0 flex list-none gap-[22px] p-0">
+          <ul
+            className="m-0 flex list-none flex-wrap gap-2 p-0"
+            aria-label="Change counts"
+          >
             <li>
-              <span className="mr-1.5 text-[1.4rem] font-extrabold text-foreground">
-                {summary.added}
-              </span>{" "}
-              added
+              <Badge tone="added" className="font-mono tracking-normal">
+                +{summary.added} added
+              </Badge>
             </li>
             <li>
-              <span className="mr-1.5 text-[1.4rem] font-extrabold text-foreground">
-                {summary.removed}
-              </span>{" "}
-              removed
+              <Badge tone="removed" className="font-mono tracking-normal">
+                −{summary.removed} removed
+              </Badge>
             </li>
             <li>
-              <span className="mr-1.5 text-[1.4rem] font-extrabold text-foreground">
-                {summary.changed}
-              </span>{" "}
-              changed
+              <Badge tone="changed" className="font-mono tracking-normal">
+                ~{summary.changed} changed
+              </Badge>
             </li>
           </ul>
         )}
-      </section>
+      </header>
 
-      <div className="grid gap-4.5">
+      <div className="grid gap-4">
         {KINDS.map((kind) => (
           <DiffList
             key={kind}
@@ -314,7 +299,7 @@ export function ReviewView() {
           {canApprove && isAuthor && (
             <Banner tone="warn">
               This is your own proposal, so you cannot approve or send it back. Somebody
-              else has to read it — that independent check is the whole point of the
+              else has to read it. That independent check is the whole point of the
               workflow. It publishes on its own the moment both reviewers have approved.
             </Banner>
           )}
@@ -326,8 +311,8 @@ export function ReviewView() {
           {canReject && somebodyHasApproved && isAuthor && (
             <Banner tone="warn">
               This is your own proposal, so you cannot send it back either, even now
-              that it is approved. Withdrawing it is yours to do instead, from the map
-              -- that also drops the approval.
+              that it is approved. Withdrawing it is yours to do instead, from the map.
+              That also drops the approval.
             </Banner>
           )}
 
@@ -368,9 +353,10 @@ export function ReviewView() {
                   <Button
                     variant="primary"
                     type="submit"
-                    disabled={approve.isPending || reviewRefused}
+                    loading={approve.isPending}
+                    disabled={reviewRefused}
                   >
-                    {approve.isPending ? "Approving…" : "Approve"}
+                    Approve
                   </Button>
                   <p className={mutedHint}>
                     Approving freezes the draft as it stands. What gets published is
@@ -402,15 +388,10 @@ export function ReviewView() {
                 </Field>
                 <Button
                   type="submit"
-                  disabled={
-                    reject.isPending || reviewRefused || rejectNote.trim() === ""
-                  }
+                  loading={reject.isPending}
+                  disabled={reviewRefused || rejectNote.trim() === ""}
                 >
-                  {reject.isPending
-                    ? "Sending back…"
-                    : somebodyHasApproved
-                      ? "Undo the approval"
-                      : "Send back"}
+                  {somebodyHasApproved ? "Undo the approval" : "Send back"}
                 </Button>
                 {/* A rejection with nothing to say makes the author guess,
                     which is why the note is required here and on the

@@ -118,7 +118,9 @@ describe("a live question", () => {
       .getByText("Default route")
       .closest("[data-slot=card]") as HTMLElement;
     expect(within(defaultCard).getByText("Yes")).toBeInTheDocument();
-    expect(within(defaultCard).getByText("Prompt for Q2")).toBeInTheDocument();
+    expect(
+      within(defaultCard).getByRole("button", { name: /Go to Q2:/ }),
+    ).toBeInTheDocument();
     expect(
       within(defaultCard).getByRole("list", { name: /Takes this route/ }),
     ).toBeInTheDocument();
@@ -219,7 +221,12 @@ describe("edit controls", () => {
     expect(
       screen.queryByRole("button", { name: "+ Add a default route" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Remove route" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit answer" }),
+    ).not.toBeInTheDocument();
   });
 
   it("appear, collapsed, once the version is an open draft", async () => {
@@ -238,22 +245,67 @@ describe("edit controls", () => {
     expect(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
   });
 
-  it("keep an answer's rename/delete controls collapsed until Edit text is clicked", async () => {
+  it("keep an answer's rename collapsed until Edit is clicked, and delete visible beside it", async () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
     const section = screen.getByRole("region", { name: /^Options/ });
 
     expect(within(section).queryByLabelText("Label")).not.toBeInTheDocument();
     expect(
-      within(section).queryByRole("button", { name: "Delete" }),
-    ).not.toBeInTheDocument();
+      within(section).getAllByRole("button", { name: "Delete answer" }).length,
+    ).toBeGreaterThan(0);
 
     await user.click(
-      within(section).getAllByRole("button", { name: "Edit text" })[0] as HTMLElement,
+      within(section).getAllByRole("button", { name: "Edit answer" })[0] as HTMLElement,
     );
 
     expect(within(section).getByLabelText("Label")).toBeInTheDocument();
-    expect(within(section).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("asks before deleting an answer", async () => {
+    const user = userEvent.setup();
+    const original = makeGraph();
+    const graph = makeGraph({
+      questions: original.questions.map((item) =>
+        item.id !== Q1
+          ? item
+          : {
+              ...item,
+              options: [
+                ...item.options,
+                {
+                  id: "bbbbbbbb-0000-4000-8000-000000000099",
+                  code: "maybe",
+                  label: "Maybe",
+                  display_order: 2,
+                },
+              ],
+            },
+      ),
+    });
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={vi.fn()}
+      />,
+    );
+    const maybeRow = screen.getByText("Maybe").closest("li") as HTMLElement;
+
+    await user.click(within(maybeRow).getByRole("button", { name: "Delete answer" }));
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByText('Delete "Maybe"?')).toBeInTheDocument();
   });
 
   it("offers no destination controls at all on a published version", () => {
@@ -263,10 +315,7 @@ describe("edit controls", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows a route's Change-destination popup without needing that answer's Edit text", async () => {
-    // Unlike Remove (still behind Edit text -- see the test above), this
-    // acts immediately and isn't destructive, so it doesn't need the extra
-    // click.
+  it("shows a route's Change-destination popup without needing that answer's Edit", async () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
 
@@ -279,9 +328,6 @@ describe("edit controls", () => {
     expect(
       screen.getByRole("button", { name: "End the flow here" }),
     ).toBeInTheDocument();
-    expect(
-      within(yesRow).queryByRole("button", { name: "Remove" }),
-    ).not.toBeInTheDocument();
   });
 
   it("asks the map to start a retarget, naming the route being retargeted", async () => {
@@ -594,7 +640,7 @@ describe("change highlighting", () => {
     expect(screen.queryByText("Nothing to report")).not.toBeInTheDocument();
   });
 
-  it("badges an added option and a changed route", () => {
+  it("does not badge an added option or a changed route", () => {
     panelFor(Q1, false, {
       questions: new Map(),
       options: new Map([[OPTION_YES, "added"]]),
@@ -602,7 +648,7 @@ describe("change highlighting", () => {
     });
 
     const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
-    expect(within(yesRow).getByText("Added")).toBeInTheDocument();
-    expect(within(yesRow).getByText("Changed")).toBeInTheDocument();
+    expect(within(yesRow).queryByText("Added")).not.toBeInTheDocument();
+    expect(within(yesRow).queryByText("Changed")).not.toBeInTheDocument();
   });
 });

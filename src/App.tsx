@@ -66,8 +66,8 @@ export function App() {
               Desktop required
             </CardTitle>
             <CardDescription className="text-base text-pretty">
-              The flow tool needs a larger screen to use safely — please switch to a
-              desktop or laptop to continue.
+              The flow tool needs a larger screen to use safely. Switch to a desktop or
+              laptop to continue.
             </CardDescription>
           </CardHeader>
         </Card>
