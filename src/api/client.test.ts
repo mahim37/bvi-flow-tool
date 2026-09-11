@@ -261,6 +261,41 @@ describe("errors", () => {
     expect(denied.isForbidden).toBe(true);
   });
 
+  it("recognizes a taken code from either refusal's fixed wording", async () => {
+    // Spawning a product and adding/renaming an answer no longer show a
+    // `code` field at all -- both derive it from a name/label the user did
+    // type, so the raw server wording (which still names `code`) has to be
+    // recognized and replaced rather than shown as-is.
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      respond(
+        409,
+        { detail: "Another product already uses the code widgets." },
+        false,
+      ),
+    );
+    const spawnClash = (await request("/api/x/", { method: "POST", body: {} }).catch(
+      (error: unknown) => error,
+    )) as ApiError;
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      respond(400, { detail: "Q3 already has an option coded male." }, false),
+    );
+    const optionClash = (await request("/api/x/", { method: "POST", body: {} }).catch(
+      (error: unknown) => error,
+    )) as ApiError;
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      respond(400, { detail: "This field may not be blank." }, false),
+    );
+    const unrelated = (await request("/api/x/", { method: "POST", body: {} }).catch(
+      (error: unknown) => error,
+    )) as ApiError;
+
+    expect(spawnClash.isDuplicateName).toBe(true);
+    expect(optionClash.isDuplicateName).toBe(true);
+    expect(unrelated.isDuplicateName).toBe(false);
+  });
+
   it("tells a dead session apart from a permission refusal, both 403", async () => {
     // `StaffSessionAuthentication` sets no `WWW-Authenticate` header, so
     // DRF downgrades every auth failure -- no cookie, an expired session,

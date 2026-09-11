@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TabsLink, TabsNav } from "@/components/ui/nav-tabs";
 import { editorBox, mutedHint } from "@/lib/chrome";
+import { slugify } from "@/lib/slug";
 import {
   useActivateVersion,
   useCreateDraft,
@@ -140,9 +141,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   const [summary, setSummary] = useState("");
 
   const spawnNameId = useId();
-  const spawnCodeId = useId();
   const [spawnName, setSpawnName] = useState("");
-  const [spawnCode, setSpawnCode] = useState("");
 
   const createDraft = useCreateDraft();
   const discardDraft = useDiscardDraft();
@@ -182,13 +181,12 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   function startSpawn(event: React.FormEvent, close: () => void) {
     event.preventDefault();
     spawnProduct.mutate(
-      { name: spawnName, code: spawnCode },
+      { name: spawnName, code: slugify(spawnName) },
       {
         onError: onReviewError,
         onSuccess: (created) => {
           close();
           setSpawnName("");
-          setSpawnCode("");
           // Straight into the child, same reasoning as a fresh draft: it
           // is a different product now, with a different id, and staying
           // on the source would leave the editor looking at a version
@@ -366,23 +364,10 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
                       onChange={(event) => setSpawnName(event.target.value)}
                     />
                   </Field>
-                  <Field label="Code" htmlFor={spawnCodeId}>
-                    <Input
-                      id={spawnCodeId}
-                      value={spawnCode}
-                      required
-                      placeholder="Stable identifier, unique across every product"
-                      onChange={(event) => setSpawnCode(event.target.value)}
-                    />
-                  </Field>
                   <Button
                     variant="primary"
                     type="submit"
-                    disabled={
-                      spawnProduct.isPending ||
-                      spawnName.trim() === "" ||
-                      spawnCode.trim() === ""
-                    }
+                    disabled={spawnProduct.isPending || spawnName.trim() === ""}
                   >
                     {spawnProduct.isPending ? "Spawning…" : "Spawn product"}
                   </Button>

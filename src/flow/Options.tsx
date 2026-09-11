@@ -34,6 +34,7 @@ import {
   subCount,
   subHeading,
 } from "@/lib/chrome";
+import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
@@ -625,14 +626,17 @@ function OptionCard({
   const removeOption = useRemoveOption(versionId);
 
   const labelId = useId();
-  const codeId = useId();
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(option.label);
-  const [code, setCode] = useState(option.code);
   const isAddingRoute = addingRouteOptionId === option.id;
   const optionChange = ctx.optionChangeKinds.get(option.id);
+  // Only an option this draft itself introduced ("added" against the
+  // parent version) may have its code rewritten -- `editing.update_option`
+  // outright refuses a code change on one this draft inherited, so an
+  // inherited option's rename must never touch it.
+  const isDraftNew = optionChange === "added";
 
-  const dirty = label !== option.label || code !== option.code;
+  const dirty = label !== option.label;
   const pending = updateOption.isPending || removeOption.isPending || disabled;
   const error =
     writeErrorMessage(updateOption.error) ?? writeErrorMessage(removeOption.error);
@@ -644,7 +648,6 @@ function OptionCard({
 
   function cancel() {
     setLabel(option.label);
-    setCode(option.code);
     setEditing(false);
   }
 
@@ -659,14 +662,6 @@ function OptionCard({
                 value={label}
                 {...(pending ? { disabled: true } : {})}
                 onChange={(event) => setLabel(event.target.value)}
-              />
-            </Field>
-            <Field label="Code" htmlFor={codeId} className="min-w-[120px]">
-              <Input
-                id={codeId}
-                value={code}
-                {...(pending ? { disabled: true } : {})}
-                onChange={(event) => setCode(event.target.value)}
               />
             </Field>
           </div>
@@ -698,14 +693,7 @@ function OptionCard({
                   updateOption.mutate(
                     {
                       optionId: option.id,
-                      // Only what moved: an absent key stays absent from
-                      // `validated_data`, and the code of an inherited option is
-                      // refused outright, so sending an unchanged one would turn
-                      // a label edit into a refusal.
-                      changes: {
-                        ...(label !== option.label ? { label } : {}),
-                        ...(code !== option.code ? { code } : {}),
-                      },
+                      changes: isDraftNew ? { label, code: slugify(label) } : { label },
                     },
                     { onError: onWriteError, onSuccess: () => setEditing(false) },
                   )
@@ -843,10 +831,8 @@ export function Options({
   const onWriteError = useWriteErrorHandler();
   const addOption = useAddOption(versionId);
 
-  const optionCodeId = useId();
   const optionLabelId = useId();
   const [addingOption, setAddingOption] = useState(false);
-  const [newOptionCode, setNewOptionCode] = useState("");
   const [newOptionLabel, setNewOptionLabel] = useState("");
 
   const options = useMemo(
@@ -1055,13 +1041,12 @@ export function Options({
                   addOption.mutate(
                     {
                       question: question.id,
-                      code: newOptionCode,
+                      code: slugify(newOptionLabel),
                       label: newOptionLabel,
                     },
                     {
                       onError: onWriteError,
                       onSuccess: () => {
-                        setNewOptionCode("");
                         setNewOptionLabel("");
                         setAddingOption(false);
                       },
@@ -1079,23 +1064,11 @@ export function Options({
                     onChange={(event) => setNewOptionLabel(event.target.value)}
                   />
                 </Field>
-                <Field label="Code" htmlFor={optionCodeId}>
-                  <Input
-                    id={optionCodeId}
-                    value={newOptionCode}
-                    required
-                    placeholder="Stable identifier"
-                    {...(pending ? { disabled: true } : {})}
-                    onChange={(event) => setNewOptionCode(event.target.value)}
-                  />
-                </Field>
                 <div className={editorActions}>
                   <Button
                     variant="primary"
                     type="submit"
-                    disabled={
-                      pending || newOptionCode.trim() === "" || newOptionLabel.trim() === ""
-                    }
+                    disabled={pending || newOptionLabel.trim() === ""}
                   >
                     {addOption.isPending ? "Adding…" : "Add option"}
                   </Button>

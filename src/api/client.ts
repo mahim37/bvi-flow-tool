@@ -108,6 +108,25 @@ export class ApiError extends Error {
   }
 
   /**
+   * A name/label that collides with another row's code, once slugified.
+   *
+   * `editing.ProductSpawnRefusedError`/`ContentValidationError` raise fixed
+   * wording for this ("already uses the code ...", "already has an option
+   * coded ...") -- matched here the same way `isCsrfFailure` matches its
+   * own fixed string, since nothing else on the response marks a taken
+   * code apart from every other 400/409 shape. Worth a getter of its own
+   * because the frontend no longer shows a `code` field to type into
+   * (spawning a product, adding or renaming an answer all derive it from
+   * the name/label): the raw message would name a column the user never
+   * saw, so callers use this to show copy about the name instead.
+   */
+  get isDuplicateName(): boolean {
+    const detail = this.body?.["detail"];
+    if (typeof detail !== "string") return false;
+    return /already uses the code|already has an option coded/.test(detail);
+  }
+
+  /**
    * Who is holding the draft, when the refusal was a held lock.
    *
    * `editing.DraftLockedError.detail_payload` puts these on the body so a

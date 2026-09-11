@@ -33,6 +33,11 @@ export function useWriteErrorHandler(): (error: unknown) => void {
 export function writeErrorMessage(error: unknown): string | null {
   if (error === null || error === undefined) return null;
   if (error instanceof ApiError) {
+    if (error.isDuplicateName) {
+      // The server's own wording names a `code` this UI never asked the
+      // user to type -- see `ApiError.isDuplicateName`.
+      return "That name is already taken here. Try a name that's a little more distinctive.";
+    }
     const holder = error.lockHolder;
     if (holder !== null) {
       // `DraftLockedError` already says who; repeating the email here
