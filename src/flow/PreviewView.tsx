@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import predmindLogo from "../assets/predmind-logo.webp";
 import { ApiError } from "../api/client";
 import { usePreviewPathTo, usePreviewWalk, useReview } from "../api/queries";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
-import type { PreviewAnswer, PreviewState, QuestionRecord, UUID } from "../api/types";
+import type {
+  PreviewAnswer,
+  PreviewRegion,
+  PreviewState,
+  QuestionRecord,
+  UUID,
+} from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingStatus } from "@/components/ui/loading";
 import { Segment, SegmentOption } from "@/components/ui/segment";
 import { useVersionContext } from "./versionContext";
-import { previewInstruction, questionRefLabel } from "./labels";
+import { previewInstruction, regionLabel } from "./labels";
 import { emptyText, panelHeading } from "@/lib/chrome";
 import { writeErrorMessage } from "./useWriteError";
 
@@ -57,7 +63,7 @@ export function PreviewView() {
   // does not leave a stale explicit choice pinning it to a mode that no
   // longer makes sense.
   const [modeOverride, setModeOverride] = useState<PreviewMode | null>(null);
-  const [changeIndex, setChangeIndex] = useState(0);
+  const [regionIndex, setRegionIndex] = useState(0);
 
   const { mutate } = walk;
 
@@ -84,32 +90,14 @@ export function PreviewView() {
     [mutate],
   );
 
-  // Every question this draft touches, deduped and in reading order (a
-  // question's own `display_order`, not diff-kind order) -- sections
-  // contribute nothing here, since a section change hangs off no single
-  // question. "Changes only" mode steps through exactly this list.
-  //
-  // A *removed* question still has a `question_id` in `diff.questions`,
-  // but it no longer exists in `graph.questions` to preview a path to --
-  // stepping to one 404s server-side ("No Question matches the given
-  // query."), so it's filtered out here rather than left for the walk to
-  // fail on.
-  const changedQuestionIds = useMemo(() => {
-    if (review.data === undefined) return [];
-    const { diff } = review.data;
-    const liveIds = new Set(graph.questions.map((question) => question.id));
-    const ids = new Set<UUID>();
-    for (const item of [...diff.questions, ...diff.options, ...diff.edges]) {
-      if (item.question_id !== null && liveIds.has(item.question_id)) {
-        ids.add(item.question_id);
-      }
-    }
-    return [...ids].sort((a, b) => {
-      const orderOf = (id: UUID) =>
-        graph.questions.find((question) => question.id === id)?.display_order ?? 0;
-      return orderOf(a) - orderOf(b);
-    });
-  }, [review.data, graph.questions]);
+  // Changes-only mode's grouping, computed server-side
+  // (`preview_regions.py`) so "consecutive" reflects the graph's real
+  // branching -- adjacency along `routing.path_to`'s own route to each
+  // question, not `display_order`, which is presentational under GRAPH
+  // routing and can disagree with it once branches are involved. Each
+  // region is a contiguous run of one or more changed questions, plus the
+  // one unchanged question immediately before it, if any.
+  const regions = review.data?.preview_regions ?? [];
 
   // A published version keeps its historical diff forever (that's what
   // "What changed" shows), but by the time it's live those changes are
@@ -120,8 +108,7 @@ export function PreviewView() {
   // itself would necessarily reflect that.
   const changeRequestStatus =
     (review.data?.change_request ?? graph.change_request)?.status ?? null;
-  const hasChanges =
-    changedQuestionIds.length > 0 && changeRequestStatus !== "published";
+  const hasChanges = regions.length > 0 && changeRequestStatus !== "published";
   // Defaults to "changes" the moment there is anything to show -- explicit
   // requirement, not just a convenience: a reviewer opening Preview should
   // land on what this draft actually touches, not have to know to ask for
@@ -129,31 +116,30 @@ export function PreviewView() {
   // exists (nothing to step through), regardless of any earlier toggle.
   const mode: PreviewMode = hasChanges ? (modeOverride ?? "changes") : "full";
 
-  // `ReviewView`'s "Preview from here" points at one specific change via
-  // `?question=`; this resolves it to a position in `changedQuestionIds`
-  // exactly once, the first time the diff is available to check it
-  // against -- afterward the reviewer's own Next/Previous clicks own
-  // `changeIndex`, so this must not re-fire and snap them back.
+  // `ReviewView`'s "Preview from here" points at one specific question via
+  // `?question=`; this resolves it to whichever region contains that
+  // question exactly once, the first time the diff is available to check
+  // it against -- afterward the reviewer's own Next/Previous clicks own
+  // `regionIndex`, so this must not re-fire and snap them back.
   const appliedUrlTargetRef = useRef(false);
   useEffect(() => {
     if (appliedUrlTargetRef.current || review.data === undefined) return;
     appliedUrlTargetRef.current = true;
     const urlTarget = searchParams.get("question");
     if (urlTarget === null) return;
-    const index = changedQuestionIds.indexOf(urlTarget);
+    const index = regions.findIndex((region) => region.question_ids.includes(urlTarget));
     if (index !== -1) {
       setModeOverride("changes");
-      setChangeIndex(index);
+      setRegionIndex(index);
     }
-  }, [review.data, searchParams, changedQuestionIds]);
+  }, [review.data, searchParams, regions]);
 
-  // Restarted whenever the version, the mode, or which change is being
-  // stepped to changes. Deliberately *not* keyed on `graph`/
-  // `changedQuestionIds` themselves, which change identity on every
-  // unrelated refetch (any edit anywhere invalidates the graph) -- this
-  // still re-seeds exactly when it should, because `review.data`
-  // transitioning from unloaded to loaded is what makes those two actually
-  // differ in the first place.
+  // Restarted whenever the version, the mode, or which region is being
+  // stepped to changes. Deliberately *not* keyed on `graph`/`regions`
+  // themselves, which change identity on every unrelated refetch (any edit
+  // anywhere invalidates the graph) -- this still re-seeds exactly when it
+  // should, because `review.data` transitioning from unloaded to loaded is
+  // what makes those two actually differ in the first place.
   useEffect(() => {
     if (review.data === undefined) return;
     setSteps([]);
@@ -161,7 +147,12 @@ export function PreviewView() {
     setChosen([]);
     setFreeValue("");
 
-    const target = mode === "changes" ? changedQuestionIds[changeIndex] : undefined;
+    // Seeds to the region's *first* question only -- same mechanism as
+    // before, just landing on the start of a run instead of one isolated
+    // question. Everything after that is the reviewer's own real answers;
+    // `pastRegion` below is what notices once those answers have carried
+    // them out the other side.
+    const target = mode === "changes" ? regions[regionIndex]?.question_ids[0] : undefined;
     if (target === undefined) {
       mutate([], { onSuccess: (result) => setState(result) });
       return;
@@ -190,17 +181,59 @@ export function PreviewView() {
         walkTo(seededSteps);
       },
     });
-  }, [versionId, review.data, mode, changeIndex, mutate]);
+  }, [versionId, review.data, mode, regionIndex, mutate]);
 
-  const currentChange =
-    mode === "changes"
-      ? (graph.questions.find((item) => item.id === changedQuestionIds[changeIndex]) ??
-        null)
-      : null;
+  const currentRegion: PreviewRegion | null =
+    mode === "changes" ? (regions[regionIndex] ?? null) : null;
 
   const question = state?.next_questions[0] ?? null;
   const isChoice = question !== null && CHOICE_ANSWER_TYPES.has(question.answer_type);
   const isMulti = question?.answer_type === "multi_choice";
+  // The reviewer's own real answers have carried the walk out the far
+  // side of the region -- `question` is a question of trailing context
+  // this lands on, not something to precompute server-side (see
+  // `preview_regions.py`'s own docstring for why): it falls out of
+  // whatever they actually picked, same as it would for a respondent.
+  const pastRegion =
+    mode === "changes" &&
+    currentRegion !== null &&
+    question !== null &&
+    !currentRegion.question_ids.includes(question.id);
+  // How many already-answered steps in a row, counting back from the most
+  // recent, sit outside the region -- stops counting the moment it hits a
+  // step that *is* a region member (or runs out of steps). Zero right
+  // after finishing the region itself, since every trailing step at that
+  // point is still a region member; becomes 1 the moment the reviewer
+  // answers the one unaffected question this lands them on next.
+  let pastRegionCount = 0;
+  if (currentRegion !== null) {
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      const step = steps[i];
+      if (step === undefined || currentRegion.question_ids.includes(step.question.id)) {
+        break;
+      }
+      pastRegionCount += 1;
+    }
+  }
+  // "One unchanged question on either side of the change" (spec) -- the
+  // seed already only auto-walks through the one right before the region;
+  // this is what holds the line on the other side once answering is real
+  // again. The first unaffected question is still a genuine step to
+  // confirm the change rejoins correctly; a second one in a row is
+  // Changes-only mode wandering into unrelated territory, which is what
+  // Full preview is for.
+  const pastRegionLimitReached = pastRegion && pastRegionCount >= 1;
+  const regionBannerMessage = pastRegionLimitReached ? (
+    "That's as far as Changes-only mode walks past a change — use Next to " +
+    "preview the next one, or switch to Full preview to keep going."
+  ) : pastRegion ? (
+    "Unaffected by this change — answer it to see it connects correctly, " +
+    "or use Next to preview the next change."
+  ) : currentRegion !== null ? (
+    <>
+      Previewing <strong>{regionLabel(currentRegion, graph.questions)}</strong>
+    </>
+  ) : null;
 
   function toggle(optionId: UUID) {
     setChosen((current) =>
@@ -247,26 +280,26 @@ export function PreviewView() {
         )}
       </header>
 
-      {mode === "changes" && currentChange !== null && (
-        <Banner as="div" tone="info" className="preview__changebar" role="status">
+      {mode === "changes" && currentRegion !== null && (
+        <Banner as="div" tone="warn" className="preview__changebar" role="status">
           <p>
-            Change {changeIndex + 1} of {changedQuestionIds.length}. Previewing{" "}
-            <strong>QID {questionRefLabel(currentChange)}</strong>
+            <strong className="preview__changelabel">
+              Change {regionIndex + 1} of {regions.length}
+            </strong>
+            . {regionBannerMessage}
           </p>
           <div className="preview__changenav">
             <Button
               variant="outline"
-              size="sm"
-              disabled={changeIndex === 0}
-              onClick={() => setChangeIndex((index) => index - 1)}
+              disabled={regionIndex === 0}
+              onClick={() => setRegionIndex((index) => index - 1)}
             >
               ← Previous
             </Button>
             <Button
-              variant="outline"
-              size="sm"
-              disabled={changeIndex >= changedQuestionIds.length - 1}
-              onClick={() => setChangeIndex((index) => index + 1)}
+              variant="primary"
+              disabled={regionIndex >= regions.length - 1}
+              onClick={() => setRegionIndex((index) => index + 1)}
             >
               Next →
             </Button>
@@ -303,7 +336,13 @@ export function PreviewView() {
         </Banner>
       )}
 
-      {state !== null && (
+      {/* Full preview only: the denominator is every question reachable
+          from the entry point, which means little in Changes-only mode --
+          a region can seed straight into the middle of the flow, where
+          "12 of 82 answered" reads as behind rather than as exactly where
+          this change sits. The change banner above is Changes-only mode's
+          own progress indicator. */}
+      {mode === "full" && state !== null && (
         <p className="preview__progress" role="status">
           {state.answered_count} of {state.total_count} answered
           {/* The denominator is the questions reachable from the entry
@@ -360,7 +399,14 @@ export function PreviewView() {
                     {question.prompt}
                   </h3>
 
-                  {isChoice ? (
+                  {pastRegionLimitReached ? (
+                    // Second unaffected question in a row -- past the one
+                    // side of context Changes-only mode shows. Read-only
+                    // rather than another step to answer: "Next" above (or
+                    // Full preview) is how a reviewer keeps going from
+                    // here.
+                    <p className="preview__subtitle">Unaffected by this change.</p>
+                  ) : isChoice ? (
                     <>
                       <p className="preview__subtitle">
                         {previewInstruction(question.answer_type)}
@@ -425,17 +471,19 @@ export function PreviewView() {
                     </>
                   )}
 
-                  <div className="preview__actions">
-                    <Button
-                      variant="primary"
-                      className="preview__next"
-                      loading={walk.isPending}
-                      disabled={isChoice && chosen.length === 0}
-                      onClick={answer}
-                    >
-                      Answer and continue
-                    </Button>
-                  </div>
+                  {!pastRegionLimitReached && (
+                    <div className="preview__actions">
+                      <Button
+                        variant="primary"
+                        className="preview__next"
+                        loading={walk.isPending}
+                        disabled={isChoice && chosen.length === 0}
+                        onClick={answer}
+                      >
+                        Answer and continue
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

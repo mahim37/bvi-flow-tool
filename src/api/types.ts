@@ -402,6 +402,13 @@ export interface ReviewPayload {
   stale_against: Version | null;
   change_request: ChangeRequest | null;
   diff: VersionDiff;
+  /** Changes-only preview mode's grouping: every changed question,
+   * bucketed into contiguous runs a respondent would actually walk
+   * back-to-back (`routing.path_to` adjacency server-side, not
+   * `display_order` -- see `preview_regions.py`), each with the one
+   * unchanged question immediately before it, if any. Empty on a
+   * published version, which has nothing left to walk as a "change." */
+  preview_regions: PreviewRegion[];
   summary: DiffCounts;
   /**
    * Why this could not be activated right now, or null if it could.
@@ -443,6 +450,15 @@ export interface PreviewState {
   /** The reachability denominator -- questions reachable from the entry
    * point, not every question in the version. */
   total_count: number;
+}
+
+/** One contiguous run of changed questions, in walk order, plus the
+ * unchanged question immediately before it -- `null` when the region
+ * starts at the version's own entry point, since there is nothing before
+ * the first question to show. */
+export interface PreviewRegion {
+  question_ids: UUID[];
+  before_id: UUID | null;
 }
 
 /** One valid route from the entry point to a specific question --

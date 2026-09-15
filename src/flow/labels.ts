@@ -5,6 +5,7 @@ import type {
   DiffChange,
   DiffKind,
   Edge,
+  PreviewRegion,
   Question,
   ReviewDecision,
   UUID,
@@ -42,6 +43,21 @@ export function answerTypeLabel(type: AnswerType): string {
  * same idea as the canvas's own node labels (`graphElements.ts`). */
 export function questionRefLabel(question: Question): string {
   return `${question.code} · ${trunc(question.prompt, 40)}`;
+}
+
+/** What a Changes-only preview region's banner calls it: one QID for a
+ * single-question region (same as before this was regions at all), a code
+ * range for a run of several -- "2 questions" alone doesn't say *which*
+ * two. */
+export function regionLabel(region: PreviewRegion, questions: Question[]): string {
+  const first = questions.find((item) => item.id === region.question_ids[0]);
+  if (region.question_ids.length === 1) {
+    return first === undefined ? "this question" : `QID ${questionRefLabel(first)}`;
+  }
+  const last = questions.find((item) => item.id === region.question_ids.at(-1));
+  const firstCode = first?.code ?? "?";
+  const lastCode = last?.code ?? "?";
+  return `${String(region.question_ids.length)} questions (${firstCode}–${lastCode})`;
 }
 
 /** Where an edge goes, in words. `to_question === null` is not missing

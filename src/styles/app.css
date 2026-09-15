@@ -159,22 +159,34 @@ input[type="radio"] {
 
 /* One line: the change count/name on the left, Previous/Next on the
  * right, instead of stacking the nav under its own sentence -- wraps
- * only if the viewport genuinely can't fit both. */
+ * only if the viewport genuinely can't fit both. Changes-only mode's
+ * primary control, so it gets more visual weight than an ordinary
+ * banner: a tinted background and thicker border rather than the
+ * left-stripe-on-white every other `Banner` uses. */
 .preview__changebar {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
 }
 
 .preview__changebar p {
   margin: 0;
+  font-size: 0.95rem;
+}
+
+.preview__changelabel {
+  font-size: 1.05rem;
+  color: var(--warn-border);
 }
 
 .preview__changenav {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex: 0 0 auto;
 }
 
