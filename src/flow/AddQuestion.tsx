@@ -1,7 +1,7 @@
-import { useId, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import { useAddQuestion } from "../api/queries";
-import type { AnswerType, Graph, UUID } from "../api/types";
+import type { AnswerType, Graph, QuestionRecord, UUID } from "../api/types";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field, nativeSelectClassName } from "@/components/ui/field";
@@ -19,6 +19,19 @@ const ANSWER_TYPES: AnswerType[] = [
   "scale",
 ];
 const NO_SECTION = "__none__";
+
+/** One past the highest existing purely-numeric code (real codes are
+ * "1", "2", "risk_1", ... -- see `_v3_graph_csv/questions.csv`), so a QID
+ * never needs typing from scratch -- still just an edit away for a
+ * question that wants a non-numeric scheme. */
+function nextQuestionCode(questions: QuestionRecord[]): string {
+  const highest = questions.reduce((max, question) => {
+    return /^\d+$/.test(question.code)
+      ? Math.max(max, Number(question.code))
+      : max;
+  }, 0);
+  return `${highest + 1}`;
+}
 
 interface AddQuestionProps {
   graph: Graph;
@@ -42,6 +55,8 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
   const onWriteError = useWriteErrorHandler();
   const addQuestion = useAddQuestion(versionId);
 
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
   const codeId = useId();
   const promptId = useId();
   const typeId = useId();
@@ -49,7 +64,13 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
   const requiredId = useId();
   const rawId = useId();
 
-  const [code, setCode] = useState("");
+  const [codeInput, setCodeInput] = useState("");
+  const [codeTouched, setCodeTouched] = useState(false);
+  const suggestedCode = useMemo(
+    () => nextQuestionCode(graph.questions),
+    [graph.questions],
+  );
+  const code = codeTouched ? codeInput : suggestedCode;
   const [prompt, setPrompt] = useState("");
   const [answerType, setAnswerType] = useState<AnswerType>("single_choice");
   const [section, setSection] = useState<string>(NO_SECTION);
@@ -67,6 +88,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
       description="Added last, and unreachable until an edge points at it. Use the detail panel of the question it should follow to add that edge."
       className="max-h-[min(90svh,44rem)] overflow-y-auto"
       trigger={<Button variant="outline">Add a question</Button>}
+      initialFocus={promptRef}
     >
       {(close) => (
         <form
@@ -86,7 +108,8 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
                 onError: onWriteError,
                 onSuccess: (created) => {
                   close();
-                  setCode("");
+                  setCodeInput("");
+                  setCodeTouched(false);
                   setPrompt("");
                   onAdded(created.id);
                 },
@@ -107,12 +130,16 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
               required
               placeholder="Stable identifier"
               {...(addQuestion.isPending ? { disabled: true } : {})}
-              onChange={(event) => setCode(event.target.value)}
+              onChange={(event) => {
+                setCodeInput(event.target.value);
+                setCodeTouched(true);
+              }}
             />
           </Field>
 
           <Field label="Question text" htmlFor={promptId}>
             <Textarea
+              ref={promptRef}
               id={promptId}
               rows={3}
               value={prompt}

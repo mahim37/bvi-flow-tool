@@ -20,6 +20,11 @@ interface EditorDialogProps {
   disabled?: boolean;
   /** Extra classes on the overlay panel (scroll for long forms). */
   className?: string;
+  /** Focus this instead of Radix's default (the first tabbable field) once
+   * the dialog opens -- for a form whose first field is a low-stakes
+   * prefill (an auto-generated code, say) rather than the thing the user
+   * actually needs to type first. */
+  initialFocus?: React.RefObject<HTMLElement | null>;
   children: ReactNode | ((close: () => void) => ReactNode);
 }
 
@@ -37,6 +42,7 @@ export function EditorDialog({
   description,
   disabled,
   className,
+  initialFocus,
   children,
 }: EditorDialogProps) {
   const [open, setOpen] = useState(false);
@@ -56,7 +62,17 @@ export function EditorDialog({
           trigger
         )}
       </DialogTrigger>
-      <DialogContent className={cn("sm:max-w-lg", className)}>
+      <DialogContent
+        className={cn("sm:max-w-lg", className)}
+        {...(initialFocus
+          ? {
+              onOpenAutoFocus: (event: Event) => {
+                event.preventDefault();
+                initialFocus.current?.focus();
+              },
+            }
+          : {})}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description !== undefined && (
