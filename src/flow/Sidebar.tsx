@@ -225,9 +225,9 @@ export function Sidebar({
 
   const sections = useMemo(
     () =>
-      [...graph.sections].sort(
-        (left, right) => left.display_order - right.display_order,
-      ),
+      [...graph.sections]
+        .filter((section) => section.live_question_count > 0)
+        .sort((left, right) => left.display_order - right.display_order),
     [graph.sections],
   );
 
