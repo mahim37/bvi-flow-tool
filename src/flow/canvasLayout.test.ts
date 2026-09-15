@@ -280,6 +280,49 @@ describe("separateNodesFromEdges", () => {
     expect(cy.getElementById("c").position()).toEqual({ x: 0, y: 160 });
     expect(cy.getElementById("b").position().x).not.toBe(0);
   });
+
+  it("slides a child off a skip when the section is not at the origin", () => {
+    const cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      layout: { name: "preset" },
+      style: [
+        { selector: "node", style: { width: 80, height: 40 } },
+        { selector: ":parent", style: { padding: "96px" } },
+      ],
+      elements: [
+        { data: { id: "sec", kind: "section" }, position: { x: 400, y: 300 } },
+        { data: { id: "a", parent: "sec" }, position: { x: 0, y: 0 } },
+        { data: { id: "b", parent: "sec" }, position: { x: 0, y: 120 } },
+        { data: { id: "c", parent: "sec" }, position: { x: 0, y: 240 } },
+        { data: { id: "skip", source: "a", target: "c" } },
+      ],
+    });
+
+    separateNodesFromEdges(cy);
+
+    expect(Math.abs(cy.getElementById("b").position().x)).toBeGreaterThan(20);
+  });
+
+  it("slides a node off a skip that shares a dock with a neighbour hop", () => {
+    const cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      layout: { name: "preset" },
+      style: [{ selector: "node", style: { width: 80, height: 40 } }],
+      elements: [
+        { data: { id: "a" }, position: { x: 0, y: 0 } },
+        { data: { id: "b" }, position: { x: 0, y: 120 } },
+        { data: { id: "c" }, position: { x: 0, y: 240 } },
+        { data: { id: "hop", source: "a", target: "b", priority: 1 } },
+        { data: { id: "skip", source: "a", target: "c", priority: 2 } },
+      ],
+    });
+
+    separateNodesFromEdges(cy);
+
+    expect(Math.abs(cy.getElementById("b").position().x)).toBeGreaterThan(20);
+  });
 });
 
 describe("parallelLaneOffset", () => {
@@ -347,10 +390,12 @@ describe("parallelLanePolyline", () => {
 });
 
 describe("edgeLabelScreenOffset", () => {
-  it("leaves a docked fan's labels on the stroke", () => {
+  it("leaves a docked diagonal fan's labels on the stroke", () => {
     const ele = {
       data: (name: string) =>
         ({ outLaneCount: 3, outLane: 0, laneCount: 3, lane: 0 })[name],
+      source: () => ({ position: () => ({ x: 0, y: 0 }) }),
+      target: () => ({ position: () => ({ x: 80, y: 100 }) }),
     };
     expect(edgeLabelScreenOffset(ele)).toEqual({ x: 0, y: 0 });
   });
@@ -360,10 +405,9 @@ describe("edgeLabelScreenOffset", () => {
       data: (name: string) =>
         ({ laneCount: 3, lane: 0, outLaneCount: 1, inLaneCount: 1 })[name],
       source: () => ({ position: () => ({ x: 0, y: 0 }) }),
-      target: () => ({ position: () => ({ x: 0, y: 100 }) }),
+      target: () => ({ position: () => ({ x: 80, y: 100 }) }),
     };
     const offset = edgeLabelScreenOffset(ele);
-    expect(offset.y).toBeCloseTo(0);
     expect(offset.x).not.toBe(0);
   });
 });

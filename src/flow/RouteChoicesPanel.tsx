@@ -2,8 +2,7 @@ import { useMemo } from "react";
 
 import { CHOICE_ANSWER_TYPES, type Edge, type Graph } from "../api/types";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { emptyText, optCard, subCount, subHeading } from "@/lib/chrome";
+import { emptyText, subCount, subHeading } from "@/lib/chrome";
 import { optionsCoveredByFallback } from "./graphElements";
 
 interface RouteChoicesPanelProps {
@@ -55,15 +54,8 @@ export function RouteChoicesPanel({ graph, edge, onClose }: RouteChoicesPanelPro
           aria-labelledby="route-choices-heading"
         >
           {choices.map((option) => (
-            <li key={option.id}>
-              <Card className={`${optCard} p-2.5`}>
-                <div className="text-[12.5px] leading-snug font-medium">
-                  {option.label}
-                </div>
-                <div className="text-muted-foreground mt-1 text-[11px]">
-                  {option.code}
-                </div>
-              </Card>
+            <li key={option.id} className="border-border border-b py-2 last:border-b-0">
+              <div className="text-sm leading-snug font-medium">{option.label}</div>
             </li>
           ))}
         </ul>

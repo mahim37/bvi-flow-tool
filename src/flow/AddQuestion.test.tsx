@@ -2,9 +2,30 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import type { Graph } from "../api/types";
 import { makeGraph } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 import { AddQuestion } from "./AddQuestion";
+
+function graphWithCodes(codes: string[]): Graph {
+  const template = makeGraph().questions[0];
+  if (template === undefined) throw new Error("fixture has no questions");
+  return makeGraph({
+    questions: codes.map((code, index) => ({
+      ...template,
+      id: `aaaaaaaa-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      code,
+    })),
+    edges: [],
+  });
+}
+
+async function openAddQuestion(graph: Graph = makeGraph()) {
+  const user = userEvent.setup();
+  renderWithProviders(<AddQuestion graph={graph} onAdded={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "Add a question" }));
+  return user;
+}
 
 describe("AddQuestion", () => {
   it("opens a page overlay rather than a popover", async () => {
@@ -20,42 +41,64 @@ describe("AddQuestion", () => {
     expect(screen.getByLabelText("Question text")).toBeInTheDocument();
   });
 
-  it("defaults the QID to one past the highest existing numeric code, editable", async () => {
-    const user = userEvent.setup();
-    const graph = makeGraph({
-      questions: [
-        ...makeGraph().questions,
-        {
-          ...makeGraph().questions[0]!,
-          id: "aaaaaaaa-0000-4000-8000-000000000099",
-          code: "12",
-        },
-      ],
-    });
-    renderWithProviders(<AddQuestion graph={graph} onAdded={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "Add a question" }));
+  it("prefills QID with the next Q-prefixed code from this graph and lets it be edited", async () => {
+    const user = await openAddQuestion();
 
     const qid = screen.getByLabelText("QID");
-    expect(qid).toHaveValue("13");
+    expect(qid).toBeVisible();
+    expect(qid).toHaveValue("Q5");
 
     await user.clear(qid);
-    await user.type(qid, "custom-code");
-    expect(qid).toHaveValue("custom-code");
+    await user.type(qid, "custom");
+    expect(qid).toHaveValue("custom");
   });
 
   it("focuses Question text on open, not the prefilled QID", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<AddQuestion graph={makeGraph()} onAdded={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "Add a question" }));
+    await openAddQuestion();
 
     expect(screen.getByLabelText("Question text")).toHaveFocus();
   });
 
-  it("ignores non-numeric codes (e.g. \"Q1\", \"risk_1\") when computing the default", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<AddQuestion graph={makeGraph()} onAdded={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "Add a question" }));
+  it("does not preview a public id or offer the raw-answer checkbox", async () => {
+    await openAddQuestion();
+
+    expect(screen.queryByText("id: Q5")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/raw answer/i)).not.toBeInTheDocument();
+  });
+
+  it("prefills 1 when the graph has no questions yet", async () => {
+    await openAddQuestion(makeGraph({ questions: [], edges: [] }));
 
     expect(screen.getByLabelText("QID")).toHaveValue("1");
+  });
+
+  it("increments a bare numeric max", async () => {
+    await openAddQuestion(graphWithCodes(["24", "3"]));
+
+    expect(screen.getByLabelText("QID")).toHaveValue("25");
+  });
+
+  it("increments the highest integer among mixed patterns, keeping that match's prefix", async () => {
+    await openAddQuestion(graphWithCodes(["Q5", "12", "Q3"]));
+
+    expect(screen.getByLabelText("QID")).toHaveValue("13");
+  });
+
+  it("starts at Q1 when non-numeric codes are mostly Q-prefixed", async () => {
+    await openAddQuestion(graphWithCodes(["Qa", "Qb", "intro"]));
+
+    expect(screen.getByLabelText("QID")).toHaveValue("Q1");
+  });
+
+  it("starts at 1 when non-numeric codes are mostly unprefixed", async () => {
+    await openAddQuestion(graphWithCodes(["intro", "risk", "Qa"]));
+
+    expect(screen.getByLabelText("QID")).toHaveValue("1");
+  });
+
+  it("ignores slug codes such as risk_1 when a numeric sequence exists", async () => {
+    await openAddQuestion(graphWithCodes(["1", "2", "risk_1"]));
+
+    expect(screen.getByLabelText("QID")).toHaveValue("3");
   });
 });

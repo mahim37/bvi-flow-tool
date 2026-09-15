@@ -123,7 +123,7 @@ function matches(question: Question, needle: string): boolean {
 }
 
 const accordionTrigger =
-  "rounded-none border-0 px-4 py-3 text-[0.75rem] font-bold tracking-[0.06em] text-muted-foreground uppercase hover:bg-transparent hover:no-underline hover:text-foreground";
+  "rounded-none border-0 px-4 py-3 text-[0.75rem] font-bold tracking-normal text-muted-foreground hover:bg-transparent hover:no-underline hover:text-foreground";
 
 const nestedTrigger =
   "rounded-md border-0 px-4 py-2 text-sm font-semibold hover:bg-transparent hover:no-underline";
@@ -293,7 +293,7 @@ export function Sidebar({
     >
       <div className="shrink-0 px-4 pt-4 pb-3">
         <Label
-          className="text-muted-foreground mb-2 text-[0.75rem] font-bold tracking-[0.06em] uppercase"
+          className="text-muted-foreground mb-2 text-[0.75rem] font-bold tracking-normal"
           htmlFor={searchId}
         >
           Search questions
@@ -302,7 +302,7 @@ export function Sidebar({
           id={searchId}
           type="search"
           value={search}
-          placeholder="Code or prompt text"
+          placeholder="Search"
           className="bg-card shadow-sm"
           onChange={(event) => setSearch(event.target.value)}
         />

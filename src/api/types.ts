@@ -273,6 +273,22 @@ export interface ChangeRequest {
   break_draft_version_id: number | null;
 }
 
+/** True only when both named reviewers have actually approved.
+ * `status === "approved"` is not enough: that is the first of two, and
+ * the draft must not be treated as publishable until both timestamps
+ * are set. */
+export function bothReviewersApproved(
+  changeRequest: Pick<
+    ChangeRequest,
+    "reviewer_1_approved_at" | "reviewer_2_approved_at"
+  >,
+): boolean {
+  return (
+    changeRequest.reviewer_1_approved_at !== null &&
+    changeRequest.reviewer_2_approved_at !== null
+  );
+}
+
 export interface GraphDiagnostics {
   entry_question_id: UUID | null;
   decision_point_question_ids: UUID[];

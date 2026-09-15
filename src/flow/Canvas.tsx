@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import cytoscape from "cytoscape";
 import type { Core, EdgeSingular, ElementDefinition, NodeSingular } from "cytoscape";
 import dagre from "cytoscape-dagre";
@@ -123,6 +124,10 @@ interface CanvasProps {
   /** Sorted join of collapsed section ids. A change here is a fold, not a
    * new graph — keep the camera instead of fitting the chain start. */
   collapsedSectionKey: string;
+  /** Canvas-owned chrome, top right. Zoom/fit stay bottom-right; the
+   * hamburger is top-left; the pick banner is top-center. MapView puts
+   * Add a question here on an open, editable draft. */
+  topRight?: ReactNode;
 }
 
 /** The id set, in a form that is cheap to compare. A change here means
@@ -269,6 +274,7 @@ export function Canvas({
   onCancelPick,
   onToggleSection,
   collapsedSectionKey,
+  topRight,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -773,6 +779,10 @@ export function Canvas({
           </Button>
         </div>
       )}
+
+      {topRight !== undefined && topRight !== null ? (
+        <div className="absolute top-4 right-4 z-6">{topRight}</div>
+      ) : null}
 
       {/* Ported from break-backend's #sidebarToggle (index.html ~L174-188,
           same hamburger path) -- there it lives in the topbar, but this

@@ -7,11 +7,50 @@ import type {
   Edge,
   PreviewRegion,
   Question,
+  QuestionOption,
   ReviewDecision,
   UUID,
   Version,
 } from "../api/types";
 import { trunc } from "./graphElements";
+
+/** Public codes never look like this; a value that does is a database id
+ * that must not be shown. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Question-level (`from_option === null`) routes have no option code of
+ * their own. Review copy and the node sheet still need a public id. */
+export const DEFAULT_ROUTE_CODE = "default";
+export const DEFAULT_ROUTE_LABEL = "Default route";
+
+/** `(id: public-code, label: human text)` -- QID / option code / section
+ * code, never a database UUID. Empty or UUID-shaped ids read as unknown
+ * rather than leaking. */
+export function publicCode(id: string | null | undefined): string {
+  const trimmed = id?.trim() ?? "";
+  return trimmed !== "" && !UUID_RE.test(trimmed) ? trimmed : "unknown";
+}
+
+/** Compact pair for review sentences. Sheets render `NamedRef` instead. */
+export function idLabelPair(id: string | null | undefined, label: string): string {
+  return `(id: ${publicCode(id)}, label: ${label})`;
+}
+
+export function questionIdLabel(question: Pick<Question, "code" | "prompt">): string {
+  return idLabelPair(question.code, question.prompt);
+}
+
+export function optionIdLabel(option: Pick<QuestionOption, "code" | "label">): string {
+  return idLabelPair(option.code, option.label);
+}
+
+export function sectionIdLabel(section: { code: string; name: string }): string {
+  return idLabelPair(section.code, section.name !== "" ? section.name : section.code);
+}
+
+export function defaultRouteIdLabel(): string {
+  return idLabelPair(DEFAULT_ROUTE_CODE, DEFAULT_ROUTE_LABEL);
+}
 
 /** The two people every proposal is reviewed by -- locked down, not a
  * choice `submit` offers any more. Mirrors bvi-backend's own
@@ -36,11 +75,8 @@ export function answerTypeLabel(type: AnswerType): string {
   return ANSWER_TYPE_LABELS[type];
 }
 
-/** "{code} · {prompt, truncated}" -- the code alone ("Q2") means little
- * without opening that question, so anywhere a question is named away
- * from its own card (a route's destination, an incoming source, the
- * Preview screen's "QID" step header) gets the prompt alongside it too,
- * same idea as the canvas's own node labels (`graphElements.ts`). */
+/** "{code} · {prompt, truncated}" -- compact name for the Preview screen
+ * and issue titles. Review diff sentences use the human label only. */
 export function questionRefLabel(question: Question): string {
   return `${question.code} · ${trunc(question.prompt, 40)}`;
 }
@@ -69,32 +105,9 @@ export function targetLabel(
   if (edge.to_question === null) return "End of flow";
   const target = questionsById.get(edge.to_question);
   if (target === undefined) return "Unknown question";
-  const name = questionRefLabel(target);
-  return target.archived_at === null ? name : `${name} (archived)`;
+  return target.archived_at === null ? target.prompt : `${target.prompt} (archived)`;
 }
 
-/** The question a "Reached from" row points at. */
-export function sourceLabel(question: Question | undefined): string {
-  return question === undefined ? "Unknown question" : questionRefLabel(question);
-}
-
-export function optionLabel(
-  question: Question | undefined,
-  optionId: UUID | null,
-): string {
-  // Matches `Options.tsx`'s "Default route" section -- the question-level
-  // route (`from_option === null`) that any answer without one of its own
-  // uses.
-  if (optionId === null) return "Default route";
-  const option = question?.options.find((candidate) => candidate.id === optionId);
-  return option ? option.label : "Unknown option";
-}
-
-/** The instruction shown above a preview question's answers -- ported
- * from break-backend's own preview-walkthrough copy. Takes `isMulti`
- * rather than the full `AnswerType`: a free-text/scale answer selects no
- * option at all, and `PreviewView` explains that separately instead of
- * misusing this for something it doesn't do. */
 /** Ported from break-backend's own `previewSubtitle` -- same four strings,
  * one per `AnswerType`. */
 export function previewInstruction(answerType: AnswerType): string {
@@ -122,7 +135,7 @@ export function formatTimestamp(value: string): string {
 const STATUS_LABELS: Record<ChangeRequestStatus, string> = {
   open: "Open",
   submitted: "Submitted for review",
-  approved: "Approved, ready to publish",
+  approved: "Waiting on second reviewer",
   published: "Published",
 };
 
@@ -135,15 +148,15 @@ export function statusLabel(status: ChangeRequestStatus): string {
  *
  * Written out because the status names alone hide the two facts that
  * matter most: a rejection puts the proposal back to `open` rather than
- * giving it a state of its own, and `approved` is frozen -- cleared, but
- * still not live until somebody publishes it.
+ * giving it a state of its own, and `approved` means one of two required
+ * reviewers has cleared it. Publishing waits for the second approval.
  */
 const STATUS_MEANINGS: Record<ChangeRequestStatus, string> = {
-  open: "Editable. Submit it when it is ready for somebody else to read.",
+  open: "",
   submitted:
     "Frozen while it is read. A reviewer approves it, or sends it back to open with their reasons.",
   approved:
-    "Cleared by a reviewer and still frozen. Publishing is what makes it the latest questionnaire.",
+    "One of the two required reviewers has approved. Still frozen until the other does, which publishes it.",
   published: "Latest. This version is what respondents are now asked.",
 };
 
@@ -227,7 +240,10 @@ const FIELD_LABELS: Record<string, string> = {
   label: "Label",
   guard: "Answer",
   target: "Goes to",
+  to: "Goes to",
   to_question: "Goes to",
+  subtext: "Subtext",
+  show_raw_answer_to_advisor: "Show raw answer to advisor",
   priority: "Priority",
   from_option: "Answer",
 };

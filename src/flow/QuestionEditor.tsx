@@ -1,5 +1,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 
+import { Pencil } from "lucide-react";
+
 import { useUpdateQuestion } from "../api/queries";
 import type { AnswerType, Graph, Question } from "../api/types";
 import { CHOICE_ANSWER_TYPES } from "../api/types";
@@ -10,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Field, nativeSelectClassName } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { checkRow, editorActions, editorBox, warnHint } from "@/lib/chrome";
+import { checkRow, editorActions, warnHint } from "@/lib/chrome";
+import { EditorDialog } from "./EditorDialog";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const ANSWER_TYPES: AnswerType[] = [
@@ -46,13 +49,9 @@ function draftOf(question: Question): Draft {
   };
 }
 
-/** Sits right next to the question text in `DetailPanel`'s header: closed
- * by default (just the text plus an "Edit" button, break-backend's own
- * affordance for the text alone), opening into one combined form for
- * every editable field on the question -- text included -- rather than a
- * quick inline text editor plus a second, always-open "Edit this
- * question" section further down the panel for everything else. One
- * control, one place, next to the thing it edits. */
+/** Sits right next to the question text in `DetailPanel`'s header: the
+ * text stays visible, and Edit opens one dialog for every field on the
+ * question rather than expanding an inline form in place of the title. */
 export function QuestionEditor({ graph, question }: QuestionEditorProps) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
@@ -64,11 +63,9 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
   const sectionId = useId();
   const requiredId = useId();
 
-  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => draftOf(question));
   useEffect(() => {
     setDraft(draftOf(question));
-    setEditing(false);
   }, [question]);
 
   const sections = useMemo(
@@ -114,131 +111,152 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
 
   return (
     <>
-      {editing ? (
-        <form
-          className={editorBox}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!dirty) return;
-            updateQuestion.mutate(
-              { questionId: question.id, changes },
-              { onError: onWriteError, onSuccess: () => setEditing(false) },
-            );
+      <div className="flex items-start gap-2">
+        <h2 className="m-0 min-w-0 flex-1 text-base leading-snug font-medium">
+          {question.prompt}
+        </h2>
+        <EditorDialog
+          title="Edit question"
+          className="max-h-[min(90svh,44rem)] overflow-y-auto"
+          onOpenChange={(open) => {
+            if (open) setDraft(draftOf(question));
           }}
-        >
-          <Field label="Question text" htmlFor={promptId}>
-            <Textarea
-              id={promptId}
-              rows={3}
-              value={draft.prompt}
-              {...(pending ? { disabled: true } : {})}
-              onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
-            />
-          </Field>
-
-          <Field
-            label="QID"
-            htmlFor={codeId}
-            hint="Editable only on something this draft introduced. Renaming an inherited code reads as a removal and an addition in the review screen, so the server refuses it. Retire the question and add its replacement instead."
-          >
-            <Input
-              id={codeId}
-              value={draft.code}
-              {...(pending ? { disabled: true } : {})}
-              onChange={(event) => setDraft({ ...draft, code: event.target.value })}
-            />
-          </Field>
-
-          <Field label="Answer type" htmlFor={typeId}>
-            <select
-              id={typeId}
-              className={nativeSelectClassName}
-              value={draft.answer_type}
-              {...(pending ? { disabled: true } : {})}
-              onChange={(event) =>
-                setDraft({ ...draft, answer_type: event.target.value as AnswerType })
-              }
-            >
-              {ANSWER_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {answerTypeLabel(type)}
-                </option>
-              ))}
-            </select>
-            {losingGuards && (
-              <p className={warnHint}>
-                Per-option edges leave this question. An answer type that selects no
-                option would leave those guards unable to match, with nothing downstream
-                to catch it, so this change is refused until they are removed.
-              </p>
-            )}
-          </Field>
-
-          <Field label="Section" htmlFor={sectionId}>
-            <select
-              id={sectionId}
-              className={nativeSelectClassName}
-              value={draft.section}
-              {...(pending ? { disabled: true } : {})}
-              onChange={(event) => setDraft({ ...draft, section: event.target.value })}
-            >
-              <option value={NO_SECTION}>No section</option>
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className={checkRow}>
-            <input
-              id={requiredId}
-              type="checkbox"
-              checked={draft.is_required}
-              disabled={pending}
-              onChange={(event) =>
-                setDraft({ ...draft, is_required: event.target.checked })
-              }
-            />
-            <label htmlFor={requiredId}>Required</label>
-          </div>
-
-          <div className={editorActions}>
-            <Button variant="primary" type="submit" loading={pending} disabled={!dirty}>
-              Save changes
-            </Button>
+          trigger={
             <Button
-              variant="ghost"
-              disabled={pending}
-              onClick={() => {
-                setDraft(draftOf(question));
-                setEditing(false);
+              variant="outline"
+              size="icon-sm"
+              className="shrink-0"
+              aria-label="Edit question"
+              title="Edit question"
+            >
+              <Pencil />
+            </Button>
+          }
+        >
+          {(close) => (
+            <form
+              className="flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!dirty) return;
+                updateQuestion.mutate(
+                  { questionId: question.id, changes },
+                  { onError: onWriteError, onSuccess: close },
+                );
               }}
             >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <h2 className="text-base leading-snug font-medium">
-          {question.prompt}{" "}
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-2 align-middle"
-            onClick={() => setEditing(true)}
-          >
-            Edit
-          </Button>
-        </h2>
-      )}
+              <Field label="Question text" htmlFor={promptId}>
+                <Textarea
+                  id={promptId}
+                  rows={3}
+                  value={draft.prompt}
+                  {...(pending ? { disabled: true } : {})}
+                  onChange={(event) =>
+                    setDraft({ ...draft, prompt: event.target.value })
+                  }
+                />
+              </Field>
 
-      {error !== null && (
-        <Banner tone="error" role="alert">
-          {error}
-        </Banner>
-      )}
+              <Field label="QID" htmlFor={codeId}>
+                <Input
+                  id={codeId}
+                  value={draft.code}
+                  {...(pending ? { disabled: true } : {})}
+                  onChange={(event) => setDraft({ ...draft, code: event.target.value })}
+                />
+              </Field>
+
+              <Field label="Answer type" htmlFor={typeId}>
+                <select
+                  id={typeId}
+                  className={nativeSelectClassName}
+                  value={draft.answer_type}
+                  {...(pending ? { disabled: true } : {})}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      answer_type: event.target.value as AnswerType,
+                    })
+                  }
+                >
+                  {ANSWER_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {answerTypeLabel(type)}
+                    </option>
+                  ))}
+                </select>
+                {losingGuards && (
+                  <p className={warnHint}>
+                    Per-option edges leave this question. An answer type that selects no
+                    option would leave those guards unable to match, with nothing
+                    downstream to catch it, so this change is refused until they are
+                    removed.
+                  </p>
+                )}
+              </Field>
+
+              <Field label="Section" htmlFor={sectionId}>
+                <select
+                  id={sectionId}
+                  className={nativeSelectClassName}
+                  value={draft.section}
+                  {...(pending ? { disabled: true } : {})}
+                  onChange={(event) =>
+                    setDraft({ ...draft, section: event.target.value })
+                  }
+                >
+                  <option value={NO_SECTION}>No section</option>
+                  {sections.map((section) => (
+                    <option key={section.id} value={section.id}>
+                      {section.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div className={checkRow}>
+                <input
+                  id={requiredId}
+                  type="checkbox"
+                  checked={draft.is_required}
+                  disabled={pending}
+                  onChange={(event) =>
+                    setDraft({ ...draft, is_required: event.target.checked })
+                  }
+                />
+                <label htmlFor={requiredId}>Required</label>
+              </div>
+
+              {error !== null && (
+                <Banner tone="error" role="alert">
+                  {error}
+                </Banner>
+              )}
+
+              <div className={editorActions}>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  loading={pending}
+                  disabled={!dirty}
+                >
+                  Save changes
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => {
+                    setDraft(draftOf(question));
+                    close();
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </EditorDialog>
+      </div>
     </>
   );
 }

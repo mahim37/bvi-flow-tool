@@ -1,22 +1,18 @@
-import { useMemo } from "react";
-
-import { ArrowUpRight, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 
 import { useArchiveQuestion } from "../api/queries";
-import type { Edge, Graph, Question, UUID } from "../api/types";
+import type { Graph, Question, UUID } from "../api/types";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { emptyText, mutedHint, questionLink, subCount, subHeading } from "@/lib/chrome";
+import { emptyText, subHeading } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
 import { ConfirmAction } from "./ConfirmAction";
 import type { ChangeKinds } from "./graphElements";
-import { NO_SECTION_COLOR, sectionColorMap } from "./graphElements";
 import { Options } from "./Options";
 import { QuestionEditor } from "./QuestionEditor";
-import { answerTypeLabel, formatTimestamp, optionLabel, sourceLabel } from "./labels";
+import { formatTimestamp } from "./labels";
 import { useWriteErrorHandler, writeErrorMessage } from "./useWriteError";
 
 const EMPTY_CHANGE_KINDS: ChangeKinds = {
@@ -36,6 +32,10 @@ interface DetailPanelProps {
    * mid-add for, if any -- see `MapView`. Threaded straight through to
    * `Options`. */
   addingRouteOptionId: UUID | null;
+  /** The question that new route is being added from. With
+   * `addingRouteOptionId === null`, this is a default-route add. Optional
+   * so existing panel tests can omit it. */
+  addingRouteQuestionId?: UUID | null;
   onSelectQuestion: (id: UUID) => void;
   onStartRetarget: (edgeId: UUID, label: string) => void;
   onStartAddRoute: (questionId: UUID, optionId: UUID | null, label: string) => void;
@@ -55,16 +55,6 @@ interface DetailPanelProps {
   changeKinds?: ChangeKinds | undefined;
 }
 
-function incomingVia(guards: string[]): string {
-  if (guards.length === 1 && guards[0] === "Default route") {
-    return "Via the default route";
-  }
-  if (guards.length === 1) {
-    return `When ${guards[0] ?? ""}`;
-  }
-  return `When ${guards.join(", ")}`;
-}
-
 /** Ported from break-backend's `.flag` + per-kind modifiers (styles.css
  * ~L690-733) -- colour by what the flag means, not one flat pill style.
  * "added"/"changed" reuse the exact green/gold `--entry`/`--branch` already
@@ -80,31 +70,13 @@ function Flag({
   return <Badge tone={kind}>{children}</Badge>;
 }
 
-/** A `.d-sub` heading with break's count-bubble (styles.css ~L778-795). */
-function SubHeading({
-  id,
-  count,
-  children,
-}: {
-  id: string;
-  count: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <h3 id={id} className={cn(subHeading, "mb-0")}>
-      {children} <span className={subCount}>{count}</span>
-    </h3>
-  );
-}
-
 /** Ported from break-backend's "Danger zone" (app.js's `openDetail`,
- * ~L1355-1362) -- same position, last in the panel, same `.danger-zone`
- * spacing. Delete-with-restore there is one-way retirement here: this
- * app's draft/publish model has no live single-version state to toggle
- * back, an archival made by mistake is undone by discarding the whole
- * draft instead (see the hint below). The button is `Button variant="danger"`,
- * the same primitive EdgeEditor's "Remove" uses, rather than break's small
- * outline ghost. */
+ * ~L1355-1362) -- same position, last in the panel. Delete-with-restore
+ * there is one-way retirement here: this app's draft/publish model has
+ * no live single-version state to toggle back, an archival made by
+ * mistake is undone by discarding the whole draft instead. The button is
+ * `Button variant="danger"`, the same primitive EdgeEditor's "Remove"
+ * uses, rather than break's small outline ghost. */
 function DangerZone({ versionId, question }: { versionId: UUID; question: Question }) {
   const onWriteError = useWriteErrorHandler();
   const archiveQuestion = useArchiveQuestion(versionId);
@@ -117,7 +89,7 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
       </h3>
       <div>
         <ConfirmAction
-          message={`Retire ${question.code}? It stops being served, stays drawn while anything still points at it, and there is no way to bring it back except discarding the draft.`}
+          message={`Retire "${question.prompt}"? It stops being served, stays drawn while anything still points at it, and there is no way to bring it back except discarding the draft.`}
           confirmLabel="Retire this question"
           danger
           onConfirm={() =>
@@ -134,12 +106,6 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
             </Button>
           )}
         </ConfirmAction>
-        <p className={mutedHint}>
-          Retiring archives rather than deletes, and there is no un-archive: an archival
-          made by mistake is undone by discarding the draft. Edges pointing at it are
-          left alone on purpose. They become broken edges, which is what keeps the arrow
-          into nowhere visible until somebody deals with it.
-        </p>
       </div>
       {error !== null && (
         <Banner tone="error" role="alert">
@@ -156,6 +122,7 @@ export function DetailPanel({
   editable,
   retargetingEdgeId,
   addingRouteOptionId,
+  addingRouteQuestionId = null,
   onSelectQuestion,
   onStartRetarget,
   onStartAddRoute,
@@ -163,40 +130,6 @@ export function DetailPanel({
   onClose,
   changeKinds = EMPTY_CHANGE_KINDS,
 }: DetailPanelProps) {
-  const questionsById = useMemo(
-    () => new Map(graph.questions.map((item) => [item.id, item])),
-    [graph.questions],
-  );
-
-  const incoming = useMemo(() => {
-    if (question === null) return [];
-    return graph.edges.filter((edge) => edge.to_question === question.id);
-  }, [graph.edges, question]);
-
-  // The same per-section colour the canvas draws that section's node
-  // borders in (`graphElements.ts`), so the section badge below matches
-  // the map instead of inventing a second palette for this one panel.
-  const sectionColors = useMemo(
-    () => sectionColorMap(graph.sections),
-    [graph.sections],
-  );
-
-  // Grouped by source question, not left as one row per edge -- ported
-  // from break-backend's own merged incoming rows (openDetail's `ins`,
-  // ~L1281-1319): several answers on the same source question that all
-  // lead here read as one card with a numbered "via" list, not as that
-  // question repeated once per answer. Purely a display grouping of
-  // already-resolved edges, no priority/match computation involved.
-  const incomingBySource = useMemo(() => {
-    const map = new Map<UUID, Edge[]>();
-    for (const edge of incoming) {
-      const list = map.get(edge.from_question);
-      if (list) list.push(edge);
-      else map.set(edge.from_question, [edge]);
-    }
-    return map;
-  }, [incoming]);
-
   if (question === null) {
     return (
       <aside
@@ -210,11 +143,7 @@ export function DetailPanel({
   }
 
   const audit = question.diagnostics;
-  const section = graph.sections.find((item) => item.id === question.section);
   const live = question.archived_at === null;
-  const sectionColor = section
-    ? (sectionColors.get(section.id) ?? NO_SECTION_COLOR)
-    : NO_SECTION_COLOR;
   // Only ever set for a live question: an archived one's own diff row is
   // exactly what put it here, and it already gets the banner below
   // instead of this flag row at all.
@@ -244,7 +173,7 @@ export function DetailPanel({
   return (
     <aside
       className="panel relative flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto bg-background p-4"
-      aria-label={`Detail for ${question.code}`}
+      aria-label={`Detail for ${question.prompt}`}
     >
       {onClose !== undefined && (
         <Button
@@ -280,27 +209,13 @@ export function DetailPanel({
           )
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            tone="section"
-            style={{ background: `${sectionColor}22`, color: sectionColor }}
-          >
-            <span
-              className="inline-block size-2.5 shrink-0 rounded-full"
-              style={{ background: sectionColor }}
-            />
-            {section ? section.name : "No section"}
-          </Badge>
-          <Badge tone="meta">{answerTypeLabel(question.answer_type)}</Badge>
-          {!question.is_required && <Badge tone="meta">Optional</Badge>}
-        </div>
-
         <div className="flex flex-col gap-1">
-          <p className="text-muted-foreground text-xs tabular-nums">{question.code}</p>
           {editable && live ? (
             <QuestionEditor graph={graph} question={question} />
           ) : (
-            <h2 className="text-base leading-snug font-medium">{question.prompt}</h2>
+            <h2 className="m-0 text-base leading-snug font-medium">
+              {question.prompt}
+            </h2>
           )}
         </div>
       </header>
@@ -314,61 +229,12 @@ export function DetailPanel({
         changeKinds={changeKinds}
         retargetingEdgeId={retargetingEdgeId}
         addingRouteOptionId={addingRouteOptionId}
+        addingRouteQuestionId={addingRouteQuestionId}
         onSelectQuestion={onSelectQuestion}
         onStartRetarget={onStartRetarget}
         onStartAddRoute={onStartAddRoute}
         onCancelPick={onCancelPick}
       />
-
-      <Separator />
-
-      <section className="flex flex-col gap-3" aria-labelledby="incoming-heading">
-        <SubHeading id="incoming-heading" count={incomingBySource.size}>
-          Reached from
-        </SubHeading>
-        {incoming.length === 0 ? (
-          <p className={cn(emptyText, "my-0")}>
-            {audit?.is_entry === true
-              ? "Nothing routes here. It is the entry point, so it runs first anyway."
-              : "Nothing routes here, so this question is never served."}
-          </p>
-        ) : (
-          <ul className="flex list-none flex-col gap-2 p-0">
-            {[...incomingBySource.entries()].map(([fromId, edgesFromSource]) => {
-              const source = questionsById.get(fromId);
-              const guards = edgesFromSource.map((edge) =>
-                optionLabel(source, edge.from_option),
-              );
-              return (
-                <li key={fromId}>
-                  <Card size="sm">
-                    <CardHeader>
-                      <CardTitle className="min-w-0 text-sm">
-                        {source !== undefined ? (
-                          <Button
-                            variant="link"
-                            className={questionLink}
-                            aria-label={`Go to ${source.code}: ${source.prompt}`}
-                            onClick={() => onSelectQuestion(fromId)}
-                          >
-                            <span className="underline underline-offset-2">
-                              {source.prompt}
-                            </span>
-                            <ArrowUpRight aria-hidden="true" />
-                          </Button>
-                        ) : (
-                          sourceLabel(source)
-                        )}
-                      </CardTitle>
-                      <CardDescription>{incomingVia(guards)}</CardDescription>
-                    </CardHeader>
-                  </Card>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
 
       {editable && live && (
         <>

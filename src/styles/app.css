@@ -341,8 +341,7 @@ input[type="radio"] {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 700;
   font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--text-muted);
 }
 
@@ -427,8 +426,6 @@ input[type="radio"] {
 .preview__next {
   padding: 10px 24px;
   font-size: 0.8rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .preview__actions {

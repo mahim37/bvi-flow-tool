@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,11 +20,12 @@ interface EditorDialogProps {
   disabled?: boolean;
   /** Extra classes on the overlay panel (scroll for long forms). */
   className?: string;
+  onOpenChange?: (open: boolean) => void;
   /** Focus this instead of Radix's default (the first tabbable field) once
    * the dialog opens -- for a form whose first field is a low-stakes
    * prefill (an auto-generated code, say) rather than the thing the user
    * actually needs to type first. */
-  initialFocus?: React.RefObject<HTMLElement | null>;
+  initialFocus?: RefObject<HTMLElement | null>;
   children: ReactNode | ((close: () => void) => ReactNode);
 }
 
@@ -42,6 +43,7 @@ export function EditorDialog({
   description,
   disabled,
   className,
+  onOpenChange,
   initialFocus,
   children,
 }: EditorDialogProps) {
@@ -53,6 +55,7 @@ export function EditorDialog({
       onOpenChange={(next) => {
         if (disabled) return;
         setOpen(next);
+        onOpenChange?.(next);
       }}
     >
       <DialogTrigger asChild>
@@ -64,6 +67,7 @@ export function EditorDialog({
       </DialogTrigger>
       <DialogContent
         className={cn("sm:max-w-lg", className)}
+        {...(description === undefined ? { "aria-describedby": undefined } : {})}
         {...(initialFocus
           ? {
               onOpenAutoFocus: (event: Event) => {

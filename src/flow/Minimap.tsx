@@ -187,7 +187,7 @@ export function Minimap({ cy }: MinimapProps) {
           collapsed ? "" : "border-b border-border"
         }`}
       >
-        <span className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+        <span className="text-[11px] font-semibold tracking-normal text-muted-foreground">
           Overview
         </span>
         <div className="flex items-center gap-1">

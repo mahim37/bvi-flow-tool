@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 import { useAddEdge, useReview, useUpdateEdge } from "../api/queries";
 import type { UUID } from "../api/types";
+import { useAuth } from "../auth/useAuth";
+import { AddQuestion } from "./AddQuestion";
 import { Canvas } from "./Canvas";
 import { DetailPanel } from "./DetailPanel";
 import { RouteChoicesPanel } from "./RouteChoicesPanel";
@@ -11,6 +13,7 @@ import { Sidebar } from "./Sidebar";
 import { useVersionContext } from "./versionContext";
 import { useWriteErrorHandler } from "./useWriteError";
 import {
+  END_NODE_ID,
   buildElements,
   changeKindsFromDiff,
   isSectionNode,
@@ -27,6 +30,8 @@ type CanvasPick =
 
 export function MapView() {
   const { graph, editable } = useVersionContext();
+  const { editRefused } = useAuth();
+  const navigate = useNavigate();
   const { versionId } = useParams<{ versionId: string }>();
   const [searchParams] = useSearchParams();
   const updateEdge = useUpdateEdge(graph.version.id);
@@ -78,52 +83,62 @@ export function MapView() {
     [review.data],
   );
 
-  // Synthetic ids (the shared end-of-flow node, a cross-version target
-  // this version doesn't contain) and archived questions aren't valid
-  // pick destinations -- the old dropdowns never offered them either
-  // (`Options.tsx`'s `targets` list excludes archived questions, and
-  // there was never a synthetic-id option at all). An invalid pick is
-  // ignored rather than refused, same as tapping empty canvas.
+  // Archived questions, section boxes, and cross-version missing
+  // placeholders aren't valid pick destinations. The shared end-of-flow
+  // node is: clicking it ends the route, same as the destination
+  // picker's "End the flow here", with no extra confirm. An invalid pick
+  // is ignored rather than refused, same as tapping empty canvas.
   function pickCanvasTarget(nodeId: string) {
     if (pick === null) return;
-    if (isSyntheticNode(nodeId) || isSectionNode(nodeId)) return;
-    const target = graph.questions.find((question) => question.id === nodeId);
-    if (target === undefined || target.archived_at !== null) return;
+    if (isSectionNode(nodeId)) return;
+    const endsFlow = nodeId === END_NODE_ID;
+    if (isSyntheticNode(nodeId) && !endsFlow) return;
+
+    let toQuestion: UUID | null;
+    if (endsFlow) {
+      toQuestion = null;
+    } else {
+      const target = graph.questions.find((question) => question.id === nodeId);
+      if (target === undefined || target.archived_at !== null) return;
+      toQuestion = nodeId;
+    }
+
     if (pick.kind === "retarget") {
       updateEdge.mutate(
-        { edgeId: pick.edgeId, changes: { to_question: nodeId } },
+        { edgeId: pick.edgeId, changes: { to_question: toQuestion } },
         { onError: onWriteError, onSuccess: () => setPick(null) },
       );
-    } else {
-      // A new edge goes last by default (`editing.add_edge`'s own rule),
-      // which the server then refuses outright if this question already
-      // has a default route (question-level edge) -- appending a
-      // per-option edge below one that matches every answer would create
-      // a route that can never fire. Sidestep that for the one case this
-      // picker can actually cause (adding a *per-option* edge) by asking
-      // for a priority below every edge this question already has, read
-      // straight from the already-fetched graph -- not a routing
-      // computation, just picking a number smaller than ones already
-      // visible. The server still re-validates and owns the real
-      // decision, same as any other write.
-      const siblings = graph.edges.filter(
-        (edge) => edge.from_question === pick.questionId,
-      );
-      const hasFallback = siblings.some((edge) => edge.from_option === null);
-      const priority =
-        pick.optionId !== null && hasFallback
-          ? Math.min(...siblings.map((edge) => edge.priority)) - 1
-          : undefined;
-      addEdge.mutate(
-        {
-          from_question: pick.questionId,
-          from_option: pick.optionId,
-          to_question: nodeId,
-          ...(priority !== undefined ? { priority } : {}),
-        },
-        { onError: onWriteError, onSuccess: () => setPick(null) },
-      );
+      return;
     }
+
+    // A new edge goes last by default (`editing.add_edge`'s own rule),
+    // which the server then refuses outright if this question already
+    // has a default route (question-level edge) -- appending a
+    // per-option edge below one that matches every answer would create
+    // a route that can never fire. Sidestep that for the one case this
+    // picker can actually cause (adding a *per-option* edge) by asking
+    // for a priority below every edge this question already has, read
+    // straight from the already-fetched graph -- not a routing
+    // computation, just picking a number smaller than ones already
+    // visible. The server still re-validates and owns the real
+    // decision, same as any other write.
+    const siblings = graph.edges.filter(
+      (edge) => edge.from_question === pick.questionId,
+    );
+    const hasFallback = siblings.some((edge) => edge.from_option === null);
+    const priority =
+      pick.optionId !== null && hasFallback
+        ? Math.min(...siblings.map((edge) => edge.priority)) - 1
+        : undefined;
+    addEdge.mutate(
+      {
+        from_question: pick.questionId,
+        from_option: pick.optionId,
+        to_question: toQuestion,
+        ...(priority !== undefined ? { priority } : {}),
+      },
+      { onError: onWriteError, onSuccess: () => setPick(null) },
+    );
   }
 
   const selectedQuestion = useMemo(() => {
@@ -200,6 +215,14 @@ export function MapView() {
         onPickTarget={pickCanvasTarget}
         onCancelPick={() => setPick(null)}
         collapsedSectionKey={[...collapsedSections].sort().join("|")}
+        topRight={
+          editable && !editRefused ? (
+            <AddQuestion
+              graph={graph}
+              onAdded={(id) => navigate(`/versions/${graph.version.id}?question=${id}`)}
+            />
+          ) : undefined
+        }
         onToggleSection={(sectionId) => {
           const collapsing = !collapsedSections.has(sectionId);
           setCollapsedSections((current) => {
@@ -242,6 +265,7 @@ export function MapView() {
           changeKinds={changeKinds}
           retargetingEdgeId={pick?.kind === "retarget" ? pick.edgeId : null}
           addingRouteOptionId={pick?.kind === "add" ? pick.optionId : null}
+          addingRouteQuestionId={pick?.kind === "add" ? pick.questionId : null}
           onSelectQuestion={selectQuestion}
           onStartRetarget={(edgeId, label) =>
             setPick({ kind: "retarget", edgeId, label })

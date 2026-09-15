@@ -238,7 +238,7 @@ export function rectFullyInView(rect: Rect, extent: Rect, padding: number): bool
   );
 }
 
-const CLEARANCE = 16;
+const CLEARANCE = 28;
 const MAX_SEPARATION_PASSES = 10;
 
 /** Signed offset from the chord for a parallel bundle (`0` when there is
@@ -504,8 +504,8 @@ function edgePriorityId(cy: Core, a: string, b: string): number {
 }
 
 function edgeDelta(edge: EdgeSingular): { dx: number; dy: number } {
-  const source = edge.source().position();
-  const target = edge.target().position();
+  const source = nodeCenter(edge.source());
+  const target = nodeCenter(edge.target());
   return { dx: target.x - source.x, dy: target.y - source.y };
 }
 
@@ -599,8 +599,66 @@ function nodeRect(node: NodeSingular): Rect {
   return { x1: bb.x1, y1: bb.y1, x2: bb.x2, y2: bb.y2 };
 }
 
+function nodeCenter(node: NodeSingular): Point {
+  const box = nodeRect(node);
+  return { x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 };
+}
+
 function isExpandedSection(node: NodeSingular): boolean {
   return node.data("kind") === "section" && node.data("collapsed") !== true;
+}
+
+/** The stroke we actually paint: docked endpoints when a fan is split,
+ * otherwise the bounding-box centres. Centres from `position()` are
+ * parent-relative for section children, so a skip inside a compound that
+ * is not at the origin would miss the box sitting on it. */
+function paintedEdgeSegment(edge: EdgeSingular): {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+} {
+  const source = edge.source();
+  const target = edge.target();
+  const sourceBox = nodeRect(source);
+  const targetBox = nodeRect(target);
+  const sourceCenter = nodeCenter(source);
+  const targetCenter = nodeCenter(target);
+  const outCount = edge.data("outLaneCount");
+  const outLane = edge.data("outLane");
+  const sourceSide = edge.data("sourceDockSide");
+  const inCount = edge.data("inLaneCount");
+  const inLane = edge.data("inLane");
+  const targetSide = edge.data("targetDockSide");
+  const start =
+    typeof outCount === "number" &&
+    outCount > 1 &&
+    typeof outLane === "number" &&
+    isDockSide(sourceSide)
+      ? nodeDockPoint(
+          sourceCenter,
+          sourceBox.x2 - sourceBox.x1,
+          sourceBox.y2 - sourceBox.y1,
+          outLane,
+          outCount,
+          sourceSide,
+        )
+      : sourceCenter;
+  const end =
+    typeof inCount === "number" &&
+    inCount > 1 &&
+    typeof inLane === "number" &&
+    isDockSide(targetSide)
+      ? nodeDockPoint(
+          targetCenter,
+          targetBox.x2 - targetBox.x1,
+          targetBox.y2 - targetBox.y1,
+          inLane,
+          inCount,
+          targetSide,
+        )
+      : targetCenter;
+  return { x1: start.x, y1: start.y, x2: end.x, y2: end.y };
 }
 
 /**
@@ -664,22 +722,21 @@ export function separateNodesFromEdges(cy: Core): void {
     const internal = typeof sourceParent === "string" && sourceParent === targetParent;
     edge.data("internal", internal);
   });
-  assignParallelEdgeLanes(cy);
 
   for (let pass = 0; pass < MAX_SEPARATION_PASSES; pass += 1) {
+    assignParallelEdgeLanes(cy);
     const shifts = new Map<string, { x: number; y: number }>();
     cy.edges().forEach((edge) => {
       if (edge.data("isBack") === true) return;
+      const { x1, y1, x2, y2 } = paintedEdgeSegment(edge);
       const source = edge.source();
       const target = edge.target();
-      const s = source.position();
-      const t = target.position();
       cy.nodes().forEach((node) => {
         if (node.id() === source.id() || node.id() === target.id()) return;
         if (isExpandedSection(node)) return;
         const parentId = node.data("parent") as string | undefined;
         if (parentId === source.id() || parentId === target.id()) return;
-        const shift = nudgeOffSegment(s.x, s.y, t.x, t.y, nodeRect(node), CLEARANCE);
+        const shift = nudgeOffSegment(x1, y1, x2, y2, nodeRect(node), CLEARANCE);
         if (shift === null) return;
         const current = shifts.get(node.id());
         shifts.set(

@@ -48,6 +48,7 @@ describe("RouteChoicesPanel", () => {
     );
 
     expect(screen.getByText("Other")).toBeInTheDocument();
+    expect(screen.queryByText("id: other")).not.toBeInTheDocument();
     expect(screen.queryByText("Yes")).not.toBeInTheDocument();
     expect(screen.queryByText("No")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Answers/ }).textContent).toContain("1");
@@ -83,6 +84,7 @@ describe("RouteChoicesPanel", () => {
       .map((item) => item.textContent ?? "");
     expect(labels[0]).toContain("Yes");
     expect(labels[1]).toContain("No");
+    expect(labels[0]).not.toContain("id:");
     expect(labels[0]).not.toMatch(/^\s*1/);
   });
 

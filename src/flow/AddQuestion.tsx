@@ -1,7 +1,8 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useAddQuestion } from "../api/queries";
-import type { AnswerType, Graph, QuestionRecord, UUID } from "../api/types";
+import type { AnswerType, Graph, UUID } from "../api/types";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field, nativeSelectClassName } from "@/components/ui/field";
@@ -19,18 +20,40 @@ const ANSWER_TYPES: AnswerType[] = [
   "scale",
 ];
 const NO_SECTION = "__none__";
+const NUMERIC_CODE = /^([Qq]?)(\d+)$/;
 
-/** One past the highest existing purely-numeric code (real codes are
- * "1", "2", "risk_1", ... -- see `_v3_graph_csv/questions.csv`), so a QID
- * never needs typing from scratch -- still just an edit away for a
- * question that wants a non-numeric scheme. */
-function nextQuestionCode(questions: QuestionRecord[]): string {
-  const highest = questions.reduce((max, question) => {
-    return /^\d+$/.test(question.code)
-      ? Math.max(max, Number(question.code))
-      : max;
-  }, 0);
-  return `${highest + 1}`;
+/**
+ * Next unused question code on this version: increment the highest integer
+ * already used (`24` -> `25`, `Q24` -> `Q25`), keeping that match's prefix.
+ * No numeric codes -> `Q1` or `1` from the dominant existing prefix. An
+ * empty graph starts at `1`.
+ *
+ * Purely slug codes (`risk_1`) are not a sequence, so they are ignored
+ * when picking the next integer -- same as incrementing past the highest
+ * numeric QID on a mixed graph.
+ */
+function nextQuestionCode(codes: readonly string[]): string {
+  let maxN = -1;
+  let prefix = "";
+
+  for (const code of codes) {
+    const match = NUMERIC_CODE.exec(code.trim());
+    if (match === null) continue;
+    const n = Number(match[2]);
+    if (n > maxN) {
+      maxN = n;
+      prefix = match[1] ?? "";
+    }
+  }
+
+  if (maxN >= 0) return `${prefix}${maxN + 1}`;
+  if (codes.length === 0) return "1";
+
+  let qCount = 0;
+  for (const code of codes) {
+    if (/^[Qq]/.test(code.trim())) qCount += 1;
+  }
+  return qCount > codes.length - qCount ? "Q1" : "1";
 }
 
 interface AddQuestionProps {
@@ -51,31 +74,53 @@ interface AddQuestionProps {
  * is the tool telling the truth.
  */
 export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  return (
+    <EditorDialog
+      title="Add a question"
+      className="max-h-[min(90svh,44rem)] overflow-y-auto"
+      trigger={<Button variant="outline">Add a question</Button>}
+      initialFocus={promptRef}
+    >
+      {(close) => (
+        <AddQuestionForm
+          graph={graph}
+          onAdded={onAdded}
+          close={close}
+          promptRef={promptRef}
+        />
+      )}
+    </EditorDialog>
+  );
+}
+
+function AddQuestionForm({
+  graph,
+  onAdded,
+  close,
+  promptRef,
+}: AddQuestionProps & {
+  close: () => void;
+  promptRef: RefObject<HTMLTextAreaElement | null>;
+}) {
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const addQuestion = useAddQuestion(versionId);
-
-  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const codeId = useId();
   const promptId = useId();
   const typeId = useId();
   const sectionId = useId();
   const requiredId = useId();
-  const rawId = useId();
 
-  const [codeInput, setCodeInput] = useState("");
-  const [codeTouched, setCodeTouched] = useState(false);
-  const suggestedCode = useMemo(
-    () => nextQuestionCode(graph.questions),
-    [graph.questions],
+  const [code, setCode] = useState(() =>
+    nextQuestionCode(graph.questions.map((question) => question.code)),
   );
-  const code = codeTouched ? codeInput : suggestedCode;
   const [prompt, setPrompt] = useState("");
   const [answerType, setAnswerType] = useState<AnswerType>("single_choice");
   const [section, setSection] = useState<string>(NO_SECTION);
   const [isRequired, setIsRequired] = useState(true);
-  const [showRaw, setShowRaw] = useState(false);
 
   const sections = [...graph.sections].sort(
     (left, right) => left.display_order - right.display_order,
@@ -83,148 +128,114 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
   const error = writeErrorMessage(addQuestion.error);
 
   return (
-    <EditorDialog
-      title="Add a question"
-      description="Added last, and unreachable until an edge points at it. Use the detail panel of the question it should follow to add that edge."
-      className="max-h-[min(90svh,44rem)] overflow-y-auto"
-      trigger={<Button variant="outline">Add a question</Button>}
-      initialFocus={promptRef}
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        addQuestion.mutate(
+          {
+            code,
+            prompt,
+            answer_type: answerType,
+            is_required: isRequired,
+            section: section === NO_SECTION ? null : section,
+          },
+          {
+            onError: onWriteError,
+            onSuccess: (created) => {
+              close();
+              onAdded(created.id);
+            },
+          },
+        );
+      }}
     >
-      {(close) => (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addQuestion.mutate(
-              {
-                code,
-                prompt,
-                answer_type: answerType,
-                is_required: isRequired,
-                section: section === NO_SECTION ? null : section,
-                show_raw_answer_to_advisor: showRaw,
-              },
-              {
-                onError: onWriteError,
-                onSuccess: (created) => {
-                  close();
-                  setCodeInput("");
-                  setCodeTouched(false);
-                  setPrompt("");
-                  onAdded(created.id);
-                },
-              },
-            );
-          }}
-        >
-          {error !== null && (
-            <Banner tone="error" role="alert" className="mt-0">
-              {error}
-            </Banner>
-          )}
-
-          <Field label="QID" htmlFor={codeId}>
-            <Input
-              id={codeId}
-              value={code}
-              required
-              placeholder="Stable identifier"
-              {...(addQuestion.isPending ? { disabled: true } : {})}
-              onChange={(event) => {
-                setCodeInput(event.target.value);
-                setCodeTouched(true);
-              }}
-            />
-          </Field>
-
-          <Field label="Question text" htmlFor={promptId}>
-            <Textarea
-              ref={promptRef}
-              id={promptId}
-              rows={3}
-              value={prompt}
-              required
-              {...(addQuestion.isPending ? { disabled: true } : {})}
-              onChange={(event) => setPrompt(event.target.value)}
-            />
-          </Field>
-
-          <Field label="Answer type" htmlFor={typeId}>
-            <select
-              id={typeId}
-              className={nativeSelectClassName}
-              value={answerType}
-              {...(addQuestion.isPending ? { disabled: true } : {})}
-              onChange={(event) => setAnswerType(event.target.value as AnswerType)}
-            >
-              {ANSWER_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {answerTypeLabel(type)}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Section" htmlFor={sectionId}>
-            <select
-              id={sectionId}
-              className={nativeSelectClassName}
-              value={section}
-              {...(addQuestion.isPending ? { disabled: true } : {})}
-              onChange={(event) => setSection(event.target.value)}
-            >
-              <option value={NO_SECTION}>No section</option>
-              {sections.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className={checkRow}>
-            <input
-              id={requiredId}
-              type="checkbox"
-              checked={isRequired}
-              disabled={addQuestion.isPending}
-              onChange={(event) => setIsRequired(event.target.checked)}
-            />
-            <label htmlFor={requiredId}>Required</label>
-          </div>
-
-          {/* Offered here and nowhere else. `FlowToolQuestionSerializer` does
-            not serve `show_raw_answer_to_advisor`, so an existing
-            question's value cannot be read back -- an edit control would
-            have to start from a guess and would silently overwrite whatever
-            was really set. On a question being created there is no prior
-            value to misreport. */}
-          <div className={checkRow}>
-            <input
-              id={rawId}
-              type="checkbox"
-              checked={showRaw}
-              disabled={addQuestion.isPending}
-              onChange={(event) => setShowRaw(event.target.checked)}
-            />
-            <label htmlFor={rawId}>Show the raw answer to advisors</label>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={close}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              loading={addQuestion.isPending}
-              disabled={code.trim() === "" || prompt.trim() === ""}
-            >
-              Add question
-            </Button>
-          </div>
-        </form>
+      {error !== null && (
+        <Banner tone="error" role="alert" className="mt-0">
+          {error}
+        </Banner>
       )}
-    </EditorDialog>
+
+      <Field label="QID" htmlFor={codeId}>
+        <Input
+          id={codeId}
+          value={code}
+          required
+          placeholder="QID"
+          {...(addQuestion.isPending ? { disabled: true } : {})}
+          onChange={(event) => setCode(event.target.value)}
+        />
+      </Field>
+
+      <Field label="Question text" htmlFor={promptId}>
+        <Textarea
+          ref={promptRef}
+          id={promptId}
+          rows={3}
+          value={prompt}
+          required
+          {...(addQuestion.isPending ? { disabled: true } : {})}
+          onChange={(event) => setPrompt(event.target.value)}
+        />
+      </Field>
+
+      <Field label="Answer type" htmlFor={typeId}>
+        <select
+          id={typeId}
+          className={nativeSelectClassName}
+          value={answerType}
+          {...(addQuestion.isPending ? { disabled: true } : {})}
+          onChange={(event) => setAnswerType(event.target.value as AnswerType)}
+        >
+          {ANSWER_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {answerTypeLabel(type)}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Section" htmlFor={sectionId}>
+        <select
+          id={sectionId}
+          className={nativeSelectClassName}
+          value={section}
+          {...(addQuestion.isPending ? { disabled: true } : {})}
+          onChange={(event) => setSection(event.target.value)}
+        >
+          <option value={NO_SECTION}>No section</option>
+          {sections.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <div className={checkRow}>
+        <input
+          id={requiredId}
+          type="checkbox"
+          checked={isRequired}
+          disabled={addQuestion.isPending}
+          onChange={(event) => setIsRequired(event.target.checked)}
+        />
+        <label htmlFor={requiredId}>Required</label>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" onClick={close}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          type="submit"
+          loading={addQuestion.isPending}
+          disabled={code.trim() === "" || prompt.trim() === ""}
+        >
+          Add question
+        </Button>
+      </div>
+    </form>
   );
 }

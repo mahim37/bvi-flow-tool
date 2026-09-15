@@ -4,7 +4,14 @@ import type { QueryClient } from "@tanstack/react-query";
 import * as api from "./endpoints";
 import type { NewEdge, NewOption, NewQuestion, QuestionChanges } from "./endpoints";
 import { ApiError } from "./client";
-import type { Edge, PreviewAnswer, QuestionOption, UUID } from "./types";
+import {
+  bothReviewersApproved,
+  type ChangeRequest,
+  type Edge,
+  type PreviewAnswer,
+  type QuestionOption,
+  type UUID,
+} from "./types";
 
 /** Keyed on the questionnaire filter, because the server applies it -- two
  * filters are two different lists, not one list read twice. */
@@ -245,17 +252,19 @@ export function useReleaseLock(versionId: UUID) {
  * `editing.approve`), so this has to invalidate the way publishing always
  * has: every version's graph, not just this one, since a publish changes
  * what's live and re-answers `is_stale` for every other open sandbox on
- * the same questionnaire. Checked on the response's own `status` rather
- * than assumed, since a first approval (still `approved`, waiting on the
- * other reviewer) only ever changes this one proposal.
+ * the same questionnaire. Checked on the response's own timestamps rather
+ * than `status === "published"` alone: a first approval (still waiting on
+ * the other reviewer) must not be treated as a publish, even if the
+ * server marks the proposal `published` too early. There is no follow-up
+ * `publish/` or `activate/` call from this mutation.
  */
 export function useApproveDraft(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (note: string) => api.approveDraft(versionId, note),
-    onSuccess: async (data) => {
+    onSuccess: async (data: ChangeRequest) => {
       await invalidateGraph(client, versionId);
-      if (data.status === "published") {
+      if (data.status === "published" && bothReviewersApproved(data)) {
         await client.invalidateQueries({ queryKey: ["graph"] });
       }
     },

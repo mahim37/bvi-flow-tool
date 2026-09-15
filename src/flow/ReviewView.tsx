@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useApproveDraft, useRejectDraft, useReview } from "../api/queries";
-import type { ChangeRequest, DiffKind, ItemDiff, UUID } from "../api/types";
+import { bothReviewersApproved, type ChangeRequest, type UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { DiffList } from "./DiffList";
 import { AlertsButton } from "./AlertsButton";
@@ -28,8 +28,6 @@ import { cn } from "@/lib/utils";
 import { useVersionContext } from "./versionContext";
 import { decisionLabel, formatTimestamp, versionLabel } from "./labels";
 import { useReviewErrorHandler, writeErrorMessage } from "./useWriteError";
-
-const KINDS: DiffKind[] = ["question", "option", "edge", "section"];
 
 function ReviewHistory({ changeRequest }: { changeRequest: ChangeRequest }) {
   if (changeRequest.reviews.length === 0) return null;
@@ -152,12 +150,15 @@ export function ReviewView() {
   // *second* reviewer's approve call has to still reach the form from
   // there (their own `myApprovalTimestamp` is what actually gates it, not
   // status alone: `approved` alone doesn't say whether *this* identity is
-  // the one still owed an approval). There is no separate `canPublish`
-  // any more -- the moment both have approved, `editing.approve` publishes
-  // in the same call, so there is never a distinct "approved, waiting for
-  // publish" state for a human to act on.
+  // the one still owed an approval). Publishing is not a separate button:
+  // it is supposed to happen inside `editing.approve` only when *both*
+  // `reviewer_*_approved_at` timestamps are set. One approval is never
+  // enough, even if status has already become `approved`.
+  const bothApproved = changeRequest !== null && bothReviewersApproved(changeRequest);
   const canApprove =
-    (status === "submitted" || status === "approved") && myApprovalTimestamp === null;
+    !bothApproved &&
+    (status === "submitted" || status === "approved") &&
+    myApprovalTimestamp === null;
   // Reject reaches an approved proposal too, not just a submitted one --
   // it is a reviewer's own way to reverse an approval (their own or the
   // other reviewer's) they've changed their mind about, mirroring
@@ -168,16 +169,22 @@ export function ReviewView() {
   // Distinguishes the reject button's own wording ("send back" vs. "undo
   // the approval") -- whether *anyone* has approved yet, not whether
   // *this* reviewer specifically has (that's `myApprovalTimestamp`,
-  // `canApprove`'s own concern). `status === "approved"` already means at
-  // least one of the two has cleared it.
-  const somebodyHasApproved = status === "approved";
+  // `canApprove`'s own concern). Status `approved` used to stand in for
+  // this; the timestamps are the real fact, so a server that marks
+  // `approved` after one of two does not look like a finished publish.
+  const somebodyHasApproved =
+    changeRequest !== null &&
+    (changeRequest.reviewer_1_approved_at !== null ||
+      changeRequest.reviewer_2_approved_at !== null);
 
-  const items: Record<DiffKind, ItemDiff[]> = {
-    section: diff.sections,
-    question: diff.questions,
-    option: diff.options,
-    edge: diff.edges,
-  };
+  const canActOnDecision =
+    version.is_draft &&
+    !reviewRefused &&
+    !isAuthor &&
+    isNamedReviewer &&
+    (canApprove || canReject);
+
+  const items = [...diff.questions, ...diff.options, ...diff.edges, ...diff.sections];
 
   const issueItems: ChromeAlert[] = version.is_draft
     ? draftIssues(graph, publish_blocker).map((issue) => {
@@ -256,115 +263,50 @@ export function ReviewView() {
         )}
       </header>
 
-      <div className="grid gap-4">
-        {KINDS.map((kind) => (
-          <DiffList
-            key={kind}
-            kind={kind}
-            items={items[kind]}
-            onShowOnMap={showOnMap}
-          />
-        ))}
-      </div>
+      <DiffList items={items} graph={graph} onShowOnMap={showOnMap} />
 
       {changeRequest !== null && <ReviewHistory changeRequest={changeRequest} />}
 
-      {version.is_draft && (
+      {canActOnDecision && (
         <section className={panelSection} aria-labelledby="review-actions">
           <h3 id="review-actions" className={panelHeading}>
             Decision
           </h3>
 
-          {reviewRefused && (
-            <Banner tone="warn">
-              Your account can read this diff but not act on it. Approving, sending back
-              and publishing need the flow-tool publish grant, which is separate from
-              the edit one.
-            </Banner>
-          )}
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+            {canApprove && (
+              <form
+                className="rounded-lg border border-border bg-card p-3.5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  approve.mutate(approveNote, {
+                    onError: onReviewError,
+                    onSuccess: () => setApproveNote(""),
+                  });
+                }}
+              >
+                <Field label="Note (optional)" htmlFor={approveNoteId}>
+                  <Textarea
+                    id={approveNoteId}
+                    rows={2}
+                    value={approveNote}
+                    placeholder="Anything worth saying alongside an approval"
+                    {...(approve.isPending ? { disabled: true } : {})}
+                    onChange={(event) => setApproveNote(event.target.value)}
+                  />
+                </Field>
+                <Button variant="primary" type="submit" loading={approve.isPending}>
+                  Approve
+                </Button>
+                <p className={mutedHint}>
+                  {somebodyHasApproved
+                    ? "This is the second required approval, and it publishes the draft."
+                    : "Records your approval. Publishing waits for the other required reviewer."}
+                </p>
+              </form>
+            )}
 
-          {status === "open" && (
-            <p className={emptyText}>
-              This proposal has not been submitted yet, so there is nothing to decide.
-              Its author submits it when it is ready to be read.
-            </p>
-          )}
-
-          {status === "published" && (
-            <p className={emptyText}>
-              This proposal has been published. Nothing is left to do.
-            </p>
-          )}
-
-          {canApprove && isAuthor && (
-            <Banner tone="warn">
-              This is your own proposal, so you cannot approve or send it back. Somebody
-              else has to read it. That independent check is the whole point of the
-              workflow. It publishes on its own the moment both reviewers have approved.
-            </Banner>
-          )}
-
-          {/* somebodyHasApproved here -- the banner above only fires while
-              this identity itself could still approve, so once at least one
-              approval exists (whether by this identity or not, for an
-              author it's always "not") this is the one that applies. */}
-          {canReject && somebodyHasApproved && isAuthor && (
-            <Banner tone="warn">
-              This is your own proposal, so you cannot send it back either, even now
-              that it is approved. Withdrawing it is yours to do instead, from the map.
-              That also drops the approval.
-            </Banner>
-          )}
-
-          {canReject && !isAuthor && !isNamedReviewer && changeRequest !== null && (
-            <Banner tone="warn">
-              You hold the publish grant, but this proposal named two other people as
-              its reviewers: {changeRequest.reviewer_1_email ?? "someone"} and{" "}
-              {changeRequest.reviewer_2_email ?? "someone"}. Only they can approve or
-              send it back.
-            </Banner>
-          )}
-
-          {canReject && !isAuthor && isNamedReviewer && (
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-              {canApprove && (
-                <form
-                  className="rounded-lg border border-border bg-card p-3.5"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    approve.mutate(approveNote, {
-                      onError: onReviewError,
-                      onSuccess: () => setApproveNote(""),
-                    });
-                  }}
-                >
-                  <Field label="Note (optional)" htmlFor={approveNoteId}>
-                    <Textarea
-                      id={approveNoteId}
-                      rows={2}
-                      value={approveNote}
-                      placeholder="Anything worth saying alongside an approval"
-                      {...(approve.isPending || reviewRefused
-                        ? { disabled: true }
-                        : {})}
-                      onChange={(event) => setApproveNote(event.target.value)}
-                    />
-                  </Field>
-                  <Button
-                    variant="primary"
-                    type="submit"
-                    loading={approve.isPending}
-                    disabled={reviewRefused}
-                  >
-                    Approve
-                  </Button>
-                  <p className={mutedHint}>
-                    Approving freezes the draft as it stands. What gets published is
-                    what you read.
-                  </p>
-                </form>
-              )}
-
+            {canReject && (
               <form
                 className="rounded-lg border border-border bg-card p-3.5"
                 onSubmit={(event) => {
@@ -382,14 +324,14 @@ export function ReviewView() {
                     required
                     value={rejectNote}
                     placeholder="What the author has to change"
-                    {...(reject.isPending || reviewRefused ? { disabled: true } : {})}
+                    {...(reject.isPending ? { disabled: true } : {})}
                     onChange={(event) => setRejectNote(event.target.value)}
                   />
                 </Field>
                 <Button
                   type="submit"
                   loading={reject.isPending}
-                  disabled={reviewRefused || rejectNote.trim() === ""}
+                  disabled={rejectNote.trim() === ""}
                 >
                   {somebodyHasApproved ? "Undo the approval" : "Send back"}
                 </Button>
@@ -404,14 +346,18 @@ export function ReviewView() {
                   Your note is kept with it and cannot be overwritten by a resubmission.
                 </p>
               </form>
-            </div>
-          )}
+            )}
+          </div>
 
-          {canReject && !isAuthor && isNamedReviewer && !canApprove && (
+          {canReject && !canApprove && !bothApproved && (
             <p className={emptyText}>
               You have approved this. It publishes on its own the moment the other
               reviewer approves too.
             </p>
+          )}
+
+          {bothApproved && version.is_draft && (
+            <p className={emptyText}>Both required reviewers have approved.</p>
           )}
 
           {error !== null && (

@@ -21,22 +21,22 @@ const badgeVariants = cva(
         ghost: "border-transparent text-muted-foreground",
         link: "border-transparent text-primary underline-offset-4",
         entry:
-          "uppercase tracking-wider text-green border-[rgba(87,211,140,0.4)] bg-[rgba(87,211,140,0.1)]",
+          "tracking-normal text-green border-[rgba(87,211,140,0.4)] bg-[rgba(87,211,140,0.1)]",
         added:
-          "uppercase tracking-wider text-green border-[rgba(87,211,140,0.4)] bg-[rgba(87,211,140,0.1)]",
-        term: "uppercase tracking-wider text-destructive border-[rgba(240,114,107,0.4)] bg-[rgba(240,114,107,0.1)]",
+          "tracking-normal text-green border-[rgba(87,211,140,0.4)] bg-[rgba(87,211,140,0.1)]",
+        term: "tracking-normal text-destructive border-[rgba(240,114,107,0.4)] bg-[rgba(240,114,107,0.1)]",
         removed:
-          "uppercase tracking-wider text-destructive border-[rgba(240,114,107,0.4)] bg-[rgba(240,114,107,0.1)]",
+          "tracking-normal text-destructive border-[rgba(240,114,107,0.4)] bg-[rgba(240,114,107,0.1)]",
         branch:
-          "uppercase tracking-wider text-gold border-[rgba(242,193,78,0.4)] bg-[rgba(242,193,78,0.1)]",
+          "tracking-normal text-gold border-[rgba(242,193,78,0.4)] bg-[rgba(242,193,78,0.1)]",
         changed:
-          "uppercase tracking-wider text-gold border-[rgba(242,193,78,0.4)] bg-[rgba(242,193,78,0.1)]",
+          "tracking-normal text-gold border-[rgba(242,193,78,0.4)] bg-[rgba(242,193,78,0.1)]",
         unreach:
-          "uppercase tracking-wider text-emphasis border-[rgba(240,148,77,0.4)] bg-[rgba(240,148,77,0.1)]",
+          "tracking-normal text-emphasis border-[rgba(240,148,77,0.4)] bg-[rgba(240,148,77,0.1)]",
         neutral:
-          "uppercase tracking-wider text-muted-foreground border-border-strong bg-background",
+          "tracking-normal text-muted-foreground border-border-strong bg-background",
         meta: "rounded-md tracking-normal text-foreground/80 border-border bg-card",
-        tag: "uppercase tracking-wider text-[0.68rem] font-bold text-muted-foreground border-border-strong px-1.5 py-px",
+        tag: "tracking-normal text-[0.68rem] font-bold text-muted-foreground border-border-strong px-1.5 py-px",
         section:
           "rounded-full border-0 text-xs font-semibold tracking-normal px-2.5 py-1",
       },

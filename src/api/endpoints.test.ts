@@ -70,6 +70,22 @@ describe("submit", () => {
   });
 });
 
+describe("approve", () => {
+  it("posts a note to approve, not to a publish path", async () => {
+    await api.approveDraft("v1", "looks good");
+
+    const call = lastCall();
+    expect(call.url).toBe("/api/staff/flow-tool/versions/v1/approve/");
+    expect(call.method).toBe("POST");
+    expect(call.body).toEqual({ note: "looks good" });
+  });
+
+  it("has no client publish verb to call after a single approval", () => {
+    expect(Object.keys(api)).not.toContain("publishDraft");
+    expect(Object.keys(api)).not.toContain("publishVersion");
+  });
+});
+
 describe("edge updates", () => {
   it("sends only the end being moved", async () => {
     // `FlowToolEdgeUpdateSerializer` has no defaults, so an absent key

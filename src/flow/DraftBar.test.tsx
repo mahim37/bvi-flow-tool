@@ -56,15 +56,15 @@ function renderBar(
 }
 
 describe("DraftBar", () => {
-  it("keeps draft warnings behind a red Alerts control next to Check diff", async () => {
+  it("keeps draft warnings behind a red Alerts control", async () => {
     const user = userEvent.setup();
     renderBar();
 
-    expect(screen.getByRole("link", { name: "Check diff" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add a question" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Check diff" })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "Check the diff" }),
+      screen.queryByRole("button", { name: "Add a question" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review" })).toBeInTheDocument();
     expect(screen.queryByText(/Behind the latest version/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2 alerts" }));
@@ -93,6 +93,16 @@ describe("DraftBar", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Propose a change" }),
+    ).toBeInTheDocument();
+  });
+
+  it("names an open draft beside the status and keeps who proposed it", () => {
+    renderBar();
+
+    expect(screen.queryByText(/Editable\. Submit/)).not.toBeInTheDocument();
+    expect(screen.getByText("draft")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Proposed by postman-demo@example.com/),
     ).toBeInTheDocument();
   });
 

@@ -1,6 +1,5 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
 
 import type { Graph, UUID, VersionListItem } from "../api/types";
 import { Banner } from "@/components/ui/banner";
@@ -19,7 +18,6 @@ import {
 import { useAuth } from "../auth/useAuth";
 import { AlertsButton } from "./AlertsButton";
 import type { ChromeAlert } from "./AlertsButton";
-import { AddQuestion } from "./AddQuestion";
 import { ConfirmAction } from "./ConfirmAction";
 import { EditorDialog } from "./EditorDialog";
 import {
@@ -132,7 +130,6 @@ function Cta({
 }
 
 export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
-  const navigate = useNavigate();
   const { identity, editRefused, reviewRefused } = useAuth();
   const onWriteError = useWriteErrorHandler();
   const onReviewError = useReviewErrorHandler();
@@ -364,25 +361,6 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // older draft is not an approval of the next one.
   const isFrozen =
     changeRequest.status === "submitted" || changeRequest.status === "approved";
-  // Mirrors `ReviewView`'s own `isNamedReviewer`/`canApprove`/`canReject` --
-  // not re-deriving a routing decision (spec 1.3 is about the graph, not
-  // this), just the same client-side echo of who may act that this file
-  // already keeps for Discard/Withdraw. There is no more `canPublish` to
-  // mirror: publishing is automatic the moment the second required
-  // reviewer approves (`editing.approve`), not a separate action anybody
-  // presses. `submitted` *or* `approved` both still mean "something for a
-  // reviewer to do" now -- `approved` means one of the two has cleared it
-  // and the other one still can, where it used to mean "anyone holding
-  // publish may press Publish."
-  const isNamedReviewer =
-    identity !== null &&
-    (changeRequest.reviewer_1_email === identity.email ||
-      changeRequest.reviewer_2_email === identity.email);
-  const canActOnReview =
-    !reviewRefused &&
-    !isAuthor &&
-    isNamedReviewer &&
-    (changeRequest.status === "submitted" || changeRequest.status === "approved");
   const busy =
     submitDraft.isPending ||
     withdrawDraft.isPending ||
@@ -469,34 +447,21 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
           <strong className="truncate text-sm">
             {versionLabel(graph.version)} ·{" "}
             {statusLabel(changeRequest.status).toLowerCase()}
+            {changeRequest.status === "open" && graph.version.is_draft ? (
+              <span className="text-muted-foreground font-normal"> draft</span>
+            ) : null}
           </strong>
           <span className="text-muted-foreground truncate text-xs">
-            {statusMeaning(changeRequest.status)} Proposed by{" "}
-            {changeRequest.created_by_email}
+            {statusMeaning(changeRequest.status) !== ""
+              ? `${statusMeaning(changeRequest.status)} `
+              : ""}
+            Proposed by {changeRequest.created_by_email}
             {changeRequest.summary !== "" && `. ${changeRequest.summary}`}
           </span>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {isOpen && !editRefused && (
-          <AddQuestion
-            graph={graph}
-            onAdded={(id) => navigate(`/versions/${versionId}?question=${id}`)}
-          />
-        )}
-        {/* Quiet while there's a more primary action beside it (Submit
-              for review) or while this signed-in account cannot actually
-              approve or reject this proposal -- everyone with view access
-              may still open it to read the diff, but only
-              `canActOnReview` earns the same visual weight Submit gets
-              elsewhere and the wording that promises an action. */}
-        <Button asChild variant={isOpen || !canActOnReview ? "ghost" : "primary"}>
-          <Link to={`/versions/${versionId}/review`}>
-            {isOpen || !canActOnReview ? "Check diff" : "Review"}
-          </Link>
-        </Button>
-
         <AlertsButton items={alerts} />
 
         {/* No more reviewer picker -- `submit` always sends this to the

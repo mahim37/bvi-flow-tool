@@ -175,8 +175,10 @@ export const releaseLock = (versionId: UUID) =>
 export const fetchReview = (versionId: UUID, signal?: AbortSignal) =>
   request<ReviewPayload>(`${version(versionId)}/review/`, signal ? { signal } : {});
 
-/** Clear a proposal. The note is optional: a reviewer who read the diff
- * and found nothing to say has said everything the author needs. */
+/** Record one required reviewer's approval. Must not be used as a
+ * publish shortcut: the server is supposed to publish only when both
+ * `reviewer_*_approved_at` timestamps are set. This client never follows
+ * a single approval with `publish/` or `activate/`. */
 export const approveDraft = (versionId: UUID, note: string) =>
   request<ChangeRequest>(`${version(versionId)}/approve/`, {
     method: "POST",

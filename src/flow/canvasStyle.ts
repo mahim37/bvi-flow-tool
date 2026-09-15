@@ -341,9 +341,13 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "text-background-shape": "roundrectangle",
       "text-background-padding": "3px",
       "text-rotation": "autorotate",
+      "text-margin-x": ((ele: { data: (name: string) => unknown }) =>
+        edgeLabelScreenOffset(ele).x) as unknown as number,
+      "text-margin-y": ((ele: { data: (name: string) => unknown }) =>
+        edgeLabelScreenOffset(ele).y) as unknown as number,
       // So hovering the truncated pill, not just the stroke, can select it.
       "text-events": "yes",
-    },
+    } as unknown as Record<string, string>,
   },
   {
     // Both ends live in the same expanded section. A wide bezier is what
@@ -389,17 +393,6 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
         sourceEndpointSpec(ele)) as unknown as string,
       "target-endpoint": ((ele: { data: (name: string) => unknown }) =>
         targetEndpointSpec(ele)) as unknown as string,
-    } as unknown as Record<string, string>,
-  },
-  {
-    // Autorotated pills sit on the path midpoint. Extra screen-Y stagger
-    // was what dragged a diagonal bundle's labels onto neighbouring arrows.
-    selector: "edge[laneCount > 1], edge[outLaneCount > 1], edge[inLaneCount > 1]",
-    css: {
-      "text-margin-x": ((ele: { data: (name: string) => unknown }) =>
-        edgeLabelScreenOffset(ele).x) as unknown as number,
-      "text-margin-y": ((ele: { data: (name: string) => unknown }) =>
-        edgeLabelScreenOffset(ele).y) as unknown as number,
     } as unknown as Record<string, string>,
   },
   {

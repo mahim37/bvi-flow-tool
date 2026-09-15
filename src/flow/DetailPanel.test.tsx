@@ -21,6 +21,23 @@ function changeDestinationTrigger(row: HTMLElement) {
   return within(row).getByRole("button", { name: "Change destination" });
 }
 
+function defaultRouteFolder() {
+  return screen.getByRole("group", {
+    name: "Default route",
+  });
+}
+
+function optionRow(label: string) {
+  const section = screen.getByRole("region", { name: /^(Answers|Route)/ });
+  return within(section).getByText(label, { exact: true }).closest("li") as HTMLElement;
+}
+
+function destinationMenu() {
+  const menu = document.querySelector("[data-slot=popover-content]");
+  if (menu === null) throw new Error("destination menu not open");
+  return menu as HTMLElement;
+}
+
 function panelFor(questionId: string, editable = false, changeKinds?: ChangeKinds) {
   const graph = makeGraph();
   const question = graph.questions.find((item) => item.id === questionId);
@@ -49,11 +66,44 @@ describe("a live question", () => {
     expect(screen.getByText("Decision point")).toBeInTheDocument();
     expect(screen.getByText("Can end the flow")).toBeInTheDocument();
     expect(screen.queryByText(/^QID /)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", {
+        name: "Detail for Prompt for Q1",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("id: Q1")).not.toBeInTheDocument();
+    expect(screen.getByText("Prompt for Q1")).toBeInTheDocument();
+    expect(screen.queryByText("No section")).not.toBeInTheDocument();
+    expect(screen.queryByText("Introduction")).not.toBeInTheDocument();
+    const answers = screen.getByRole("region", { name: /^Answers/ });
+    expect(within(answers).getByText("Single choice")).toBeInTheDocument();
+  });
+
+  it("names answers and destinations by label, without ids", () => {
+    panelFor(Q1);
+
+    const section = screen.getByRole("region", { name: /^Answers/ });
+    expect(within(section).getByText("Yes")).toBeInTheDocument();
+    expect(within(section).getByText("No")).toBeInTheDocument();
+    expect(
+      within(optionRow("Yes")).getByRole("heading", { name: "Choice: Yes" }),
+    ).toBeInTheDocument();
+    expect(
+      within(optionRow("No")).getByRole("heading", { name: "Choice: No" }),
+    ).toBeInTheDocument();
+    expect(within(section).queryByText("id: yes")).not.toBeInTheDocument();
+    expect(within(section).queryByText("id: no")).not.toBeInTheDocument();
+    expect(within(section).queryByText("id: Q2")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "To: Prompt for Q2",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("groups each answer's edge under that answer, regardless of edge order", () => {
-    // Options drive the card order now, not edge priority -- so reversing
-    // the edges array should change nothing about which card a guard's
+    // Options drive the row order now, not edge priority -- so reversing
+    // the edges array should change nothing about which row a guard's
     // destination shows up under.
     const graph = makeGraph();
     const question = graph.questions.find((item) => item.id === Q1);
@@ -72,21 +122,19 @@ describe("a live question", () => {
       />,
     );
 
-    const section = screen.getByRole("region", { name: /^Options/ });
+    const section = screen.getByRole("region", { name: /^Answers/ });
     const guards = within(section)
       .getAllByRole("listitem")
       .map((row) => within(row).getByText(/^(Yes|No)$/).textContent);
 
     expect(guards).toEqual(["Yes", "No"]);
-    expect(within(section).queryByText("yes")).not.toBeInTheDocument();
-    expect(within(section).queryByText("no")).not.toBeInTheDocument();
   });
 
   it("nests leftover answers inside the default route they actually take", () => {
     // Screenshot case: Yes has no edge of its own so it takes the
     // question-level route to Q2; No still has its own edge. Yes belongs
-    // in the default-route card with that shared destination, not as an
-    // empty sibling card.
+    // in the default-route folder with that shared destination, not as an
+    // empty sibling row.
     const graph = makeGraph();
     graph.edges = [
       ...graph.edges.filter((item) => item.id !== E_YES_TO_Q2),
@@ -114,20 +162,27 @@ describe("a live question", () => {
       />,
     );
 
-    const defaultCard = screen
-      .getByText("Default route")
-      .closest("[data-slot=card]") as HTMLElement;
-    expect(within(defaultCard).getByText("Yes")).toBeInTheDocument();
+    const defaultFolder = defaultRouteFolder();
+    expect(within(defaultFolder).getByText("Yes")).toBeInTheDocument();
     expect(
-      within(defaultCard).getByRole("button", { name: /Go to Q2:/ }),
+      within(defaultFolder).queryByRole("heading", { name: /^Choice:/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(defaultFolder).getByRole("button", {
+        name: "To: Prompt for Q2",
+      }),
     ).toBeInTheDocument();
     expect(
-      within(defaultCard).getByRole("list", { name: /Takes this route/ }),
+      within(defaultFolder).getByRole("list", { name: /^Answers/ }),
     ).toBeInTheDocument();
-    expect(within(defaultCard).queryByText("No")).not.toBeInTheDocument();
+    expect(within(defaultFolder).queryByText("No")).not.toBeInTheDocument();
+    expect(defaultFolder.closest("[data-slot=card]")).toBeNull();
 
-    const noRow = screen.getByText("No").closest("li") as HTMLElement;
-    expect(defaultCard.contains(noRow)).toBe(false);
+    const noRow = optionRow("No");
+    expect(defaultFolder.contains(noRow)).toBe(false);
+    expect(
+      within(noRow).getByRole("heading", { name: "Choice: No" }),
+    ).toBeInTheDocument();
     expect(within(noRow).getByText("End of flow")).toBeInTheDocument();
   });
 
@@ -159,15 +214,20 @@ describe("a live question", () => {
       />,
     );
 
-    const defaultCard = screen
-      .getByText("Default route")
-      .closest("[data-slot=card]") as HTMLElement;
-    const leftover = within(defaultCard).getByRole("list", {
-      name: /Takes this route/,
+    const defaultFolder = defaultRouteFolder();
+    const leftover = within(defaultFolder).getByRole("list", {
+      name: /^Answers/,
     });
     expect(within(leftover).getByText("Yes")).toBeInTheDocument();
     expect(within(leftover).getByText("No")).toBeInTheDocument();
-    expect(within(defaultCard).getAllByText("Prompt for Q2")).toHaveLength(1);
+    expect(
+      within(leftover).queryByRole("heading", { name: /^Choice:/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(defaultFolder).getAllByRole("button", {
+        name: "To: Prompt for Q2",
+      }),
+    ).toHaveLength(1);
   });
 
   it("names an end-of-flow target rather than leaving it blank", () => {
@@ -181,7 +241,7 @@ describe("a live question", () => {
   it("explains a dead edge in terms of the answer, not the target", () => {
     panelFor(Q2);
 
-    // The group card carries the explanation once, not once more per row --
+    // The group carries the explanation once, not once more per row --
     // see `Options.tsx`'s `hideDeadNote`.
     expect(
       screen.getByText(/tied to an answer this question doesn't have anymore/i),
@@ -199,6 +259,13 @@ describe("a live question", () => {
 
     expect(screen.queryByText("Nothing to report")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Diagnostics")).not.toBeInTheDocument();
+  });
+
+  it("does not list incoming routes", () => {
+    panelFor(Q1);
+
+    expect(screen.queryByText("Reached from")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing routes here/)).not.toBeInTheDocument();
   });
 });
 
@@ -229,26 +296,115 @@ describe("edit controls", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("appear, collapsed, once the version is an open draft", async () => {
+  it("does not teach how answers, archives, or add-answer work", async () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
 
-    // Closed by default -- opening it is what reveals the actual form. Q1
-    // takes options, so the default-route section's own button is
-    // labeled distinctly from "Add a specific route" (that name is
-    // reserved for a specific answer's own card -- see below).
-    const toggle = screen.getByRole("button", { name: "+ Add a default route" });
+    expect(screen.queryByText(/Added last/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Retiring archives/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "How answers route" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "What the default route does" }),
+    ).not.toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "Edit question" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Edit$/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "+ Add an answer" }));
+    expect(screen.getByRole("dialog", { name: "Add an answer" })).toBeInTheDocument();
+    expect(
+      screen.queryByText(/A new answer with no route yet/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/answers are added before the routes/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables deleting a guarded answer with a tooltip, not a paragraph", () => {
+    panelFor(Q1, true);
+
+    const yesRow = optionRow("Yes");
+    const remove = within(yesRow).getByRole("button", { name: "Delete answer" });
+    expect(remove).toBeDisabled();
+    expect(remove).toHaveAttribute(
+      "title",
+      "A route still uses this answer. Remove that route first.",
+    );
+    expect(
+      screen.queryByText(/A route still uses this answer/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers canvas pick and End the flow here for a missing default route, not a destination list", async () => {
+    const user = userEvent.setup();
+    const onStartAddRoute = vi.fn();
+    const graph = makeGraph();
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={onStartAddRoute}
+        onCancelPick={vi.fn()}
+      />,
+    );
+
+    const folder = defaultRouteFolder();
+    expect(within(folder).queryByLabelText("Go to")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add route" })).not.toBeInTheDocument();
+    expect(
+      within(folder).getByRole("button", { name: "End the flow here" }),
+    ).toBeInTheDocument();
 
-    await user.click(toggle);
+    await user.click(
+      within(folder).getByRole("button", { name: "+ Add a default route" }),
+    );
 
-    expect(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
+    expect(onStartAddRoute).toHaveBeenCalledWith(Q1, null, "the default route");
+  });
+
+  it("shows Cancel add route on the default route currently mid-add", async () => {
+    const user = userEvent.setup();
+    const onCancelPick = vi.fn();
+    const graph = makeGraph();
+    const question = graph.questions.find((item) => item.id === Q1);
+    if (question === undefined) throw new Error("no such question in the fixture");
+    renderWithProviders(
+      <DetailPanel
+        graph={graph}
+        question={question}
+        editable
+        retargetingEdgeId={null}
+        addingRouteOptionId={null}
+        addingRouteQuestionId={Q1}
+        onSelectQuestion={vi.fn()}
+        onStartRetarget={vi.fn()}
+        onStartAddRoute={vi.fn()}
+        onCancelPick={onCancelPick}
+      />,
+    );
+
+    const folder = defaultRouteFolder();
+    expect(
+      within(folder).queryByRole("button", { name: "+ Add a default route" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(folder).getByRole("button", { name: "Cancel add route" }));
+
+    expect(onCancelPick).toHaveBeenCalled();
   });
 
   it("keep an answer's rename collapsed until Edit is clicked, and delete visible beside it", async () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
-    const section = screen.getByRole("region", { name: /^Options/ });
+    const section = screen.getByRole("region", { name: /^Answers/ });
 
     expect(within(section).queryByLabelText("Label")).not.toBeInTheDocument();
     expect(
@@ -259,9 +415,17 @@ describe("edit controls", () => {
       within(section).getAllByRole("button", { name: "Edit answer" })[0] as HTMLElement,
     );
 
-    expect(within(section).getByLabelText("Label")).toBeInTheDocument();
-    expect(within(section).getByRole("button", { name: "Save" })).toBeInTheDocument();
-    expect(within(section).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Edit answer" });
+    expect(within(dialog).getByLabelText("Label")).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("radio", { name: "Default path" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("radio", { name: "Specific path" })).toBeChecked();
+    expect(
+      within(dialog).getByRole("button", { name: "Choose destination" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
   it("asks before deleting an answer", async () => {
@@ -300,7 +464,7 @@ describe("edit controls", () => {
         onCancelPick={vi.fn()}
       />,
     );
-    const maybeRow = screen.getByText("Maybe").closest("li") as HTMLElement;
+    const maybeRow = optionRow("Maybe");
 
     await user.click(within(maybeRow).getByRole("button", { name: "Delete answer" }));
 
@@ -319,15 +483,18 @@ describe("edit controls", () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
     await user.click(changeDestinationTrigger(yesRow));
 
     expect(
-      screen.getByRole("button", { name: "Jump to a specific question" }),
+      within(destinationMenu()).getByRole("button", { name: "Change destination" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "End the flow here" }),
+      within(destinationMenu()).getByRole("button", { name: "End the flow here" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/What should happen after this answer/),
+    ).not.toBeInTheDocument();
   });
 
   it("asks the map to start a retarget, naming the route being retargeted", async () => {
@@ -350,10 +517,10 @@ describe("edit controls", () => {
       />,
     );
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
     await user.click(changeDestinationTrigger(yesRow));
     await user.click(
-      screen.getByRole("button", { name: "Jump to a specific question" }),
+      within(destinationMenu()).getByRole("button", { name: "Change destination" }),
     );
 
     expect(onStartRetarget).toHaveBeenCalledWith(E_YES_TO_Q2, 'Where "Yes" leads');
@@ -379,7 +546,7 @@ describe("edit controls", () => {
       />,
     );
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
 
     expect(
       within(yesRow).queryByRole("button", { name: "Change destination" }),
@@ -389,24 +556,30 @@ describe("edit controls", () => {
     expect(onCancelPick).toHaveBeenCalled();
   });
 
-  it("offers no 'Add a specific route' on an answer that already has one", () => {
-    // "Yes" already routes to Q2 in the fixture -- adding a second route
-    // through this affordance isn't offered; retargeting the existing one
-    // is the way to change where it goes.
+  it("offers no row-level Own route on an answer that already has a destination", async () => {
+    const user = userEvent.setup();
     panelFor(Q1, true);
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
     expect(
       within(yesRow).queryByRole("button", { name: "Add a specific route" }),
     ).not.toBeInTheDocument();
+    expect(
+      within(yesRow).queryByRole("button", { name: "Own route" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(yesRow).getByRole("button", { name: "Edit answer" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit answer" });
+    expect(within(dialog).getByRole("radio", { name: "Specific path" })).toBeChecked();
+    expect(
+      within(dialog).getByRole("button", { name: "Choose destination" }),
+    ).toBeInTheDocument();
   });
 
-  it("asks the map to start adding a route for an answer that has none yet", async () => {
+  it("asks the map to start adding a route from the edit-answer dialog", async () => {
     const user = userEvent.setup();
     const onStartAddRoute = vi.fn();
     const graph = makeGraph();
-    // Strip "Yes"'s existing edge so it has no route yet -- the affordance
-    // this test exercises is only offered in that case.
     graph.edges = graph.edges.filter((item) => item.id !== E_YES_TO_Q2);
     const question = graph.questions.find((item) => item.id === Q1);
     if (question === undefined) throw new Error("no such question in the fixture");
@@ -424,9 +597,13 @@ describe("edit controls", () => {
       />,
     );
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
+    await user.click(within(yesRow).getByRole("button", { name: "Edit answer" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit answer" });
+    expect(within(dialog).getByRole("radio", { name: "Default path" })).toBeChecked();
+    await user.click(within(dialog).getByRole("radio", { name: "Specific path" }));
     await user.click(
-      within(yesRow).getByRole("button", { name: "Add a specific route" }),
+      within(dialog).getByRole("button", { name: "Choose destination" }),
     );
 
     expect(onStartAddRoute).toHaveBeenCalledWith(Q1, OPTION_YES, expect.any(String));
@@ -453,7 +630,7 @@ describe("edit controls", () => {
       />,
     );
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
 
     expect(
       within(yesRow).queryByRole("button", { name: "Add a specific route" }),
@@ -469,13 +646,17 @@ describe("edit controls", () => {
     const user = userEvent.setup();
     panelFor(Q1, true);
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
-    const noRow = screen.getByText("No").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
+    const noRow = optionRow("No");
     await user.click(changeDestinationTrigger(yesRow));
-    expect(screen.getByRole("button", { name: "End the flow here" })).toBeEnabled();
+    expect(
+      within(destinationMenu()).getByRole("button", { name: "End the flow here" }),
+    ).toBeEnabled();
     await user.keyboard("{Escape}");
     await user.click(changeDestinationTrigger(noRow));
-    expect(screen.getByRole("button", { name: "End the flow here" })).toBeDisabled();
+    expect(
+      within(destinationMenu()).getByRole("button", { name: "End the flow here" }),
+    ).toBeDisabled();
   });
 
   it("offers a one-click fall-through only when this question has a default route", async () => {
@@ -483,7 +664,7 @@ describe("edit controls", () => {
     // "Yes"'s own edge has nothing to fall through to -- no button.
     const user = userEvent.setup();
     panelFor(Q1, true);
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
     await user.click(changeDestinationTrigger(yesRow));
     expect(
       screen.queryByRole("button", { name: /Use the default route/ }),
@@ -523,7 +704,7 @@ describe("edit controls", () => {
       />,
     );
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
     // Available without opening this answer's Edit text toggle, like the
     // rest of "Change destination" -- it acts immediately and isn't
     // hidden away.
@@ -562,9 +743,7 @@ describe("edit controls", () => {
       />,
     );
 
-    const defaultRouteSection = screen
-      .getByText("Default route")
-      .closest("[data-slot=card]") as HTMLElement;
+    const defaultRouteSection = defaultRouteFolder();
     await user.click(changeDestinationTrigger(defaultRouteSection));
     expect(
       screen.queryByRole("button", {
@@ -575,13 +754,14 @@ describe("edit controls", () => {
 
   it("offers no per-option add-route affordance on a question whose answers select nothing", async () => {
     // A scale question has no options at all, so there's no per-option
-    // card to nest an "Add a specific route" into -- only the section-wide
+    // row to nest an "Add a specific route" into -- only the section-wide
     // default route, which every route on such a question uses. Q2's own
     // default route is stripped here so that affordance is actually
     // offered -- the base fixture already has one (E_Q2_TO_ARCHIVED),
     // which the "hide when one already exists" rule would otherwise hide
     // it behind.
     const user = userEvent.setup();
+    const onStartAddRoute = vi.fn();
     const graph = makeGraph();
     graph.edges = graph.edges.filter((item) => item.id !== E_Q2_TO_ARCHIVED);
     const question = graph.questions.find((item) => item.id === Q2);
@@ -595,25 +775,25 @@ describe("edit controls", () => {
         addingRouteOptionId={null}
         onSelectQuestion={vi.fn()}
         onStartRetarget={vi.fn()}
-        onStartAddRoute={vi.fn()}
+        onStartAddRoute={onStartAddRoute}
         onCancelPick={vi.fn()}
       />,
     );
 
     // The per-option button reads "Add a specific route" -- Q2 has no
-    // options at all, so there's no card to render one on.
+    // options at all, so there's no row to render one on.
     expect(
       screen.queryByRole("button", { name: "Add a specific route" }),
     ).not.toBeInTheDocument();
+    expect(defaultRouteFolder()).toBeInTheDocument();
     expect(
-      screen.getByRole("button", {
-        name: "What the default route does",
-      }),
+      within(defaultRouteFolder()).getByRole("button", { name: "End the flow here" }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "+ Add a route" }));
 
-    expect(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
+    expect(onStartAddRoute).toHaveBeenCalledWith(Q2, null, "the default route");
+    expect(screen.queryByRole("button", { name: "Add route" })).not.toBeInTheDocument();
   });
 });
 
@@ -647,7 +827,7 @@ describe("change highlighting", () => {
       edges: new Map([[E_YES_TO_Q2, "changed"]]),
     });
 
-    const yesRow = screen.getByText("Yes").closest("li") as HTMLElement;
+    const yesRow = optionRow("Yes");
     expect(within(yesRow).queryByText("Added")).not.toBeInTheDocument();
     expect(within(yesRow).queryByText("Changed")).not.toBeInTheDocument();
   });

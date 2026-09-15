@@ -21,11 +21,14 @@ export function BlockingList({
   return (
     <ul className="mt-2 flex list-none flex-col gap-1 p-0">
       {items.map((item) => (
-        <li key={item.questionId} className="flex flex-wrap items-baseline gap-1.5">
-          <Button variant="link" onClick={() => onSelectQuestion(item.questionId)}>
-            {item.code}
+        <li key={item.questionId}>
+          <Button
+            variant="link"
+            className="h-auto min-h-0 p-0 text-left"
+            onClick={() => onSelectQuestion(item.questionId)}
+          >
+            {item.prompt}
           </Button>
-          <span className="text-[0.85rem] opacity-85">{item.prompt}</span>
         </li>
       ))}
     </ul>
