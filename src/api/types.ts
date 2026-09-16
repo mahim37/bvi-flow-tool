@@ -60,10 +60,6 @@ export interface Version {
   questionnaire_spawned_from_version: UUID | null;
   name: string;
   label: string;
-  /** Null for every version published before numbering existed (phase
-   * 10), so nothing here may assume it exists -- show the label or the
-   * name instead of inventing a number for it. */
-  number: number | null;
   is_active: boolean;
   is_draft: boolean;
   routing_model: RoutingModel;

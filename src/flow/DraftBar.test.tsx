@@ -49,7 +49,6 @@ function renderBar(
       is_draft: true,
       is_active: false,
       is_stale: true,
-      number: 2,
       label: "tests",
     },
     change_request: openProposal(),

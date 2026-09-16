@@ -262,18 +262,10 @@ export function diffValue(value: string | number | boolean | null): string {
   return String(value);
 }
 
-/** A version, as the picker and every banner name it. `number` is the
- * per-product sequence (phase 10) and leads whenever it exists, with
- * `label` -- the checkpoint name somebody chose -- kept alongside it
- * rather than dropped. Null for every version published before
- * numbering existed, so those fall back to the label, or the
- * questionnaire's own `name` when there is no label either. */
+/** A version, as the picker and every banner name it. `number` is
+ * backend-only (phase 10's per-product sequence, never served to a
+ * client) -- this is the label, or the questionnaire's own `name` when
+ * there is no label either. */
 export function versionLabel(version: Version): string {
-  // `== null` catches both: a version predating numbering serializes
-  // `number` as an explicit JSON `null`, but a backend that has not yet
-  // deployed the field at all omits the key, which reads as `undefined`
-  // here -- `types.ts` promises `number | null` and cannot promise which
-  // of those two absences a live deployment actually sends.
-  if (version.number == null) return version.label || version.name;
-  return version.label ? `v${version.number} · ${version.label}` : `v${version.number}`;
+  return version.label || version.name;
 }

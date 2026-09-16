@@ -230,14 +230,15 @@ export function ReviewView() {
           </div>
           <p className="text-muted-foreground m-0 max-w-[72ch]">
             {base_version === null
-              ? `${versionLabel(version)}. This is the first version, so everything here is new.`
+              ? `${versionLabel(version)}. This is the first version, so there is nothing to compare it against.`
               : `${versionLabel(version)}, compared with ${versionLabel(base_version)}.`}
           </p>
         </div>
         {diff.is_empty ? (
           <p className={cn(emptyText, "my-0")}>
-            Nothing has changed. This version still says exactly what the one it was
-            copied from says.
+            {base_version === null
+              ? "There is no earlier version to diff this one against."
+              : "Nothing has changed. This version still says exactly what the one it was copied from says."}
           </p>
         ) : (
           <ul

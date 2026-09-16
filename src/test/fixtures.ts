@@ -73,7 +73,6 @@ export function makeGraph(overrides: Partial<Graph> = {}): Graph {
       questionnaire_spawned_from_version: null,
       name: "Risk profiling v3",
       label: "",
-      number: 3,
       is_active: true,
       is_draft: false,
       routing_model: "graph",
