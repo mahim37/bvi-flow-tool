@@ -50,16 +50,13 @@ describe("AddQuestion", () => {
     expect(screen.getByLabelText("Question text")).toBeInTheDocument();
   });
 
-  it("prefills QID with the next Q-prefixed code from this graph and lets it be edited", async () => {
-    const user = await openAddQuestion();
+  it("prefills QID with the next Q-prefixed code from this graph and does not allow it to be edited", async () => {
+    await openAddQuestion();
 
     const qid = screen.getByLabelText("QID");
     expect(qid).toBeVisible();
     expect(qid).toHaveValue("Q5");
-
-    await user.clear(qid);
-    await user.type(qid, "custom");
-    expect(qid).toHaveValue("custom");
+    expect(qid).toHaveAttribute("readonly");
   });
 
   it("focuses Question text on open, not the prefilled QID", async () => {

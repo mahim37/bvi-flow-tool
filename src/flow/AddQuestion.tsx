@@ -139,11 +139,9 @@ function AddQuestionForm({
   const sectionId = useId();
   const requiredId = useId();
 
-  const suggestedCode = nextQuestionCode(
+  const code = nextQuestionCode(
     usedQuestionCodes(graph, review.data?.diff, reservedCodes),
   );
-  const [codeOverride, setCodeOverride] = useState<string | null>(null);
-  const code = codeOverride ?? suggestedCode;
   const [prompt, setPrompt] = useState("");
   const [answerType, setAnswerType] = useState<AnswerType>("single_choice");
   const [section, setSection] = useState<string>(NO_SECTION);
@@ -184,14 +182,7 @@ function AddQuestionForm({
       )}
 
       <Field label="QID" htmlFor={codeId}>
-        <Input
-          id={codeId}
-          value={code}
-          required
-          placeholder="QID"
-          {...(addQuestion.isPending ? { disabled: true } : {})}
-          onChange={(event) => setCodeOverride(event.target.value)}
-        />
+        <Input id={codeId} value={code} readOnly />
       </Field>
 
       <Field label="Question text" htmlFor={promptId}>
