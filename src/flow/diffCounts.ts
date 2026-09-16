@@ -1,18 +1,31 @@
 import type { DiffCounts, Graph, ItemDiff } from "../api/types";
+import { groupDiffByNode } from "./diffGroups";
 
 /**
- * Review header pills. `added` / `removed` are questions only. Every other
- * diff row (new edges, option edits, question field edits, sections) is
- * `changed`.
+ * Review header pills, one per question (or section) group. Extra option
+ * and edge rows under the same question do not bump the count.
  */
-export function questionDiffCounts(items: readonly ItemDiff[]): DiffCounts {
+export function questionDiffCounts(
+  items: readonly ItemDiff[],
+  graph: Graph,
+): DiffCounts {
   let added = 0;
   let removed = 0;
   let changed = 0;
-  for (const item of items) {
-    if (item.kind === "question" && item.change === "added") added += 1;
-    else if (item.kind === "question" && item.change === "removed") removed += 1;
-    else changed += 1;
+  for (const group of groupDiffByNode(items, graph)) {
+    if (group.kind !== "question") {
+      changed += 1;
+      continue;
+    }
+    if (group.items.some((item) => item.kind === "question" && item.change === "added")) {
+      added += 1;
+    } else if (
+      group.items.some((item) => item.kind === "question" && item.change === "removed")
+    ) {
+      removed += 1;
+    } else {
+      changed += 1;
+    }
   }
   return { added, removed, changed };
 }

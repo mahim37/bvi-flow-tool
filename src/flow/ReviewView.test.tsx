@@ -9,6 +9,7 @@ import {
   OPTION_YES,
   Q1,
   Q2,
+  Q4_UNREACHABLE,
   VERSION_ID,
   makeGraph,
 } from "../test/fixtures";
@@ -293,7 +294,7 @@ describe("ReviewView change-count pills", () => {
     window.localStorage.clear();
   });
 
-  it("shows question added/removed, and puts every other row in changed", () => {
+  it("counts one question even when several of its answers and edges also changed", () => {
     signIn(REVIEWER_1);
     renderReview(proposal(), {
       summary: { added: 99, removed: 99, changed: 99 },
@@ -308,7 +309,13 @@ describe("ReviewView change-count pills", () => {
             base_id: Q2,
             question_id: Q2,
           }),
-          diffRow({ kind: "question", change: "changed", key: "edited", draft_id: Q1 }),
+          diffRow({
+            kind: "question",
+            change: "changed",
+            key: "edited",
+            draft_id: Q4_UNREACHABLE,
+            question_id: Q4_UNREACHABLE,
+          }),
         ],
         options: [
           diffRow({
@@ -333,7 +340,7 @@ describe("ReviewView change-count pills", () => {
     const counts = screen.getByRole("list", { name: "Change counts" });
     expect(counts).toHaveTextContent("+1 question");
     expect(counts).toHaveTextContent("−1 removed");
-    expect(counts).toHaveTextContent("3 changed");
+    expect(counts).toHaveTextContent("1 changed");
     expect(counts).not.toHaveTextContent("added");
     expect(counts).not.toHaveTextContent("~");
     expect(counts).not.toHaveTextContent("99");

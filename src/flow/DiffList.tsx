@@ -2,14 +2,13 @@ import { useMemo } from "react";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { Accordion as AccordionPrimitive } from "radix-ui";
 
-import type { DiffChange, FieldChange, Graph, ItemDiff, UUID } from "../api/types";
+import type { DiffChange, Graph, ItemDiff, UUID } from "../api/types";
 import { Accordion, AccordionContent, AccordionItem } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { subCount, subHeading } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
 import { groupDiffByNode } from "./diffGroups";
 import { diffPieces } from "./diffSentence";
-import { diffValue, fieldLabel } from "./labels";
 
 interface DiffListProps {
   items: ItemDiff[];
@@ -83,39 +82,6 @@ function MapRef({
   );
 }
 
-/** One side of a unified diff. `<ins>`/`<del>` carry the meaning; colour
- * and the +/- gutter are the same signal GitHub uses, not a second one. */
-function DiffLine({ side, children }: { side: "added" | "removed"; children: string }) {
-  const Comp = side === "added" ? "ins" : "del";
-  return (
-    <Comp
-      className={cn(
-        "flex gap-2 px-2.5 py-1 font-mono text-[13px] leading-snug no-underline",
-        side === "added"
-          ? "bg-green/10 text-green"
-          : "bg-destructive/10 text-destructive",
-      )}
-    >
-      <span className="w-3 shrink-0 select-none" aria-hidden="true">
-        {side === "added" ? "+" : "−"}
-      </span>
-      <span className="min-w-0 whitespace-pre-wrap">{children}</span>
-    </Comp>
-  );
-}
-
-function FieldHunk({ field }: { field: FieldChange }) {
-  return (
-    <div>
-      <div className="bg-muted text-muted-foreground px-2.5 py-1 font-mono text-[11px] tracking-wide">
-        {fieldLabel(field.field)}
-      </div>
-      <DiffLine side="removed">{diffValue(field.base)}</DiffLine>
-      <DiffLine side="added">{diffValue(field.draft)}</DiffLine>
-    </div>
-  );
-}
-
 function DiffItem({
   item,
   graph,
@@ -163,18 +129,6 @@ function DiffItem({
             )}
           </span>
         </header>
-
-        {item.fields.length > 0 && (
-          // Only rendered for a change: an added or removed item has
-          // no pair to show, and listing every one of its fields
-          // against "not set" would bury the four that a reviewer
-          // actually has to read.
-          <div className="flex min-w-0 flex-col">
-            {item.fields.map((field) => (
-              <FieldHunk key={field.field} field={field} />
-            ))}
-          </div>
-        )}
       </article>
     </li>
   );
@@ -217,7 +171,6 @@ export function DiffList({ items, graph, onShowOnMap }: DiffListProps) {
                   >
                     {group.title}
                   </span>
-                  <span className={cn(subCount, "shrink-0")}>{group.items.length}</span>
                 </AccordionPrimitive.Trigger>
               </AccordionPrimitive.Header>
               <AccordionContent className="pb-2 [&_p:not(:last-child)]:mb-0">

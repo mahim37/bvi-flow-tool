@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ItemDiff } from "../api/types";
-import { Q1, Q3_ARCHIVED, makeGraph } from "../test/fixtures";
+import { Q1, Q2, Q3_ARCHIVED, Q4_UNREACHABLE, makeGraph } from "../test/fixtures";
 import { questionDiffCounts, visibleDiffItems } from "./diffCounts";
 
 function item(
@@ -17,22 +17,46 @@ function item(
 }
 
 describe("questionDiffCounts", () => {
-  it("counts added and removed questions only, and puts every other row in changed", () => {
+  it("counts one question even when several of its edges and answers also changed", () => {
     expect(
-      questionDiffCounts([
-        item({ kind: "question", change: "added", key: "new" }),
-        item({ kind: "question", change: "added", key: "also-new" }),
-        item({ kind: "question", change: "removed", key: "gone" }),
-        item({ kind: "question", change: "changed", key: "edited" }),
-        item({ kind: "option", change: "added", key: "yes" }),
-        item({ kind: "edge", change: "added", key: "route" }),
-        item({ kind: "section", change: "changed", key: "intro" }),
-      ]),
-    ).toEqual({ added: 2, removed: 1, changed: 4 });
+      questionDiffCounts(
+        [
+          item({
+            kind: "question",
+            change: "added",
+            key: "Q1",
+            draft_id: Q1,
+            question_id: Q1,
+          }),
+          item({ kind: "option", change: "added", key: "yes", question_id: Q1 }),
+          item({ kind: "edge", change: "added", key: "route", question_id: Q1 }),
+          item({
+            kind: "question",
+            change: "removed",
+            key: "Q2",
+            base_id: Q2,
+            question_id: Q2,
+          }),
+          item({
+            kind: "question",
+            change: "changed",
+            key: "Q4",
+            draft_id: Q4_UNREACHABLE,
+            question_id: Q4_UNREACHABLE,
+          }),
+          item({ kind: "section", change: "changed", key: "intro", question_id: null }),
+        ],
+        makeGraph(),
+      ),
+    ).toEqual({ added: 1, removed: 1, changed: 2 });
   });
 
   it("is zeros when there are no rows", () => {
-    expect(questionDiffCounts([])).toEqual({ added: 0, removed: 0, changed: 0 });
+    expect(questionDiffCounts([], makeGraph())).toEqual({
+      added: 0,
+      removed: 0,
+      changed: 0,
+    });
   });
 });
 
