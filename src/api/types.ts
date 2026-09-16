@@ -197,6 +197,15 @@ export interface Lock {
   expires_at: Timestamp;
 }
 
+/** One person who could stand in for a draft's author on `submit`, when
+ * the author is themselves one of `REQUIRED_REVIEWER_EMAILS` (see
+ * `labels.ts`) and so cannot review their own proposal. See
+ * `fetchEligibleSubstituteReviewers`. */
+export interface SubstituteReviewer {
+  id: UUID;
+  email: string;
+}
+
 /**
  * One reviewer's verdict on one submission of a proposal.
  *
