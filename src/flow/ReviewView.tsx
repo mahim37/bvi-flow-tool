@@ -27,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { emptyText, mutedHint, panelHeading, panelSection } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
 import { useVersionContext } from "./versionContext";
-import { decisionLabel, formatTimestamp, versionLabel } from "./labels";
+import { decisionLabel, formatTimestamp } from "./labels";
 import { useReviewErrorHandler, writeErrorMessage } from "./useWriteError";
 
 function ReviewHistory({ changeRequest }: { changeRequest: ChangeRequest }) {
@@ -189,7 +189,7 @@ export function ReviewView() {
     [...diff.questions, ...diff.options, ...diff.edges, ...diff.sections],
     graph,
   );
-  const counts = questionDiffCounts(items);
+  const counts = questionDiffCounts(items, graph);
 
   const issueItems: ChromeAlert[] = version.is_draft
     ? draftIssues(graph, publish_blocker).map((issue) => {
@@ -233,11 +233,6 @@ export function ReviewView() {
             </h2>
             <AlertsButton kind="Issues" items={issueItems} />
           </div>
-          <p className="text-muted-foreground m-0 max-w-[72ch]">
-            {base_version === null
-              ? `${versionLabel(version)}. This is the first version, so there is nothing to compare it against.`
-              : `${versionLabel(version)}, compared with ${versionLabel(base_version)}.`}
-          </p>
         </div>
         {diff.is_empty ? (
           <p className={cn(emptyText, "my-0")}>

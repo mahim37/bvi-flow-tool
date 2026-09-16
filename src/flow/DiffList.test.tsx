@@ -260,7 +260,7 @@ describe("DiffList", () => {
     expect(screen.queryByText(/id:/)).not.toBeInTheDocument();
   });
 
-  it("renders a field change as a unified diff of the old and new values", async () => {
+  it("keeps the verbose sentence and does not render a field hunk", async () => {
     const graph = makeGraph();
     const q1 = graph.questions.find((question) => question.id === Q1);
     if (q1 === undefined) throw new Error("fixture is missing Q1");
@@ -280,11 +280,11 @@ describe("DiffList", () => {
     );
 
     await expandNode(q1.prompt);
-    expect(screen.getByText("Prompt")).toBeInTheDocument();
-    expect(screen.getByText("Old prompt").closest("del")).not.toBeNull();
-    expect(screen.getByText("New prompt").closest("ins")).not.toBeNull();
-    expect(screen.queryByText("→")).not.toBeInTheDocument();
-    expect(screen.queryByText("Changed")).not.toBeInTheDocument();
+    expect(screen.getByText(/Changed question/)).toBeInTheDocument();
+    expect(screen.queryByText("Prompt")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old prompt")).not.toBeInTheDocument();
+    expect(screen.queryByText("New prompt")).not.toBeInTheDocument();
+    expect(screen.queryByText("Goes to")).not.toBeInTheDocument();
   });
 
   it("lets a reviewer jump to the question the change hangs off", async () => {
