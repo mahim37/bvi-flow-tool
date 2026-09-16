@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ChangeRequest } from "../api/types";
 import { VERSION_ID, makeGraph } from "../test/fixtures";
@@ -35,6 +35,13 @@ function openProposal(overrides: Partial<ChangeRequest> = {}): ChangeRequest {
   };
 }
 
+function signIn(email: string, permissionCodes: string[]) {
+  window.localStorage.setItem(
+    "bvi-flow-tool.identity",
+    JSON.stringify({ email, name: email, role: null, permission_codes: permissionCodes }),
+  );
+}
+
 function renderBar(
   graph = makeGraph({
     version: {
@@ -56,6 +63,31 @@ function renderBar(
 }
 
 describe("DraftBar", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("offers Discard to any publish-grant holder, not just the two required reviewers", () => {
+    // `editing._require_author_or_publisher` (the server check behind
+    // Discard) accepts anyone holding `publish_flow_tool` -- a wider set
+    // than the two people `REQUIRED_REVIEWER_EMAILS` fixes for `submit`'s
+    // own review pair. This account is neither the author nor one of
+    // those two, and must still see the button.
+    signIn("some-other-publisher@example.com", ["view_flow_tool", "publish_flow_tool"]);
+    renderBar();
+
+    expect(screen.getByRole("button", { name: "Discard draft" })).toBeInTheDocument();
+  });
+
+  it("does not offer Discard to a viewer with neither authorship nor the publish grant", () => {
+    signIn("some-viewer@example.com", ["view_flow_tool"]);
+    renderBar();
+
+    expect(
+      screen.queryByRole("button", { name: "Discard draft" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps draft warnings behind a red Alerts control", async () => {
     const user = userEvent.setup();
     renderBar();

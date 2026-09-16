@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
-import type { Graph, UUID, VersionListItem } from "../api/types";
+import { PUBLISH_FLOW_TOOL, type Graph, type UUID, type VersionListItem } from "../api/types";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -20,13 +20,8 @@ import { AlertsButton } from "./AlertsButton";
 import type { ChromeAlert } from "./AlertsButton";
 import { ConfirmAction } from "./ConfirmAction";
 import { EditorDialog } from "./EditorDialog";
-import {
-  REQUIRED_REVIEWER_EMAILS,
-  formatTimestamp,
-  statusLabel,
-  statusMeaning,
-  versionLabel,
-} from "./labels";
+import { formatTimestamp, statusLabel, statusMeaning, versionLabel } from "./labels";
+import { SubmitForReview } from "./SubmitForReview";
 import {
   useReviewErrorHandler,
   useWriteErrorHandler,
@@ -344,17 +339,25 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // refusal. `editing.discard_draft` is wider (see `isPublisher` below);
   // `isAuthor` alone still gates Withdraw, which stayed author-only.
   const isAuthor = changeRequest.created_by_email === identity?.email;
-  // Whether *this* account is one of the two required reviewers -- not
-  // `isNamedReviewer` below, which only answers "is one of *this*
-  // proposal's two," a fact that does not exist yet for an OPEN draft
-  // (`submit` is what names them, and it always names the same two
-  // people). Checked against `REQUIRED_REVIEWER_EMAILS` directly rather
-  // than a `reviewers/` list call -- there is no longer a picker for that
-  // endpoint to populate, and with only ever two possible people, a fetch
-  // buys nothing a constant doesn't already have.
+  // Whether *this* account holds the publish grant at all -- not "is one
+  // of the two required reviewers" (that's `SubmitForReview`'s own,
+  // narrower check against `REQUIRED_REVIEWER_EMAILS`, for the one thing
+  // that's genuinely fixed to those two people: who reviews a
+  // submission). `editing._require_author_or_publisher` (the server check
+  // behind Discard) is deliberately wider than that -- "trusted with
+  // review at all," the same grant that qualifies someone for the role in
+  // the first place, since discarding an OPEN draft happens before
+  // `submit` has named anyone. Reading `permission_codes` off the signed-
+  // in identity rather than a server round trip: it is already on hand
+  // from `session/`, and is a rendering hint only -- the server's own
+  // check is what actually decides. `?? []` guards a stale identity
+  // remembered in `localStorage` from before this field existed on it --
+  // `useAuth.ts`'s own docstring already flags that nothing here
+  // proactively repairs one of those against a dead cookie; a login
+  // predating `permission_codes` leaves it `undefined` rather than `[]`.
   const isPublisher =
     identity !== null &&
-    (REQUIRED_REVIEWER_EMAILS as readonly string[]).includes(identity.email);
+    (identity.permission_codes ?? []).includes(PUBLISH_FLOW_TOOL);
   const isOpen = changeRequest.status === "open";
   // Withdrawing accepts both, and drops an approval rather than banking
   // it: what comes back is an editable proposal, and an approval of an
@@ -464,39 +467,26 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
       <div className="flex flex-wrap items-center gap-2">
         <AlertsButton items={alerts} />
 
-        {/* No more reviewer picker -- `submit` always sends this to the
-              same two required people (`REQUIRED_REVIEWER_EMAILS`), so
-              there is nothing left for a form to ask. A plain confirm
-              rather than an instant click: submitting still freezes the
-              draft for editing and, for a BREAK-hosted one, pushes its
-              content to break for real -- not nothing, even with no
-              input left to fill in. Author-only, same restriction
-              Withdraw already has (`editing.submit`'s own
-              `_require_author`) -- a draft may be edited by more than one
-              person, but deciding it is ready for review is the author's
-              call. */}
+        {/* Author-only, same restriction Withdraw already has
+              (`editing.submit`'s own `_require_author`) -- a draft may be
+              edited by more than one person, but deciding it is ready
+              for review is the author's call. `submit` always sends this
+              to the same two required people (`REQUIRED_REVIEWER_EMAILS`)
+              -- except when the author is themselves one of the two, the
+              one case `SubmitForReview` turns into a form instead of a
+              plain confirm. */}
         {isOpen && isAuthor && (
-          <ConfirmAction
-            message={`Submit for review? ${REQUIRED_REVIEWER_EMAILS.join(" and ")} will both need to approve before this publishes.`}
-            confirmLabel="Submit for review"
-            onConfirm={() => submitDraft.mutate(undefined, { onError: onWriteError })}
-          >
-            {(open) => (
-              <Button
-                variant="primary"
-                loading={submitDraft.isPending}
-                disabled={
-                  editRefused ||
-                  withdrawDraft.isPending ||
-                  discardDraft.isPending ||
-                  releaseLock.isPending
-                }
-                onClick={open}
-              >
-                Submit for review
-              </Button>
-            )}
-          </ConfirmAction>
+          <SubmitForReview
+            versionId={versionId}
+            authorEmail={changeRequest.created_by_email}
+            disabled={
+              editRefused ||
+              withdrawDraft.isPending ||
+              discardDraft.isPending ||
+              releaseLock.isPending
+            }
+            submitDraft={submitDraft}
+          />
         )}
 
         {/* Discard accepts the author or anyone holding the publish

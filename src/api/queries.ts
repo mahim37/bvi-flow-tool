@@ -216,8 +216,22 @@ export function useReorderEdges(versionId: UUID) {
 export function useSubmitDraft(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: () => api.submitDraft(versionId),
+    mutationFn: (substituteReviewerId?: UUID) =>
+      api.submitDraft(versionId, substituteReviewerId),
     onSuccess: () => invalidateGraph(client, versionId),
+  });
+}
+
+/** Populates the stand-in picker `useSubmitDraft` needs a
+ * `substituteReviewerId` from. `enabled` is the caller's own "does this
+ * author actually need one" check (they are one of the two required
+ * reviewers) -- fetched only then, since it is otherwise always empty. */
+export function useEligibleSubstituteReviewers(versionId: UUID, enabled: boolean) {
+  return useQuery({
+    queryKey: ["eligible-substitute-reviewers", versionId] as const,
+    queryFn: ({ signal }) => api.fetchEligibleSubstituteReviewers(versionId, signal),
+    enabled,
+    retry: retryUnlessRefused,
   });
 }
 

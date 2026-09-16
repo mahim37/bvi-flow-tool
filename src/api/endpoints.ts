@@ -17,6 +17,7 @@ import type {
   QuestionRecord,
   ReviewPayload,
   StaffIdentity,
+  SubstituteReviewer,
   UUID,
   Version,
   VersionListItem,
@@ -136,11 +137,33 @@ export const reorderEdges = (versionId: UUID, questionId: UUID, edgeIds: UUID[])
     body: { edge_ids: edgeIds },
   });
 
-/** No body -- who reviews it is no longer a choice this call makes.
- * `editing.submit` always resolves the same two required reviewers
- * itself (see `labels.ts`'s `REQUIRED_REVIEWER_EMAILS`). */
-export const submitDraft = (versionId: UUID) =>
-  request<ChangeRequest>(`${version(versionId)}/submit/`, { method: "POST" });
+/** No body needed unless the author is themselves one of the two
+ * required reviewers (see `labels.ts`'s `REQUIRED_REVIEWER_EMAILS`) --
+ * `substituteReviewerId` then stands in for them on that one slot; the
+ * other required reviewer is untouched. `editing.submit`'s own
+ * `_resolve_required_reviewers` is what actually decides whether one is
+ * needed or eligible; this is only the shape. */
+export const submitDraft = (versionId: UUID, substituteReviewerId?: UUID) =>
+  request<ChangeRequest>(`${version(versionId)}/submit/`, {
+    method: "POST",
+    ...(substituteReviewerId !== undefined
+      ? { body: { substitute_reviewer: substituteReviewerId } }
+      : {}),
+  });
+
+/** Who this draft's author could name as `submitDraft`'s
+ * `substituteReviewerId`, per bvi-backend's own
+ * `editing.eligible_substitute_reviewers`. Always answerable -- empty for
+ * an author who isn't one of the two required reviewers, since there is
+ * nothing of theirs to substitute. */
+export const fetchEligibleSubstituteReviewers = (
+  versionId: UUID,
+  signal?: AbortSignal,
+) =>
+  request<SubstituteReviewer[]>(
+    `${version(versionId)}/eligible-substitute-reviewers/`,
+    signal ? { signal } : {},
+  );
 
 export const withdrawDraft = (versionId: UUID) =>
   request<ChangeRequest>(`${version(versionId)}/withdraw/`, { method: "POST" });
