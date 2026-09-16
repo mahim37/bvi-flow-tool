@@ -152,19 +152,45 @@ export function draftChromeState({
   return null;
 }
 
-export function draftChromeLabel(state: DraftChromeState): string {
+export const REQUIRED_REVIEWER_COUNT = 2;
+
+/** How many of the two named reviewers have actually approved. */
+export function reviewApprovalProgress(
+  proposal:
+    | {
+        reviewer_1_approved_at: string | null;
+        reviewer_2_approved_at: string | null;
+      }
+    | null
+    | undefined,
+): { approved: number; required: number } {
+  let approved = 0;
+  if (proposal?.reviewer_1_approved_at) approved += 1;
+  if (proposal?.reviewer_2_approved_at) approved += 1;
+  return { approved, required: REQUIRED_REVIEWER_COUNT };
+}
+
+export function draftChromeLabel(
+  state: DraftChromeState,
+  progress?: { approved: number; required: number },
+): string {
   if (state === "open") return "Open";
   if (state === "locked") return "Locked";
-  if (state === "under_review") return "Under review";
+  if (state === "under_review") {
+    return progress === undefined
+      ? "Under review"
+      : `Under review ${progress.approved}/${progress.required}`;
+  }
   return "Discarded";
 }
 
 /** This account's role on this version, from session grants plus the
  * proposal `graph/` / `review/` / `proposals/` returned.
  *
- * Reviewer while the draft is in review. Editor on an open draft this
- * account can edit: they hold the lock, or nobody does yet and they hold
- * `edit_flow_tool` (the lock is first-write). Everyone else is Viewer. */
+ * Reviewer only while the draft is in review *and* this account is one of
+ * the two named reviewers. Editor on an open draft this account can edit:
+ * they hold the lock, or nobody does yet and they hold `edit_flow_tool`
+ * (the lock is first-write). Everyone else is Viewer. */
 export function canvasCursorRole({
   isDraft,
   status,
@@ -174,6 +200,8 @@ export function canvasCursorRole({
   submittedAt,
   reviewerId,
   reviewerEmail,
+  reviewer1Email,
+  reviewer2Email,
 }: {
   isDraft: boolean;
   status: ChangeRequestStatus | null | undefined;
@@ -183,9 +211,19 @@ export function canvasCursorRole({
   submittedAt?: string | null | undefined;
   reviewerId?: string | null | undefined;
   reviewerEmail?: string | null | undefined;
+  reviewer1Email?: string | null | undefined;
+  reviewer2Email?: string | null | undefined;
 }): CanvasCursorRole {
   if (isDraft && isUnderReview(status, { submittedAt, reviewerId, reviewerEmail })) {
-    return "Reviewer";
+    return isNamedReviewer(
+      {
+        reviewer_1_email: reviewer1Email ?? reviewerEmail ?? null,
+        reviewer_2_email: reviewer2Email ?? null,
+      },
+      identityEmail,
+    )
+      ? "Reviewer"
+      : "Viewer";
   }
   const holdsLock = sameEmail(lockEmail, identityEmail);
   if (isDraft && status === "open" && holdsLock) return "Editor";
