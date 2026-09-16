@@ -1,7 +1,13 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
-import { PUBLISH_FLOW_TOOL, type Graph, type UUID, type VersionListItem } from "../api/types";
+import {
+  PUBLISH_FLOW_TOOL,
+  type ChangeRequest,
+  type Graph,
+  type UUID,
+  type VersionListItem,
+} from "../api/types";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -20,6 +26,7 @@ import { AlertsButton } from "./AlertsButton";
 import type { ChromeAlert } from "./AlertsButton";
 import { ConfirmAction } from "./ConfirmAction";
 import { EditorDialog } from "./EditorDialog";
+import { isUnderReview, reviewRoundFrom, sameEmail } from "./draftState";
 import { formatTimestamp, statusLabel, statusMeaning, versionLabel } from "./labels";
 import { SubmitForReview } from "./SubmitForReview";
 import {
@@ -30,6 +37,9 @@ import {
 
 interface DraftBarProps {
   graph: Graph;
+  /** Live proposal from `graph/` + `review/` + `proposals/`. Falls back
+   * to `graph.change_request` when the layout has not passed one yet. */
+  proposal?: ChangeRequest | null;
   /** Every version of the current questionnaire, drafts included --
    * `editing.create_draft` refuses a second one while any of these has
    * `is_draft: true`, so this is how "Propose a change" knows to offer
@@ -124,12 +134,12 @@ function Cta({
   );
 }
 
-export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
+export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarProps) {
   const { identity, editRefused, reviewRefused } = useAuth();
   const onWriteError = useWriteErrorHandler();
   const onReviewError = useReviewErrorHandler();
   const versionId = graph.version.id;
-  const changeRequest = graph.change_request;
+  const changeRequest = proposal ?? graph.change_request;
 
   const labelId = useId();
   const [label, setLabel] = useState("");
@@ -146,7 +156,6 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
     writeErrorMessage(discardDraft.error) ??
     writeErrorMessage(submitDraft.error) ??
     writeErrorMessage(withdrawDraft.error) ??
-    writeErrorMessage(releaseLock.error) ??
     writeErrorMessage(activate.error);
 
   function startProposal(event: React.FormEvent, close: () => void) {
@@ -327,7 +336,8 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   }
 
   const lock = changeRequest.lock;
-  const heldByMe = lock !== null && lock.email === identity?.email;
+  const heldByMe = sameEmail(lock?.email, identity?.email);
+  const lockedByOther = lock !== null && !heldByMe;
   // `editing.withdraw` is author-only on the server (`_require_author`) --
   // not a permission grant, so offering the button to anyone else would be
   // a control that always 403s. Checked here rather than left to the
@@ -338,7 +348,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // `isAuthor` check for approve/reject instead of relying on the
   // refusal. `editing.discard_draft` is wider (see `isPublisher` below);
   // `isAuthor` alone still gates Withdraw, which stayed author-only.
-  const isAuthor = changeRequest.created_by_email === identity?.email;
+  const isAuthor = sameEmail(changeRequest.created_by_email, identity?.email);
   // Whether *this* account holds the publish grant at all -- not "is one
   // of the two required reviewers" (that's `SubmitForReview`'s own,
   // narrower check against `REQUIRED_REVIEWER_EMAILS`, for the one thing
@@ -356,19 +366,11 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
   // proactively repairs one of those against a dead cookie; a login
   // predating `permission_codes` leaves it `undefined` rather than `[]`.
   const isPublisher =
-    identity !== null &&
-    (identity.permission_codes ?? []).includes(PUBLISH_FLOW_TOOL);
+    identity !== null && (identity.permission_codes ?? []).includes(PUBLISH_FLOW_TOOL);
   const isOpen = changeRequest.status === "open";
-  // Withdrawing accepts both, and drops an approval rather than banking
-  // it: what comes back is an editable proposal, and an approval of an
-  // older draft is not an approval of the next one.
-  const isFrozen =
-    changeRequest.status === "submitted" || changeRequest.status === "approved";
+  const isFrozen = isUnderReview(changeRequest.status, reviewRoundFrom(changeRequest));
   const busy =
-    submitDraft.isPending ||
-    withdrawDraft.isPending ||
-    discardDraft.isPending ||
-    releaseLock.isPending;
+    submitDraft.isPending || withdrawDraft.isPending || discardDraft.isPending;
 
   const alerts: ChromeAlert[] = [];
   if (graph.version.is_stale) {
@@ -383,41 +385,14 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
         "Behind the latest version: something was published after this draft was copied, so publishing it is refused rather than silently reinstating whatever landed in between. There is no automatic rebase. Draft again from the latest version and re-apply.",
     });
   }
-  if (lock !== null) {
-    alerts.push({
-      id: "lock",
-      tone: heldByMe ? "info" : "warn",
-      children: heldByMe ? (
-        <>
-          You last edited this draft at {formatTimestamp(lock.since)}. It's yours to
-          keep editing until {formatTimestamp(lock.expires_at)} unless you edit again
-          before then.{" "}
-          <Button
-            variant="link"
-            disabled={busy}
-            onClick={() => releaseLock.mutate(undefined, { onError: onWriteError })}
-          >
-            Release it
-          </Button>{" "}
-          so somebody else can edit sooner.
-        </>
-      ) : (
-        <>
-          {lock.email} last edited this at {formatTimestamp(lock.since)}. Nobody else
-          can edit until {formatTimestamp(lock.expires_at)}, unless they release it
-          first.
-        </>
-      ),
-    });
-  }
-  if (!isAuthor && isOpen) {
+  if (!isAuthor && isOpen && !isFrozen) {
     alerts.push({
       id: "submit-author",
       tone: "info",
       children: `Only ${changeRequest.created_by_email} can submit this for review.`,
     });
   }
-  if (!isAuthor && !isOpen) {
+  if (!isAuthor && (isFrozen || !isOpen)) {
     alerts.push({
       id: "act-author",
       tone: "info",
@@ -449,8 +424,10 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
         <div className="flex min-w-0 flex-col">
           <strong className="truncate text-sm">
             {versionLabel(graph.version)} ·{" "}
-            {statusLabel(changeRequest.status).toLowerCase()}
-            {changeRequest.status === "open" && graph.version.is_draft ? (
+            {isFrozen && changeRequest.status === "open"
+              ? "submitted"
+              : statusLabel(changeRequest.status).toLowerCase()}
+            {changeRequest.status === "open" && !isFrozen && graph.version.is_draft ? (
               <span className="text-muted-foreground font-normal"> draft</span>
             ) : null}
           </strong>
@@ -467,6 +444,20 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
       <div className="flex flex-wrap items-center gap-2">
         <AlertsButton items={alerts} />
 
+        {heldByMe && isOpen && !isFrozen && (
+          <ConfirmAction
+            message="Allow others to edit this draft? Making a change locks draft automatically."
+            confirmLabel="Unlock"
+            onConfirm={() => releaseLock.mutate(undefined, { onError: onWriteError })}
+          >
+            {(open) => (
+              <Button variant="outline" loading={releaseLock.isPending} onClick={open}>
+                Unlock
+              </Button>
+            )}
+          </ConfirmAction>
+        )}
+
         {/* Author-only, same restriction Withdraw already has
               (`editing.submit`'s own `_require_author`) -- a draft may be
               edited by more than one person, but deciding it is ready
@@ -474,8 +465,9 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               to the same two required people (`REQUIRED_REVIEWER_EMAILS`)
               -- except when the author is themselves one of the two, the
               one case `SubmitForReview` turns into a form instead of a
-              plain confirm. */}
-        {isOpen && isAuthor && (
+              plain confirm. Hidden while someone else holds the lock or
+              while this draft is already under review. */}
+        {isOpen && isAuthor && !lockedByOther && !isFrozen && (
           <SubmitForReview
             versionId={versionId}
             authorEmail={changeRequest.created_by_email}
@@ -498,7 +490,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               cover every status this bar reaches (never both at once),
               so exactly one control or the explanatory note below
               renders. */}
-        {isOpen && (isAuthor || isPublisher) && (
+        {isOpen && (isAuthor || isPublisher) && !lockedByOther && !isFrozen && (
           <ConfirmAction
             message="Discard this draft? The proposal and every edit in it are deleted."
             confirmLabel="Discard draft"
@@ -539,10 +531,10 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
             // The parenthetical used to be part of the button's own
             // label, which was the longest thing on this row -- moved
             // into the description line instead, same self-describing
-            // shape as Propose/Activate, so "Withdraw" itself stays one
-            // short word and the row has a chance to fit on one line.
+            // shape as Propose/Activate, so "Withdraw review" itself
+            // stays short and the row has a chance to fit on one line.
             <Cta
-              title="Withdraw"
+              title="Withdraw review"
               description="Also drops the current approval."
               disabled={busy || editRefused}
               onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
@@ -552,7 +544,7 @@ export function DraftBar({ graph, versions, onOpenVersion }: DraftBarProps) {
               disabled={busy || editRefused}
               onClick={() => withdrawDraft.mutate(undefined, { onError: onWriteError })}
             >
-              Withdraw
+              Withdraw review
             </Button>
           ))}
       </div>

@@ -40,9 +40,10 @@ export function writeErrorMessage(error: unknown): string | null {
     }
     const holder = error.lockHolder;
     if (holder !== null) {
-      // `DraftLockedError` already says who; repeating the email here
-      // saves the reader a trip to the banner to find out who to ask.
-      return `${error.message} (${holder.email})`;
+      return `${holder.email} is editing this draft. Only one person can edit at a time.`;
+    }
+    if (/cannot review your own proposal/i.test(error.message)) {
+      return "You cannot review your own proposal.";
     }
     return error.message;
   }

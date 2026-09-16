@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { CHOICE_ANSWER_TYPES, type Edge, type Graph } from "../api/types";
 import { Button } from "@/components/ui/button";
 import { emptyText, subCount, subHeading } from "@/lib/chrome";
-import { optionsCoveredByFallback } from "./graphElements";
+import { INTEGER_ANSWER_EDGE_LABEL, optionsCoveredByFallback } from "./graphElements";
 
 interface RouteChoicesPanelProps {
   graph: Graph;
@@ -44,9 +44,11 @@ export function RouteChoicesPanel({ graph, edge, onClose }: RouteChoicesPanelPro
       </h2>
       {!isChoice || choices.length === 0 ? (
         <p className={emptyText}>
-          {isChoice
-            ? "Nothing in the answer list takes this arrow."
-            : "There is no answer list on this question."}
+          {question?.answer_type === "scale"
+            ? INTEGER_ANSWER_EDGE_LABEL
+            : isChoice
+              ? "Nothing in the answer list takes this arrow."
+              : "There is no answer list on this question."}
         </p>
       ) : (
         <ul

@@ -67,6 +67,23 @@ describe("submit", () => {
     const call = lastCall();
     expect(call.url).toBe("/api/staff/flow-tool/versions/v1/submit/");
     expect(call.method).toBe("POST");
+    expect(call.body).toBeUndefined();
+  });
+
+  it("sends substitute_reviewer when the author is themselves a required reviewer", async () => {
+    await api.submitDraft("v1", "user-2");
+
+    const call = lastCall();
+    expect(call.url).toBe("/api/staff/flow-tool/versions/v1/submit/");
+    expect(call.body).toEqual({ substitute_reviewer: "user-2" });
+  });
+
+  it("lists eligible stand-in reviewers from the version path", async () => {
+    await api.fetchEligibleSubstituteReviewers("v1");
+
+    expect(lastCall().url).toBe(
+      "/api/staff/flow-tool/versions/v1/eligible-substitute-reviewers/",
+    );
   });
 });
 

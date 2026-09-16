@@ -27,7 +27,7 @@ export const editorActions = "mt-2.5 flex flex-wrap items-center gap-2";
 
 export const checkRow = "mb-2.5 flex items-center gap-2";
 
-export const optCard = "gap-0 rounded-[10px] p-3 ring-border [--card-spacing:0.75rem]";
+export const optCard = "rounded-[10px] bg-card p-3 ring-1 ring-border";
 
 /** Destination / source question links in the detail sheet: the prompt
  * ellipsizes, `To:` stays put, and a trailing arrow marks them as

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { DetailPanel } from "./DetailPanel";
-import type { ChangeKinds } from "./graphElements";
+import { INTEGER_ANSWER_EDGE_LABEL, type ChangeKinds } from "./graphElements";
 import {
   E_Q2_TO_ARCHIVED,
   E_YES_TO_Q2,
@@ -313,7 +313,19 @@ describe("edit controls", () => {
     expect(screen.queryByRole("button", { name: /^Edit$/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "+ Add an answer" }));
-    expect(screen.getByRole("dialog", { name: "Add an answer" })).toBeInTheDocument();
+    const addDialog = screen.getByRole("dialog", { name: "Add an answer" });
+    expect(addDialog).toBeInTheDocument();
+    expect(within(addDialog).getByLabelText("Label")).toBeInTheDocument();
+    expect(
+      within(addDialog).getByRole("radio", { name: "Default path" }),
+    ).toBeInTheDocument();
+    expect(
+      within(addDialog).getByRole("radio", { name: "Specific path" }),
+    ).toBeInTheDocument();
+    await user.click(within(addDialog).getByRole("radio", { name: "Specific path" }));
+    expect(
+      within(addDialog).getByRole("button", { name: "Choose destination" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(/A new answer with no route yet/),
     ).not.toBeInTheDocument();
@@ -750,6 +762,14 @@ describe("edit controls", () => {
         name: /Use the default route/,
       }),
     ).not.toBeInTheDocument();
+  });
+
+  it("names a scale question's default route as an integer answer", () => {
+    panelFor(Q2);
+
+    expect(
+      within(defaultRouteFolder()).getByText(INTEGER_ANSWER_EDGE_LABEL),
+    ).toBeInTheDocument();
   });
 
   it("offers no per-option add-route affordance on a question whose answers select nothing", async () => {

@@ -17,6 +17,7 @@ import {
   shouldRepositionNewSiblings,
 } from "./canvasLayout";
 import { CANVAS_STYLE } from "./canvasStyle";
+import type { CanvasCursorRole } from "./draftState";
 import { sectionNodeId } from "./graphElements";
 import { type LabelTip, guardIsTruncated, labelTipForNodeData } from "./labelTips";
 import { Minimap } from "./Minimap";
@@ -97,6 +98,53 @@ function paintEdgeBox(
   el.style.height = `${box.height}px`;
 }
 
+const CURSOR_ROLE_OFFSET_X = 14;
+const CURSOR_ROLE_OFFSET_Y = 18;
+
+function paintCursorRole(
+  el: HTMLDivElement | null,
+  pos: { x: number; y: number } | null,
+): void {
+  if (el === null) return;
+  if (pos === null) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "block";
+  el.style.left = `${pos.x + CURSOR_ROLE_OFFSET_X}px`;
+  el.style.top = `${pos.y + CURSOR_ROLE_OFFSET_Y}px`;
+}
+
+function cursorRoleClass(role: CanvasCursorRole): string {
+  if (role === "Editor") {
+    return "border-[rgba(87,211,140,0.45)] bg-[rgba(87,211,140,0.14)] text-green";
+  }
+  if (role === "Reviewer") {
+    return "border-[rgba(242,193,78,0.45)] bg-[rgba(242,193,78,0.14)] text-gold";
+  }
+  return "border-border bg-card text-muted-foreground";
+}
+
+function graphElementAt(cy: Core, clientX: number, clientY: number): boolean {
+  const host = cy.container();
+  if (host === null) return false;
+  const box = host.getBoundingClientRect();
+  const x = clientX - box.left;
+  const y = clientY - box.top;
+  let hit = false;
+  cy.elements().forEach((ele) => {
+    if (hit) return;
+    const bounds = ele.renderedBoundingBox({
+      includeOverlays: false,
+      includeLabels: true,
+    });
+    if (x >= bounds.x1 && x <= bounds.x2 && y >= bounds.y1 && y <= bounds.y2) {
+      hit = true;
+    }
+  });
+  return hit;
+}
+
 interface CanvasProps {
   elements: ElementDefinition[];
   selectedId: string | null;
@@ -128,6 +176,8 @@ interface CanvasProps {
    * hamburger is top-left; the pick banner is top-center. MapView puts
    * Add a question here on an open, editable draft. */
   topRight?: ReactNode;
+  /** Figma-style role chip that follows the pointer on this stage only. */
+  cursorRole: CanvasCursorRole;
 }
 
 /** The id set, in a form that is cheap to compare. A change here means
@@ -136,13 +186,23 @@ interface CanvasProps {
 function nodeSignature(elements: ElementDefinition[]): string {
   return elements
     .filter((element) => element.group === "nodes")
-    .map((element) => element.data.id)
+    .map((element) => {
+      const id = element.data.id ?? "";
+      const parent = (element.data as { parent?: string }).parent;
+      return parent === undefined || parent === "" ? id : `${id}@${parent}`;
+    })
     .sort()
     .join("|");
 }
 
 function idsFromSignature(signature: string): Set<string> {
-  return new Set(signature === "" ? [] : signature.split("|"));
+  if (signature === "") return new Set();
+  return new Set(
+    signature.split("|").map((token) => {
+      const at = token.indexOf("@");
+      return at === -1 ? token : token.slice(0, at);
+    }),
+  );
 }
 
 /** Neighbourhood fade for a hovered question; a section hover only
@@ -275,6 +335,7 @@ export function Canvas({
   onToggleSection,
   collapsedSectionKey,
   topRight,
+  cursorRole,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -303,9 +364,51 @@ export function Canvas({
   const selectedEdgeIdRef = useRef(selectedEdgeId);
   selectedEdgeIdRef.current = selectedEdgeId;
   const canvasRootRef = useRef<HTMLDivElement>(null);
+  const cursorRoleElRef = useRef<HTMLDivElement>(null);
   const edgeBoxElRef = useRef<HTMLDivElement>(null);
   const hoverRef = useRef<{ id: string; isNode: boolean } | null>(null);
   const [labelTips, setLabelTips] = useState<LabelTip[]>([]);
+
+  useEffect(() => {
+    const root = canvasRootRef.current;
+    if (root === null) return;
+
+    function onMove(event: PointerEvent) {
+      const origin = canvasRootRef.current;
+      const stage = containerRef.current;
+      if (origin === null || stage === null || !stage.contains(event.target as Node)) {
+        paintCursorRole(cursorRoleElRef.current, null);
+        return;
+      }
+      const graph = cyRef.current;
+      const overGraph =
+        hoverRef.current !== null ||
+        (graph !== null && graphElementAt(graph, event.clientX, event.clientY));
+      if (overGraph) {
+        paintCursorRole(cursorRoleElRef.current, null);
+        return;
+      }
+      const rect = origin.getBoundingClientRect();
+      paintCursorRole(cursorRoleElRef.current, {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    }
+
+    function onLeave() {
+      paintCursorRole(cursorRoleElRef.current, null);
+    }
+
+    // Capture so cytoscape stopping bubble on its inner canvas still
+    // lets the chip track the pointer. Only paint when the target is
+    // the stage itself, not zoom/sidebar chrome sitting on top of it.
+    root.addEventListener("pointermove", onMove, true);
+    root.addEventListener("pointerleave", onLeave);
+    return () => {
+      root.removeEventListener("pointermove", onMove, true);
+      root.removeEventListener("pointerleave", onLeave);
+    };
+  }, []);
 
   useEffect(() => {
     const host = containerRef.current;
@@ -563,7 +666,21 @@ export function Canvas({
             existing.remove();
             cy.add(element);
           } else {
-            existing.data(element.data);
+            // Compound parent is fixed at add time -- `.data({ parent })`
+            // updates the field but leaves the node outside the box.
+            const nextParent =
+              (element.data as { parent?: string }).parent ?? null;
+            const currentParent = existing.isNode()
+              ? ((existing.data("parent") as string | undefined) ?? null)
+              : null;
+            const nextKey = nextParent === "" ? null : nextParent;
+            const currentKey = currentParent === "" ? null : currentParent;
+            if (existing.isNode() && nextKey !== currentKey) {
+              existing.remove();
+              cy.add(element);
+            } else {
+              existing.data(element.data);
+            }
           }
         } else {
           cy.add(element);
@@ -859,6 +976,15 @@ export function Canvas({
           </svg>
         </Button>
         <MapIndexDialog />
+      </div>
+
+      <div
+        ref={cursorRoleElRef}
+        className={`pointer-events-none absolute z-10 rounded-full border px-2 py-0.5 text-[11px] font-semibold shadow-sm ${cursorRoleClass(cursorRole)}`}
+        style={{ display: "none", fontFamily: CANVAS_LABEL_FONT }}
+        aria-hidden="true"
+      >
+        {cursorRole}
       </div>
 
       <div

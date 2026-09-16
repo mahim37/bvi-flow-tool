@@ -89,7 +89,7 @@ function DangerZone({ versionId, question }: { versionId: UUID; question: Questi
       </h3>
       <div>
         <ConfirmAction
-          message={`Retire "${question.prompt}"? It stops being served, stays drawn while anything still points at it, and there is no way to bring it back except discarding the draft.`}
+          message="Retire this question?"
           confirmLabel="Retire this question"
           danger
           onConfirm={() =>

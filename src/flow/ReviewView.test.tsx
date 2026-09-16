@@ -3,8 +3,15 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChangeRequest, Graph, ReviewPayload } from "../api/types";
-import { VERSION_ID, makeGraph } from "../test/fixtures";
+import type { ChangeRequest, Graph, ItemDiff, ReviewPayload } from "../api/types";
+import {
+  E_YES_TO_Q2,
+  OPTION_YES,
+  Q1,
+  Q2,
+  VERSION_ID,
+  makeGraph,
+} from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 import { REQUIRED_REVIEWER_EMAILS } from "./labels";
 import { ReviewView } from "./ReviewView";
@@ -42,6 +49,7 @@ vi.mock("./versionContext", () => ({
   useVersionContext: () => ({
     graph: harness.graph,
     versions: [],
+    proposal: harness.graph?.change_request ?? null,
     editable: false,
   }),
 }));
@@ -110,9 +118,12 @@ function signIn(email: string) {
   );
 }
 
-function renderReview(changeRequest: ChangeRequest) {
+function renderReview(
+  changeRequest: ChangeRequest,
+  reviewOverrides?: Partial<ReviewPayload>,
+) {
   harness.graph = draftGraph(changeRequest);
-  harness.payload = emptyReview(changeRequest);
+  harness.payload = { ...emptyReview(changeRequest), ...reviewOverrides };
   return renderWithProviders(
     <MemoryRouter initialEntries={[`/versions/${VERSION_ID}/review`]}>
       <Routes>
@@ -171,6 +182,24 @@ describe("ReviewView two-reviewer publish gate", () => {
     expect(screen.queryByRole("heading", { name: "Decision" })).not.toBeInTheDocument();
   });
 
+  it("tells a required reviewer they cannot review a proposal they authored", () => {
+    signIn(REVIEWER_1);
+    renderReview(
+      proposal({
+        created_by_email: REVIEWER_1,
+        status: "submitted",
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: "Decision" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("You cannot review your own proposal."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/name someone else to stand in/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not offer Approve to someone who is not a named reviewer", () => {
     signIn("other-publisher@example.com");
     renderReview(proposal());
@@ -206,6 +235,18 @@ describe("ReviewView two-reviewer publish gate", () => {
     ).toBeInTheDocument();
   });
 });
+
+function diffRow(
+  overrides: Partial<ItemDiff> & Pick<ItemDiff, "kind" | "change" | "key">,
+): ItemDiff {
+  return {
+    base_id: null,
+    draft_id: null,
+    question_id: Q1,
+    fields: [],
+    ...overrides,
+  };
+}
 
 describe("ReviewView with no parent to compare against", () => {
   afterEach(() => {
@@ -244,5 +285,57 @@ describe("ReviewView with no parent to compare against", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/everything here is new/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/still says exactly what/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("ReviewView change-count pills", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("shows question added/removed, and puts every other row in changed", () => {
+    signIn(REVIEWER_1);
+    renderReview(proposal(), {
+      summary: { added: 99, removed: 99, changed: 99 },
+      diff: {
+        is_empty: false,
+        questions: [
+          diffRow({ kind: "question", change: "added", key: "new", draft_id: Q1 }),
+          diffRow({
+            kind: "question",
+            change: "removed",
+            key: "gone",
+            base_id: Q2,
+            question_id: Q2,
+          }),
+          diffRow({ kind: "question", change: "changed", key: "edited", draft_id: Q1 }),
+        ],
+        options: [
+          diffRow({
+            kind: "option",
+            change: "added",
+            key: "yes",
+            draft_id: OPTION_YES,
+          }),
+        ],
+        edges: [
+          diffRow({
+            kind: "edge",
+            change: "added",
+            key: "route",
+            draft_id: E_YES_TO_Q2,
+          }),
+        ],
+        sections: [],
+      },
+    });
+
+    const counts = screen.getByRole("list", { name: "Change counts" });
+    expect(counts).toHaveTextContent("+1 question");
+    expect(counts).toHaveTextContent("−1 removed");
+    expect(counts).toHaveTextContent("3 changed");
+    expect(counts).not.toHaveTextContent("added");
+    expect(counts).not.toHaveTextContent("~");
+    expect(counts).not.toHaveTextContent("99");
   });
 });

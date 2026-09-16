@@ -8,6 +8,24 @@ import { VERSION_ID, makeGraph } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 import { DraftBar } from "./DraftBar";
 
+const AUTHOR = "postman-demo@example.com";
+const OTHER_EDITOR = "boaz.salik@fischerjordan.com";
+
+function signIn(
+  email: string,
+  permissionCodes: string[] = ["view_flow_tool", "edit_flow_tool", "publish_flow_tool"],
+) {
+  window.localStorage.setItem(
+    "bvi-flow-tool.identity",
+    JSON.stringify({
+      email,
+      name: email,
+      role: null,
+      permission_codes: permissionCodes,
+    }),
+  );
+}
+
 function openProposal(overrides: Partial<ChangeRequest> = {}): ChangeRequest {
   return {
     id: "99999999-9999-4999-8999-999999999999",
@@ -33,13 +51,6 @@ function openProposal(overrides: Partial<ChangeRequest> = {}): ChangeRequest {
     break_draft_version_id: null,
     ...overrides,
   };
-}
-
-function signIn(email: string, permissionCodes: string[]) {
-  window.localStorage.setItem(
-    "bvi-flow-tool.identity",
-    JSON.stringify({ email, name: email, role: null, permission_codes: permissionCodes }),
-  );
 }
 
 function renderBar(
@@ -149,5 +160,140 @@ describe("DraftBar", () => {
 
     expect(screen.getByRole("dialog", { name: "Create draft" })).toBeInTheDocument();
     expect(screen.getByLabelText("What's this draft for?")).toBeInTheDocument();
+  });
+});
+
+describe("DraftBar author actions", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  function draftGraph(changeRequest: ChangeRequest) {
+    return makeGraph({
+      version: {
+        ...makeGraph().version,
+        is_draft: true,
+        is_active: false,
+        is_stale: false,
+      },
+      change_request: changeRequest,
+    });
+  }
+
+  it("offers Submit for review on an open draft the author holds", () => {
+    signIn(AUTHOR);
+    renderBar(draftGraph(openProposal({ created_by_email: AUTHOR })));
+
+    expect(
+      screen.getByRole("button", { name: "Submit for review" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard draft" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Withdraw review" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers Withdraw review instead of Submit once the draft is under review", () => {
+    signIn(AUTHOR);
+    renderBar(
+      draftGraph(openProposal({ created_by_email: AUTHOR, status: "submitted" })),
+    );
+
+    expect(screen.getByRole("button", { name: "Withdraw review" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit for review" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("treats a named review round as under review even if status still says open", () => {
+    signIn(AUTHOR);
+    renderBar(
+      draftGraph(
+        openProposal({
+          created_by_email: AUTHOR,
+          status: "open",
+          submitted_at: "2026-09-16T12:00:00Z",
+          reviewer_1_email: "boaz.salik@fischerjordan.com",
+        }),
+      ),
+    );
+
+    expect(screen.getByRole("button", { name: "Withdraw review" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit for review" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses the live proposal when graph.change_request is still open", () => {
+    signIn(AUTHOR);
+    renderWithProviders(
+      <MemoryRouter>
+        <DraftBar
+          graph={draftGraph(openProposal({ created_by_email: AUTHOR, status: "open" }))}
+          proposal={openProposal({ created_by_email: AUTHOR, status: "submitted" })}
+          versions={[]}
+          onOpenVersion={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "Withdraw review" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit for review" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides submit, discard and the lock lecture when someone else holds the draft", () => {
+    signIn(AUTHOR);
+    renderBar(
+      draftGraph(
+        openProposal({
+          created_by_email: AUTHOR,
+          lock: {
+            user_id: "77777777-7777-4777-8777-777777777777",
+            email: OTHER_EDITOR,
+            since: "2026-09-16T07:18:48.654757+00:00",
+            expires_at: "2026-09-16T08:18:48.654757+00:00",
+          },
+        }),
+      ),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Submit for review" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Discard draft" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/is editing this draft/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/2026-09-16T07:18:48/)).not.toBeInTheDocument();
+  });
+
+  it("offers Unlock with a confirm overlay when this user holds the lock", async () => {
+    const user = userEvent.setup();
+    signIn(AUTHOR);
+    renderBar(
+      draftGraph(
+        openProposal({
+          created_by_email: AUTHOR,
+          lock: {
+            user_id: "77777777-7777-4777-8777-777777777777",
+            email: AUTHOR,
+            since: "2026-09-16T07:18:48.654757+00:00",
+            expires_at: "2026-09-16T08:18:48.654757+00:00",
+          },
+        }),
+      ),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Release it" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Unlock" }));
+    expect(
+      screen.getByText(
+        "Allow others to edit this draft? Making a change locks draft automatically.",
+      ),
+    ).toBeInTheDocument();
   });
 });

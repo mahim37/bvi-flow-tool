@@ -6,6 +6,7 @@ import { ApiError } from "../api/client";
 import { useApproveDraft, useRejectDraft, useReview } from "../api/queries";
 import { bothReviewersApproved, type ChangeRequest, type UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { questionDiffCounts, visibleDiffItems } from "./diffCounts";
 import { DiffList } from "./DiffList";
 import { AlertsButton } from "./AlertsButton";
 import type { ChromeAlert } from "./AlertsButton";
@@ -105,7 +106,7 @@ export function ReviewView() {
     );
   }
 
-  const { diff, summary, publish_blocker, base_version, change_request } = review.data;
+  const { diff, publish_blocker, change_request, base_version } = review.data;
   const version = review.data.version;
   const changeRequest = change_request ?? graph.change_request;
   const status = changeRequest?.status ?? null;
@@ -184,7 +185,11 @@ export function ReviewView() {
     isNamedReviewer &&
     (canApprove || canReject);
 
-  const items = [...diff.questions, ...diff.options, ...diff.edges, ...diff.sections];
+  const items = visibleDiffItems(
+    [...diff.questions, ...diff.options, ...diff.edges, ...diff.sections],
+    graph,
+  );
+  const counts = questionDiffCounts(items);
 
   const issueItems: ChromeAlert[] = version.is_draft
     ? draftIssues(graph, publish_blocker).map((issue) => {
@@ -247,22 +252,30 @@ export function ReviewView() {
           >
             <li>
               <Badge tone="added" className="font-mono tracking-normal">
-                +{summary.added} added
+                +{counts.added} {counts.added === 1 ? "question" : "questions"}
               </Badge>
             </li>
             <li>
               <Badge tone="removed" className="font-mono tracking-normal">
-                −{summary.removed} removed
+                −{counts.removed} removed
               </Badge>
             </li>
             <li>
               <Badge tone="changed" className="font-mono tracking-normal">
-                ~{summary.changed} changed
+                {counts.changed} changed
               </Badge>
             </li>
           </ul>
         )}
       </header>
+
+      {isAuthor &&
+        isNamedReviewer &&
+        (status === "submitted" || status === "approved") && (
+          <p className={cn(emptyText, "mt-0 mb-5")}>
+            You cannot review your own proposal.
+          </p>
+        )}
 
       <DiffList items={items} graph={graph} onShowOnMap={showOnMap} />
 

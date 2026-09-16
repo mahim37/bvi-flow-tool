@@ -1,6 +1,6 @@
 import { useOutletContext } from "react-router-dom";
 
-import type { Graph, VersionListItem } from "../api/types";
+import type { ChangeRequest, Graph, VersionListItem } from "../api/types";
 
 /**
  * What every screen under a version needs, fetched once by `VersionLayout`.
@@ -18,14 +18,21 @@ export interface VersionContext {
   graph: Graph;
   versions: VersionListItem[];
   /**
+   * The live proposal for this version, merged from `graph/`, `review/`
+   * and `proposals/`. Prefer this over `graph.change_request` when the
+   * chrome has to know whether the draft is still open.
+   */
+  proposal: ChangeRequest | null;
+  /**
    * Whether this screen may write.
    *
-   * A draft whose proposal is still `open`, and nothing else. `submitted`
-   * and `approved` are frozen on purpose -- what gets published has to be
-   * what was read -- and a published version is not a draft at all. The
-   * server enforces every one of those; this is the same rule stated where
-   * the controls are drawn, so nothing offers a button whose only outcome
-   * is a 409.
+   * A draft whose proposal is still `open` and whose lock is not held by
+   * someone else. `submitted` and `approved` are frozen on purpose -- what
+   * gets published has to be what was read -- and a published version is
+   * not a draft at all. A lock held by another account is the same: this
+   * browser must not offer edit, submit or discard. The server enforces
+   * every one of those; this is the same rule stated where the controls
+   * are drawn, so nothing offers a button whose only outcome is a 409.
    */
   editable: boolean;
 }

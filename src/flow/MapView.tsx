@@ -10,6 +10,7 @@ import { Canvas } from "./Canvas";
 import { DetailPanel } from "./DetailPanel";
 import { RouteChoicesPanel } from "./RouteChoicesPanel";
 import { Sidebar } from "./Sidebar";
+import { canvasCursorRole, reviewRoundFrom } from "./draftState";
 import { useVersionContext } from "./versionContext";
 import { useWriteErrorHandler } from "./useWriteError";
 import {
@@ -29,8 +30,19 @@ type CanvasPick =
   | { kind: "add"; questionId: UUID; optionId: UUID | null; label: string };
 
 export function MapView() {
-  const { graph, editable } = useVersionContext();
-  const { editRefused } = useAuth();
+  const { graph, editable, proposal } = useVersionContext();
+  const { identity, editRefused } = useAuth();
+  const liveProposal = proposal ?? graph.change_request;
+  const cursorRole = canvasCursorRole({
+    isDraft: graph.version.is_draft,
+    status: liveProposal?.status,
+    lockEmail: liveProposal?.lock?.email,
+    identityEmail: identity?.email,
+    ...(identity?.permission_codes !== undefined
+      ? { permissionCodes: identity.permission_codes }
+      : {}),
+    ...reviewRoundFrom(liveProposal),
+  });
   const navigate = useNavigate();
   const { versionId } = useParams<{ versionId: string }>();
   const [searchParams] = useSearchParams();
@@ -215,6 +227,7 @@ export function MapView() {
         onPickTarget={pickCanvasTarget}
         onCancelPick={() => setPick(null)}
         collapsedSectionKey={[...collapsedSections].sort().join("|")}
+        cursorRole={cursorRole}
         topRight={
           editable && !editRefused ? (
             <AddQuestion

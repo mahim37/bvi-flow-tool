@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { EdgeData, NodeData } from "./graphElements";
 import {
   END_NODE_ID,
+  INTEGER_ANSWER_EDGE_LABEL,
   buildElements,
   changeKindsFromDiff,
   missingNodeId,
@@ -191,10 +192,22 @@ describe("edges", () => {
   it("names an option's own guard and a count on the question-level fallback", () => {
     const built = edges();
 
-    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe("Any answer");
-    expect(built.get(E_Q2_TO_ARCHIVED)?.fullGuard).toBe("Any answer");
+    expect(built.get(E_Q2_TO_ARCHIVED)?.guard).toBe(INTEGER_ANSWER_EDGE_LABEL);
+    expect(built.get(E_Q2_TO_ARCHIVED)?.fullGuard).toBe(INTEGER_ANSWER_EDGE_LABEL);
     expect(built.get(E_NO_TO_END)?.guard).toBe("No");
     expect(built.get(E_NO_TO_END)?.fullGuard).toBe("No");
+  });
+
+  it("keeps Any answer on a free-text question-level edge", () => {
+    const original = makeGraph();
+    const graph = makeGraph({
+      questions: original.questions.map((question) =>
+        question.id !== Q2
+          ? question
+          : { ...question, answer_type: "free_text" as const },
+      ),
+    });
+    expect(edges(graph).get(E_Q2_TO_ARCHIVED)?.guard).toBe("Any answer");
   });
 
   it("counts leftover answers on a choice question's default route", () => {

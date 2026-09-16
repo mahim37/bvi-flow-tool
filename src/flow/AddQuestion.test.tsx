@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Graph } from "../api/types";
 import { makeGraph } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
-import { AddQuestion } from "./AddQuestion";
+import { AddQuestion, nextQuestionCode, usedQuestionCodes } from "./AddQuestion";
 
 function graphWithCodes(codes: string[]): Graph {
   const template = makeGraph().questions[0];
@@ -20,9 +20,18 @@ function graphWithCodes(codes: string[]): Graph {
   });
 }
 
-async function openAddQuestion(graph: Graph = makeGraph()) {
+async function openAddQuestion(
+  graph: Graph = makeGraph(),
+  reservedCodes?: readonly string[],
+) {
   const user = userEvent.setup();
-  renderWithProviders(<AddQuestion graph={graph} onAdded={vi.fn()} />);
+  renderWithProviders(
+    <AddQuestion
+      graph={graph}
+      onAdded={vi.fn()}
+      {...(reservedCodes !== undefined ? { reservedCodes } : {})}
+    />,
+  );
   await user.click(screen.getByRole("button", { name: "Add a question" }));
   return user;
 }
@@ -100,5 +109,38 @@ describe("AddQuestion", () => {
     await openAddQuestion(graphWithCodes(["1", "2", "risk_1"]));
 
     expect(screen.getByLabelText("QID")).toHaveValue("3");
+  });
+
+  it("skips codes a retired draft question still occupies", async () => {
+    await openAddQuestion(graphWithCodes(["Q1", "Q2"]), ["Q3"]);
+
+    expect(screen.getByLabelText("QID")).toHaveValue("Q4");
+  });
+});
+
+describe("usedQuestionCodes", () => {
+  it("includes live graph codes and review keys for questions graph/ dropped", () => {
+    const graph = graphWithCodes(["Q1", "Q2"]);
+    expect(
+      nextQuestionCode(
+        usedQuestionCodes(graph, {
+          is_empty: false,
+          questions: [
+            {
+              kind: "question",
+              key: "Q3",
+              change: "added",
+              base_id: null,
+              draft_id: "aaaaaaaa-0000-4000-8000-000000000099",
+              question_id: "aaaaaaaa-0000-4000-8000-000000000099",
+              fields: [],
+            },
+          ],
+          options: [],
+          edges: [],
+          sections: [],
+        }),
+      ),
+    ).toBe("Q4");
   });
 });

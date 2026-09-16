@@ -4,11 +4,16 @@ import type { StaffIdentity } from "../api/types";
 
 export interface AuthState {
   /** Who this browser last signed in as, or null. Display-only: the
-   * session itself is the httpOnly cookie, which this app cannot read. */
+   * session itself is the httpOnly cookie, which this app cannot read.
+   * Refreshed from `GET /api/staff/auth/session/` whenever that answers. */
   identity: StaffIdentity | null;
+  /** True while the session endpoint has not yet answered and nothing is
+   * remembered, so the shell can wait rather than flash the login screen
+   * in front of a cookie that is about to restore the account. */
+  sessionPending: boolean;
   /** True once a write has come back 403, meaning the account holds
-   * `view_flow_tool` but not `edit_flow_tool`. Starts false because
-   * nothing tells the client its permission codes -- see `useAuth`. */
+   * `view_flow_tool` but not `edit_flow_tool`, or once `session/` said
+   * the same via `permission_codes`. */
   editRefused: boolean;
   /** The same discovery for `publish_flow_tool`, kept apart from
    * `editRefused` because the two codes are separate grants and a

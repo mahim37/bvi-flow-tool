@@ -283,17 +283,20 @@ export function optionsCoveredByFallback(
 }
 
 /** Canvas wording for a `from_option === null` arrow. Choice questions
- * show how many listed answers take the route; free-text/scale have no
- * list, so they read as "Any answer". Zero remaining options is the
- * catch-all after every answer already has its own arrow. */
+ * show how many listed answers take the route; scale (integer) names
+ * the type on the arrow itself; free-text has no list, so it reads as
+ * "Any answer". Zero remaining options is the catch-all after every
+ * answer already has its own arrow. */
+export const INTEGER_ANSWER_EDGE_LABEL = "Number";
+
 export function fallbackCanvasLabel(
   question: Question | undefined,
   outgoing: readonly Edge[],
   fallback: Edge,
 ): string {
-  if (question === undefined || !CHOICE_ANSWER_TYPES.has(question.answer_type)) {
-    return "Any answer";
-  }
+  if (question === undefined) return "Any answer";
+  if (question.answer_type === "scale") return INTEGER_ANSWER_EDGE_LABEL;
+  if (!CHOICE_ANSWER_TYPES.has(question.answer_type)) return "Any answer";
   const count = optionsCoveredByFallback(question, outgoing, fallback).length;
   if (count === 0) return "Anything else";
   return count === 1 ? "1 choice" : `${count} choices`;

@@ -111,7 +111,7 @@ export function QuestionEditor({ graph, question }: QuestionEditorProps) {
 
   return (
     <>
-      <div className="flex items-start gap-2">
+      <div className="flex items-center gap-2">
         <h2 className="m-0 min-w-0 flex-1 text-base leading-snug font-medium">
           {question.prompt}
         </h2>

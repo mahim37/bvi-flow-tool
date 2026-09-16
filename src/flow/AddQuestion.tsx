@@ -1,8 +1,8 @@
 import { useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { useAddQuestion } from "../api/queries";
-import type { AnswerType, Graph, UUID } from "../api/types";
+import { useAddQuestion, useReview } from "../api/queries";
+import type { AnswerType, Graph, UUID, VersionDiff } from "../api/types";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field, nativeSelectClassName } from "@/components/ui/field";
@@ -31,8 +31,12 @@ const NUMERIC_CODE = /^([Qq]?)(\d+)$/;
  * Purely slug codes (`risk_1`) are not a sequence, so they are ignored
  * when picking the next integer -- same as incrementing past the highest
  * numeric QID on a mixed graph.
+ *
+ * Retired draft-only questions still occupy the unique-code slot even
+ * after `graph/` drops them, so callers must pass those codes too
+ * (`usedQuestionCodes`).
  */
-function nextQuestionCode(codes: readonly string[]): string {
+export function nextQuestionCode(codes: readonly string[]): string {
   let maxN = -1;
   let prefix = "";
 
@@ -56,11 +60,29 @@ function nextQuestionCode(codes: readonly string[]): string {
   return qCount > codes.length - qCount ? "Q1" : "1";
 }
 
+/** Codes that still occupy `questionnaires_question_version_code_unique`,
+ * including archived rows `graph/` omits when nothing points at them.
+ * Review `key`s are the codes the diff matched on. */
+export function usedQuestionCodes(
+  graph: Graph,
+  diff?: VersionDiff | null,
+  extra: readonly string[] = [],
+): string[] {
+  const codes = new Set<string>(extra);
+  for (const question of graph.questions) codes.add(question.code);
+  if (diff != null) {
+    for (const item of diff.questions) codes.add(item.key);
+  }
+  return [...codes];
+}
+
 interface AddQuestionProps {
   graph: Graph;
   /** Select the new question once it exists, so the next thing anybody
    * does -- point an edge at it -- is one click away. */
   onAdded: (questionId: UUID) => void;
+  /** Extra occupied codes the live graph/diff might not have loaded yet. */
+  reservedCodes?: readonly string[];
 }
 
 /**
@@ -73,7 +95,7 @@ interface AddQuestionProps {
  * every "continue". The map will report it as unreachable, and that report
  * is the tool telling the truth.
  */
-export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
+export function AddQuestion({ graph, onAdded, reservedCodes }: AddQuestionProps) {
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   return (
@@ -87,6 +109,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
         <AddQuestionForm
           graph={graph}
           onAdded={onAdded}
+          {...(reservedCodes !== undefined ? { reservedCodes } : {})}
           close={close}
           promptRef={promptRef}
         />
@@ -98,6 +121,7 @@ export function AddQuestion({ graph, onAdded }: AddQuestionProps) {
 function AddQuestionForm({
   graph,
   onAdded,
+  reservedCodes = [],
   close,
   promptRef,
 }: AddQuestionProps & {
@@ -107,6 +131,7 @@ function AddQuestionForm({
   const versionId = graph.version.id;
   const onWriteError = useWriteErrorHandler();
   const addQuestion = useAddQuestion(versionId);
+  const review = useReview(graph.version.is_draft ? versionId : null);
 
   const codeId = useId();
   const promptId = useId();
@@ -114,9 +139,11 @@ function AddQuestionForm({
   const sectionId = useId();
   const requiredId = useId();
 
-  const [code, setCode] = useState(() =>
-    nextQuestionCode(graph.questions.map((question) => question.code)),
+  const suggestedCode = nextQuestionCode(
+    usedQuestionCodes(graph, review.data?.diff, reservedCodes),
   );
+  const [codeOverride, setCodeOverride] = useState<string | null>(null);
+  const code = codeOverride ?? suggestedCode;
   const [prompt, setPrompt] = useState("");
   const [answerType, setAnswerType] = useState<AnswerType>("single_choice");
   const [section, setSection] = useState<string>(NO_SECTION);
@@ -163,7 +190,7 @@ function AddQuestionForm({
           required
           placeholder="QID"
           {...(addQuestion.isPending ? { disabled: true } : {})}
-          onChange={(event) => setCode(event.target.value)}
+          onChange={(event) => setCodeOverride(event.target.value)}
         />
       </Field>
 

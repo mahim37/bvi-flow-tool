@@ -24,12 +24,13 @@ import { ConfirmAction } from "./ConfirmAction";
 import { EditorDialog } from "./EditorDialog";
 import { EditorDropdown } from "./EditorDropdown";
 import type { ChangeKind, ChangeKinds } from "./graphElements";
-import { optionsCoveredByFallback } from "./graphElements";
+import { INTEGER_ANSWER_EDGE_LABEL, optionsCoveredByFallback } from "./graphElements";
 import { answerTypeLabel, targetLabel } from "./labels";
 import {
   emptyText,
   editorActions,
   mutedHint,
+  optCard,
   questionLink,
   routeHeading,
   subCount,
@@ -122,6 +123,7 @@ function EdgeRow({
   retargetingEdgeId,
   hasFallback,
   hideDeadNote,
+  footnote,
   onSelectQuestion,
   onStartRetarget,
   onCancelPick,
@@ -150,6 +152,9 @@ function EdgeRow({
    * reason its own card-level note already states, so the row doesn't
    * repeat it a second time per route. */
   hideDeadNote?: boolean;
+  /** Extra line on this route, e.g. that a scale question's only edge is
+   * an integer answer. */
+  footnote?: string;
   onSelectQuestion: (id: UUID) => void;
   onStartRetarget: (edgeId: UUID, label: string) => void;
   onCancelPick: () => void;
@@ -300,6 +305,10 @@ function EdgeRow({
         )}
       </div>
 
+      {footnote !== undefined && footnote !== "" && (
+        <p className={cn(mutedHint, "mb-0")}>{footnote}</p>
+      )}
+
       {isBroken && (
         <p className="text-destructive text-xs">
           This route leads to a question that has been archived or removed, so it would
@@ -362,7 +371,7 @@ function EdgeGroupCard({
   onCancelPick: () => void;
 }) {
   return (
-    <li className="flex flex-col gap-2">
+    <li className={cn("flex flex-col gap-2", optCard)}>
       <h4 className={routeHeading}>{heading}</h4>
       <div className={treeBranch}>
         {note !== undefined && <p className="text-destructive text-xs">{note}</p>}
@@ -400,6 +409,7 @@ function DefaultRouteSection({
   versionId,
   questionId,
   takesOptions,
+  answerType,
   edges,
   ctx,
   editable,
@@ -416,6 +426,7 @@ function DefaultRouteSection({
   versionId: UUID;
   questionId: UUID;
   takesOptions: boolean;
+  answerType: Question["answer_type"];
   edges: Edge[];
   ctx: EdgeContext;
   editable: boolean;
@@ -449,17 +460,15 @@ function DefaultRouteSection({
       role="group"
       aria-labelledby={headingId}
       data-slot="tree-folder"
-      className="flex flex-col gap-2"
+      className={cn("flex flex-col gap-2", optCard)}
     >
-      <h4 id={headingId} className={routeHeading}>
-        Default route
-      </h4>
-
-      {edges.length > 0 && (
-        <div className={defaultStem}>
-          {edges.map((edge) => (
+      <div className="flex min-w-0 flex-row flex-wrap items-center gap-2">
+        <h4 id={headingId} className={cn(routeHeading, "mb-0 shrink-0")}>
+          Default route
+        </h4>
+        {edges.map((edge) => (
+          <div key={edge.id} className="min-w-0 flex-1">
             <EdgeRow
-              key={edge.id}
               versionId={versionId}
               edge={edge}
               selectLabel="Where the default route leads"
@@ -468,14 +477,20 @@ function DefaultRouteSection({
               disabled={disabled}
               retargetingEdgeId={retargetingEdgeId}
               hasFallback={false}
+              {...(answerType === "scale"
+                ? { footnote: INTEGER_ANSWER_EDGE_LABEL }
+                : {})}
               onSelectQuestion={onSelectQuestion}
               onStartRetarget={onStartRetarget}
               onCancelPick={onCancelPick}
             />
-          ))}
-          {children}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
+
+      {edges.length > 0 && children ? (
+        <div className={defaultStem}>{children}</div>
+      ) : null}
 
       {editable && edges.length === 0 && (
         <div className={defaultStem}>
@@ -540,6 +555,9 @@ interface OptionCardProps {
   /** Specific-route answers get a `Choice:` heading that matches Default
    * route. Leftover answers nested under Default route keep their label. */
   asChoice?: boolean;
+  /** Own card, same chrome as Default route. Listed answers use this;
+   * leftovers nested inside the default card do not. */
+  boxed?: boolean;
   onSelectQuestion: (id: UUID) => void;
   onStartRetarget: (edgeId: UUID, label: string) => void;
   onStartAddRoute: (questionId: UUID, optionId: UUID | null, label: string) => void;
@@ -568,6 +586,7 @@ function OptionCard({
   retargetingEdgeId,
   addingRouteOptionId,
   asChoice = false,
+  boxed = false,
   onSelectQuestion,
   onStartRetarget,
   onStartAddRoute,
@@ -853,7 +872,10 @@ function OptionCard({
   );
 
   return (
-    <li className="flex flex-col gap-2" data-slot="tree-item">
+    <li
+      className={cn("flex flex-col gap-2", boxed && optCard)}
+      data-slot="tree-item"
+    >
       <div className="flex min-w-0 flex-row items-center justify-between gap-2">
         {title}
         {toolbar}
@@ -882,7 +904,9 @@ export function Options({
 
   const optionLabelId = useId();
   const leftoverHeadingId = useId();
+  const newPathGroupId = useId();
   const [newOptionLabel, setNewOptionLabel] = useState("");
+  const [newPath, setNewPath] = useState<"default" | "specific">("default");
 
   const options = useMemo(
     () =>
@@ -1016,7 +1040,7 @@ export function Options({
   const cardCount = options.length + (deadGuardEdges.length > 0 ? 1 : 0);
 
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="options-heading">
+    <section className="flex flex-col gap-4" aria-labelledby="options-heading">
       <div className="flex flex-wrap items-center gap-2">
         <h3 id="options-heading" className={cn(subHeading, "mb-0")}>
           {takesOptions ? "Answers" : "Route"}{" "}
@@ -1031,6 +1055,7 @@ export function Options({
           versionId={versionId}
           questionId={question.id}
           takesOptions={takesOptions}
+          answerType={question.answer_type}
           edges={anyAnswerEdges}
           ctx={ctx}
           editable={editable}
@@ -1091,12 +1116,7 @@ export function Options({
       ) : (
         <>
           {listedOptions.length > 0 && (
-            <ol
-              className={cn(
-                "flex list-none flex-col gap-3 p-0",
-                (anyAnswerEdges.length > 0 || editable) && "mt-8",
-              )}
-            >
+            <ol className="flex list-none flex-col gap-4 p-0">
               {listedOptions.map((option) => (
                 <OptionCard
                   key={option.id}
@@ -1113,6 +1133,7 @@ export function Options({
                   retargetingEdgeId={retargetingEdgeId}
                   addingRouteOptionId={addingRouteOptionId}
                   asChoice={(edgesByGuard.get(option.id) ?? []).length > 0}
+                  boxed
                   onSelectQuestion={onSelectQuestion}
                   onStartRetarget={onStartRetarget}
                   onStartAddRoute={onStartAddRoute}
@@ -1123,7 +1144,7 @@ export function Options({
           )}
 
           {deadGuardEdges.length > 0 && (
-            <ul className="flex list-none flex-col gap-2 p-0">
+            <ul className="flex list-none flex-col gap-4 p-0">
               <EdgeGroupCard
                 heading="Can't be used"
                 note="Tied to an answer this question doesn't have anymore, so these can never happen. They can only be removed."
@@ -1147,55 +1168,107 @@ export function Options({
         <EditorDialog
           title="Add an answer"
           onOpenChange={(open) => {
-            if (open) setNewOptionLabel("");
+            if (open) {
+              setNewOptionLabel("");
+              setNewPath("default");
+            }
           }}
           trigger={<Button variant="ghost">+ Add an answer</Button>}
         >
-          {(close) => (
-            <form
-              className="flex flex-col gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                addOption.mutate(
-                  {
-                    question: question.id,
-                    code: slugify(newOptionLabel),
-                    label: newOptionLabel,
+          {(close) => {
+            function addThen(startRoute: boolean) {
+              addOption.mutate(
+                {
+                  question: question.id,
+                  code: slugify(newOptionLabel),
+                  label: newOptionLabel,
+                },
+                {
+                  onError: onWriteError,
+                  onSuccess: (created) => {
+                    setNewOptionLabel("");
+                    close();
+                    if (startRoute) {
+                      onStartAddRoute(
+                        question.id,
+                        created.id,
+                        `"${created.label}"'s new route`,
+                      );
+                    }
                   },
-                  {
-                    onError: onWriteError,
-                    onSuccess: () => {
-                      setNewOptionLabel("");
-                      close();
-                    },
-                  },
-                );
-              }}
-            >
-              <Field label="Label" htmlFor={optionLabelId}>
-                <Input
-                  id={optionLabelId}
-                  value={newOptionLabel}
-                  required
-                  {...(pending ? { disabled: true } : {})}
-                  onChange={(event) => setNewOptionLabel(event.target.value)}
-                />
-              </Field>
-              <div className={editorActions}>
-                <Button
-                  variant="primary"
-                  type="submit"
-                  loading={addOption.isPending}
-                  disabled={newOptionLabel.trim() === ""}
-                >
-                  Add option
-                </Button>
-                <Button variant="ghost" disabled={pending} onClick={close}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          )}
+                },
+              );
+            }
+
+            return (
+              <form
+                className="flex flex-col gap-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addThen(false);
+                }}
+              >
+                <Field label="Label" htmlFor={optionLabelId}>
+                  <Input
+                    id={optionLabelId}
+                    value={newOptionLabel}
+                    required
+                    {...(pending ? { disabled: true } : {})}
+                    onChange={(event) => setNewOptionLabel(event.target.value)}
+                  />
+                </Field>
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="text-sm font-medium">Path</legend>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name={newPathGroupId}
+                      value="default"
+                      checked={newPath === "default"}
+                      disabled={pending}
+                      onChange={() => setNewPath("default")}
+                    />
+                    Default path
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name={newPathGroupId}
+                      value="specific"
+                      checked={newPath === "specific"}
+                      disabled={pending}
+                      onChange={() => setNewPath("specific")}
+                    />
+                    Specific path
+                  </label>
+                  {newPath === "specific" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={pending || newOptionLabel.trim() === ""}
+                      onClick={() => addThen(true)}
+                    >
+                      Choose destination
+                    </Button>
+                  )}
+                </fieldset>
+                <div className={editorActions}>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    loading={addOption.isPending}
+                    disabled={newOptionLabel.trim() === ""}
+                  >
+                    Add option
+                  </Button>
+                  <Button variant="ghost" disabled={pending} onClick={close}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            );
+          }}
         </EditorDialog>
       )}
 

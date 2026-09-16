@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../api/client";
 import * as api from "../api/endpoints";
-import type { StaffIdentity } from "../api/types";
+import { EDIT_FLOW_TOOL, PUBLISH_FLOW_TOOL, type StaffIdentity } from "../api/types";
 import { AuthContext } from "./context";
 import type { AuthState } from "./context";
 
@@ -35,11 +35,27 @@ function writeStoredIdentity(identity: StaffIdentity | null): void {
   }
 }
 
+function applyGrantHints(
+  identity: StaffIdentity | null,
+  setEditRefused: (value: boolean) => void,
+  setReviewRefused: (value: boolean) => void,
+): void {
+  if (identity === null || !Array.isArray(identity.permission_codes)) return;
+  setEditRefused(!identity.permission_codes.includes(EDIT_FLOW_TOOL));
+  setReviewRefused(!identity.permission_codes.includes(PUBLISH_FLOW_TOOL));
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [identity, setIdentity] = useState<StaffIdentity | null>(readStoredIdentity);
   const [editRefused, setEditRefused] = useState(false);
   const [reviewRefused, setReviewRefused] = useState(false);
   const queryClient = useQueryClient();
+  const session = useQuery({
+    queryKey: ["session"],
+    queryFn: ({ signal }) => api.fetchSession(signal),
+    retry: false,
+    staleTime: 30_000,
+  });
 
   const forget = useCallback(() => {
     setIdentity(null);
@@ -52,13 +68,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
   }, [queryClient]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const next = await api.login(email, password);
+  const remember = useCallback((next: StaffIdentity) => {
     writeStoredIdentity(next);
     setIdentity(next);
-    setEditRefused(false);
-    setReviewRefused(false);
+    applyGrantHints(next, setEditRefused, setReviewRefused);
   }, []);
+
+  useEffect(() => {
+    if (session.data !== undefined) remember(session.data);
+  }, [session.data, remember]);
+
+  useEffect(() => {
+    if (!(session.error instanceof ApiError) || !session.error.isUnauthenticated) {
+      return;
+    }
+    // Only drop a remembered identity. A 403 on the login screen is the
+    // expected "no cookie" answer; calling `forget` there would clear the
+    // session query and refetch it in a loop.
+    if (identity !== null) forget();
+  }, [session.error, identity, forget]);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const next = await api.login(email, password);
+      remember(next);
+      setEditRefused(false);
+      setReviewRefused(false);
+      applyGrantHints(next, setEditRefused, setReviewRefused);
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+    },
+    [queryClient, remember],
+  );
 
   const signOut = useCallback(async () => {
     try {
@@ -94,9 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // controls of somebody entitled to use them.
   const noteReviewRefused = useCallback(() => setReviewRefused(true), []);
 
+  const sessionPending = session.isPending && identity === null;
+
   const value = useMemo<AuthState>(
     () => ({
       identity,
+      sessionPending,
       editRefused,
       reviewRefused,
       signIn,
@@ -107,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }),
     [
       identity,
+      sessionPending,
       editRefused,
       reviewRefused,
       signIn,

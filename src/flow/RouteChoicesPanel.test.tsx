@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { INTEGER_ANSWER_EDGE_LABEL } from "./graphElements";
 import { RouteChoicesPanel } from "./RouteChoicesPanel";
 import { E_Q2_TO_ARCHIVED, Q1, Q2, makeGraph } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
@@ -97,10 +98,32 @@ describe("RouteChoicesPanel", () => {
       <RouteChoicesPanel graph={graph} edge={edge} onClose={vi.fn()} />,
     );
 
+    expect(screen.getByText(INTEGER_ANSWER_EDGE_LABEL)).toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+  });
+
+  it("explains a free-text default route instead of inventing a list", () => {
+    const original = makeGraph();
+    const graph = makeGraph({
+      questions: original.questions.map((question) =>
+        question.id !== Q2
+          ? question
+          : { ...question, answer_type: "free_text" as const },
+      ),
+    });
+    const edge = graph.edges.find((item) => item.id === E_Q2_TO_ARCHIVED);
+    if (edge === undefined) throw new Error("missing Q2 fallback");
+
+    renderWithProviders(
+      <RouteChoicesPanel graph={graph} edge={edge} onClose={vi.fn()} />,
+    );
+
     expect(
       screen.getByText("There is no answer list on this question."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(INTEGER_ANSWER_EDGE_LABEL),
+    ).not.toBeInTheDocument();
   });
 
   it("closes the sheet", async () => {

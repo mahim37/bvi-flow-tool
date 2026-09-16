@@ -10,6 +10,7 @@ import { PreviewView } from "./flow/PreviewView";
 import { ReviewView } from "./flow/ReviewView";
 import { VersionLanding, VersionLayout } from "./flow/VersionLayout";
 import { Card, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
+import { LoadingStatus } from "./components/ui/loading";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,7 +34,10 @@ const queryClient = new QueryClient({
  * link somebody can send.
  */
 function Shell() {
-  const { identity } = useAuth();
+  const { identity, sessionPending } = useAuth();
+  if (identity === null && sessionPending) {
+    return <LoadingStatus centered>Checking your session…</LoadingStatus>;
+  }
   if (identity === null) return <LoginPage />;
   return (
     <Routes>

@@ -9,7 +9,7 @@ import {
 } from "react-router-dom";
 
 import { ApiError } from "../api/client";
-import { useGraph, useVersions } from "../api/queries";
+import { useGraph, useProposals, useReview, useVersions } from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import croppedLogo from "../assets/predmind-logo - cropped.webp";
 import { useAuth } from "../auth/useAuth";
@@ -26,10 +26,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { AlertsButton } from "./AlertsButton";
 import type { ChromeAlert } from "./AlertsButton";
 import { CreateProductDialog } from "./CreateProductDialog";
 import { DraftBar } from "./DraftBar";
+import {
+  canvasCursorRole,
+  draftChromeLabel,
+  draftChromeState,
+  isUnderReview,
+  latestChangeRequest,
+  proposalForVersion,
+  reviewRoundFrom,
+  sameEmail,
+} from "./draftState";
 import { versionLabel } from "./labels";
 import type { VersionContext } from "./versionContext";
 
@@ -121,6 +132,8 @@ export function VersionLayout() {
   // here (rather than where it used to sit, further down) because the
   // questionnaire filter below needs it too.
   const graphData = graph.data;
+  const isDraft = graphData?.version.is_draft === true;
+  const review = useReview(isDraft ? (versionId ?? null) : null);
 
   // No explicit `?questionnaire=` is not "show every product merged
   // together" -- it defaults to whichever product the version actually
@@ -131,6 +144,14 @@ export function VersionLayout() {
     questionnaireId ?? graphData?.version.questionnaire ?? null;
 
   const versions = useVersions(effectiveQuestionnaireId);
+  const submittedProposals = useProposals({
+    questionnaire: isDraft ? effectiveQuestionnaireId : null,
+    status: "submitted",
+  });
+  const approvedProposals = useProposals({
+    questionnaire: isDraft ? effectiveQuestionnaireId : null,
+    status: "approved",
+  });
 
   // Picking a questionnaire in `topbar__picker` only ever changed which
   // product the *version* select's own options belonged to -- the page
@@ -184,10 +205,39 @@ export function VersionLayout() {
     [versions.data],
   );
 
+  const proposal = latestChangeRequest([
+    graphData?.change_request,
+    review.data?.change_request,
+    proposalForVersion(submittedProposals.data, versionId),
+    proposalForVersion(approvedProposals.data, versionId),
+  ]);
+  const lock = proposal?.lock ?? null;
+  const lockedByOther = lock !== null && !sameEmail(lock.email, identity?.email);
+  const discarded = graph.error instanceof ApiError && graph.error.isNotFound;
+  const cursorRole = canvasCursorRole({
+    isDraft: graphData?.version.is_draft ?? false,
+    status: proposal?.status,
+    lockEmail: lock?.email,
+    identityEmail: identity?.email,
+    ...(identity?.permission_codes !== undefined
+      ? { permissionCodes: identity.permission_codes }
+      : {}),
+    ...reviewRoundFrom(proposal),
+  });
+  const chromeState = draftChromeState({
+    discarded,
+    isDraft: graphData?.version.is_draft ?? discarded,
+    status: proposal?.status,
+    lockedByOther,
+    ...reviewRoundFrom(proposal),
+    hideOpen: cursorRole === "Editor",
+  });
   const editable =
     graphData !== undefined &&
     graphData.version.is_draft &&
-    graphData.change_request?.status === "open";
+    proposal?.status === "open" &&
+    !isUnderReview(proposal.status, reviewRoundFrom(proposal)) &&
+    !lockedByOther;
 
   const publishedAlerts: ChromeAlert[] = [];
   if (graphData !== undefined && !graphData.version.is_draft) {
@@ -299,6 +349,25 @@ export function VersionLayout() {
             </SelectContent>
           </Select>
 
+          {chromeState !== null && (
+            <Badge
+              tone={
+                chromeState === "open"
+                  ? "added"
+                  : chromeState === "locked"
+                    ? "unreach"
+                    : chromeState === "under_review"
+                      ? "changed"
+                      : "removed"
+              }
+              {...(chromeState === "locked" && lock !== null
+                ? { title: `Locked by ${lock.email}` }
+                : {})}
+            >
+              {draftChromeLabel(chromeState)}
+            </Badge>
+          )}
+
           {graphData !== undefined && graphData.version.is_draft === false && (
             <div className="flex shrink-0 items-center gap-2">
               <AlertsButton items={publishedAlerts} />
@@ -382,6 +451,7 @@ export function VersionLayout() {
         {graph.data !== undefined && (
           <DraftBar
             graph={graph.data}
+            proposal={proposal}
             versions={versions.data ?? []}
             onOpenVersion={(next) =>
               navigate(next === null ? "/" : `/versions/${next}`)
@@ -400,6 +470,7 @@ export function VersionLayout() {
             {
               graph: graph.data,
               versions: versions.data ?? [],
+              proposal,
               editable,
             } satisfies VersionContext
           }

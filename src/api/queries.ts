@@ -8,6 +8,7 @@ import {
   bothReviewersApproved,
   type ChangeRequest,
   type Edge,
+  type Graph,
   type PreviewAnswer,
   type QuestionOption,
   type UUID,
@@ -19,6 +20,7 @@ export const versionsKey = (questionnaireId?: UUID | null) =>
   ["versions", questionnaireId ?? "all"] as const;
 export const graphKey = (versionId: UUID) => ["graph", versionId] as const;
 export const reviewKey = (versionId: UUID) => ["review", versionId] as const;
+export const sessionKey = ["session"] as const;
 
 /**
  * A refusal is an answer, not a network blip.
@@ -57,6 +59,7 @@ export function useReview(versionId: UUID | null) {
     queryFn: ({ signal }) => api.fetchReview(versionId as UUID, signal),
     enabled: versionId !== null,
     retry: retryUnlessRefused,
+    refetchOnMount: "always",
   });
 }
 
@@ -66,6 +69,19 @@ export function useGraph(versionId: UUID | null) {
     queryFn: ({ signal }) => api.fetchGraph(versionId as UUID, signal),
     enabled: versionId !== null,
     retry: retryUnlessRefused,
+    refetchOnMount: "always",
+  });
+}
+
+/** Who is signed in, from `GET /api/staff/auth/session/`. The cookie is
+ * the session; this is how the client learns email and permission codes
+ * without waiting for a write to be refused. */
+export function useSession() {
+  return useQuery({
+    queryKey: sessionKey,
+    queryFn: ({ signal }) => api.fetchSession(signal),
+    retry: false,
+    staleTime: 30_000,
   });
 }
 
@@ -80,6 +96,7 @@ export function useProposals(filters: api.ProposalFilters) {
     queryFn: ({ signal }) => api.listProposals(filters, signal),
     enabled: filters.questionnaire !== null && filters.questionnaire !== undefined,
     retry: retryUnlessRefused,
+    refetchOnMount: "always",
   });
 }
 
@@ -122,6 +139,7 @@ function invalidateGraph(client: QueryClient, versionId: UUID) {
     // questionnaire, and every cached filtering of the list is equally
     // out of date once a version is created, published or discarded.
     client.invalidateQueries({ queryKey: ["versions"] }),
+    client.invalidateQueries({ queryKey: ["proposals"] }),
   ]);
 }
 
@@ -140,6 +158,7 @@ export function useCreateDraft() {
     onSuccess: (changeRequest) =>
       Promise.all([
         client.invalidateQueries({ queryKey: ["versions"] }),
+        client.invalidateQueries({ queryKey: ["proposals"] }),
         client.invalidateQueries({ queryKey: graphKey(changeRequest.draft_version) }),
       ]),
   });
@@ -170,6 +189,7 @@ export function useDiscardDraft() {
       client.removeQueries({ queryKey: graphKey(versionId) });
       client.removeQueries({ queryKey: reviewKey(versionId) });
       void client.invalidateQueries({ queryKey: ["versions"] });
+      void client.invalidateQueries({ queryKey: ["proposals"] });
     },
   });
 }
@@ -213,12 +233,30 @@ export function useReorderEdges(versionId: UUID) {
   });
 }
 
+function patchProposal(
+  client: QueryClient,
+  versionId: UUID,
+  changeRequest: ChangeRequest,
+) {
+  client.setQueryData<Graph>(graphKey(versionId), (current) =>
+    current === undefined ? current : { ...current, change_request: changeRequest },
+  );
+  client.setQueryData(
+    reviewKey(versionId),
+    (current: { change_request?: ChangeRequest } | undefined) =>
+      current === undefined ? current : { ...current, change_request: changeRequest },
+  );
+}
+
 export function useSubmitDraft(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (substituteReviewerId?: UUID) =>
       api.submitDraft(versionId, substituteReviewerId),
-    onSuccess: () => invalidateGraph(client, versionId),
+    onSuccess: (changeRequest) => {
+      patchProposal(client, versionId, changeRequest);
+      return invalidateGraph(client, versionId);
+    },
   });
 }
 
@@ -239,7 +277,10 @@ export function useWithdrawDraft(versionId: UUID) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => api.withdrawDraft(versionId),
-    onSuccess: () => invalidateGraph(client, versionId),
+    onSuccess: (changeRequest) => {
+      patchProposal(client, versionId, changeRequest);
+      return invalidateGraph(client, versionId);
+    },
   });
 }
 
