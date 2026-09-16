@@ -308,6 +308,23 @@ describe("DraftBar author actions", () => {
     expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
   });
 
+  it("hides undo/redo rather than crashing when a graph omits edit_history entirely", () => {
+    // `edit_history` is typed as always present (`EditHistoryState | null`),
+    // but a backend that has not yet deployed the undo/redo release omits
+    // the key rather than sending an explicit `null` -- this reproduces
+    // that payload shape (not achievable through `makeGraph`'s typed
+    // overrides) and guards the crash it caused: `editHistory.undo` read
+    // off an `undefined` `graph.edit_history`.
+    signIn(AUTHOR);
+    const graph = draftGraph(openProposal({ created_by_email: AUTHOR }));
+    const payload = graph as unknown as Record<string, unknown>;
+    delete payload["edit_history"];
+
+    expect(() => renderBar(graph)).not.toThrow();
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Redo" })).not.toBeInTheDocument();
+  });
+
   it("hides undo/redo once the draft is frozen under review", () => {
     signIn(AUTHOR);
     renderBar({

@@ -151,8 +151,13 @@ export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarP
   // Assigned to a local rather than read off `graph.edit_history` at each
   // use, the same reasoning `changeRequest` above already follows: TS
   // narrows a `const` across the closures below, which it will not do for
-  // a prop's own property.
-  const editHistory = graph.edit_history;
+  // a prop's own property. Coalesced to `null` the same way `useAuth`
+  // guards `identity.permission_codes` -- the field is typed as always
+  // present, but a backend that has not yet deployed the undo/redo
+  // release omits the key entirely rather than sending an explicit
+  // `null`, which `graph.edit_history` on its own would read as
+  // `undefined` and crash the `.undo`/`.can_undo` reads below.
+  const editHistory = graph.edit_history ?? null;
 
   const labelId = useId();
   const [label, setLabel] = useState("");
