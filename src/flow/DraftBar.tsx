@@ -17,8 +17,10 @@ import {
   useActivateVersion,
   useCreateDraft,
   useDiscardDraft,
+  useRedoDraft,
   useReleaseLock,
   useSubmitDraft,
+  useUndoDraft,
   useWithdrawDraft,
 } from "../api/queries";
 import { useAuth } from "../auth/useAuth";
@@ -27,7 +29,13 @@ import type { ChromeAlert } from "./AlertsButton";
 import { ConfirmAction } from "./ConfirmAction";
 import { EditorDialog } from "./EditorDialog";
 import { isUnderReview, reviewRoundFrom, sameEmail } from "./draftState";
-import { formatTimestamp, statusLabel, statusMeaning, versionLabel } from "./labels";
+import {
+  editHistoryTooltip,
+  formatTimestamp,
+  statusLabel,
+  statusMeaning,
+  versionLabel,
+} from "./labels";
 import { SubmitForReview } from "./SubmitForReview";
 import {
   useReviewErrorHandler,
@@ -140,6 +148,11 @@ export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarP
   const onReviewError = useReviewErrorHandler();
   const versionId = graph.version.id;
   const changeRequest = proposal ?? graph.change_request;
+  // Assigned to a local rather than read off `graph.edit_history` at each
+  // use, the same reasoning `changeRequest` above already follows: TS
+  // narrows a `const` across the closures below, which it will not do for
+  // a prop's own property.
+  const editHistory = graph.edit_history;
 
   const labelId = useId();
   const [label, setLabel] = useState("");
@@ -150,13 +163,17 @@ export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarP
   const withdrawDraft = useWithdrawDraft(versionId);
   const releaseLock = useReleaseLock(versionId);
   const activate = useActivateVersion(versionId);
+  const undoDraft = useUndoDraft(versionId);
+  const redoDraft = useRedoDraft(versionId);
 
   const error =
     writeErrorMessage(createDraft.error) ??
     writeErrorMessage(discardDraft.error) ??
     writeErrorMessage(submitDraft.error) ??
     writeErrorMessage(withdrawDraft.error) ??
-    writeErrorMessage(activate.error);
+    writeErrorMessage(activate.error) ??
+    writeErrorMessage(undoDraft.error) ??
+    writeErrorMessage(redoDraft.error);
 
   function startProposal(event: React.FormEvent, close: () => void) {
     event.preventDefault();
@@ -443,6 +460,43 @@ export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarP
 
       <div className="flex flex-wrap items-center gap-2">
         <AlertsButton items={alerts} />
+
+        {/* Undo/redo walk the draft's own private revision timeline, not
+              the permanent audit trail -- shown only where an edit could
+              legally happen right now (open, not under review, not held
+              by someone else, and this account may edit at all), the
+              same guard every content-editing control in the map already
+              applies. `editHistory === null` only outside that window in
+              practice (a published version never reaches this branch),
+              but stays a real check rather than a cast: the payload
+              types it nullable, so this is honest about the case where
+              it is. */}
+        {isOpen &&
+          !isFrozen &&
+          !lockedByOther &&
+          !editRefused &&
+          editHistory !== null && (
+            <div
+              className="flex items-center gap-1"
+              role="group"
+              aria-label="Draft history"
+            >
+              <Cta
+                title="Undo"
+                description={editHistoryTooltip("Undo", editHistory.undo)}
+                disabled={busy || redoDraft.isPending || !editHistory.can_undo}
+                loading={undoDraft.isPending}
+                onClick={() => undoDraft.mutate(undefined, { onError: onWriteError })}
+              />
+              <Cta
+                title="Redo"
+                description={editHistoryTooltip("Redo", editHistory.redo)}
+                disabled={busy || undoDraft.isPending || !editHistory.can_redo}
+                loading={redoDraft.isPending}
+                onClick={() => redoDraft.mutate(undefined, { onError: onWriteError })}
+              />
+            </div>
+          )}
 
         {heldByMe && isOpen && !isFrozen && (
           <ConfirmAction

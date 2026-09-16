@@ -7,6 +7,7 @@ import type {
   ChangeRequestStatus,
   ComparePayload,
   Edge,
+  EditHistoryState,
   Graph,
   Paginated,
   PreviewAnswer,
@@ -179,6 +180,28 @@ export const withdrawDraft = (versionId: UUID) =>
  */
 export const releaseLock = (versionId: UUID) =>
   request<ChangeRequest>(`${version(versionId)}/lock/`, { method: "DELETE" });
+
+/* ------------------------------------------------------------------ */
+/* Draft edit history (undo/redo).                                     */
+/*                                                                     */
+/* Both answer with the new history-control state, not the restored     */
+/* graph -- `useUndoDraft`/`useRedoDraft` refetch `graph/` for that.     */
+/* Both 409 the same way every other draft write does: nothing to       */
+/* undo/redo, the draft frozen under review, not a draft at all, or      */
+/* another staff member holding the edit lock.                          */
+/* ------------------------------------------------------------------ */
+
+export const undoDraft = (versionId: UUID) =>
+  request<EditHistoryState>(`${version(versionId)}/undo/`, {
+    method: "POST",
+    body: {},
+  });
+
+export const redoDraft = (versionId: UUID) =>
+  request<EditHistoryState>(`${version(versionId)}/redo/`, {
+    method: "POST",
+    body: {},
+  });
 
 /* ------------------------------------------------------------------ */
 /* Review and publish (phase 4).                                       */

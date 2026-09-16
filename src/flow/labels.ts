@@ -5,6 +5,7 @@ import type {
   DiffChange,
   DiffKind,
   Edge,
+  EditHistoryAction,
   PreviewRegion,
   Question,
   QuestionOption,
@@ -192,10 +193,25 @@ const ACTIVITY_EVENT_LABELS: Record<ActivityEventType, string> = {
   edge_changed: "Edge changed",
   edge_removed: "Edge removed",
   edges_reordered: "Edges reordered",
+  undone: "Edit undone",
+  redone: "Edit redone",
 };
 
 export function activityEventLabel(type: ActivityEventType): string {
   return ACTIVITY_EVENT_LABELS[type];
+}
+
+/** Native-tooltip text for the Undo/Redo buttons, folding in the
+ * server's own display-ready `detail` -- "Undo: Edge added: q1 (yes) ->
+ * q2". Falls back to a plain sentence when there is nothing to do, which
+ * is also when the button itself is disabled. */
+export function editHistoryTooltip(
+  verb: "Undo" | "Redo",
+  action: EditHistoryAction | null,
+): string {
+  return action === null
+    ? `Nothing to ${verb.toLowerCase()}.`
+    : `${verb}: ${action.detail}`;
 }
 
 const DIFF_KIND_LABELS: Record<DiffKind, string> = {

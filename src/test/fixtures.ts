@@ -217,6 +217,10 @@ export function makeGraph(overrides: Partial<Graph> = {}): Graph {
       dead_edge_ids: [E_Q2_DEAD],
       broken_edge_ids: [E_Q2_TO_ARCHIVED, E_Q4_TO_MISSING],
     },
+    // Matches the default `version.is_draft: false` above -- a published
+    // version has no revision timeline. Draft-specific tests override
+    // this the same way they override `version`/`change_request`.
+    edit_history: null,
   };
   return { ...graph, ...overrides };
 }

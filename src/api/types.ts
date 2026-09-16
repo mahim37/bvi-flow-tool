@@ -305,6 +305,57 @@ export interface GraphDiagnostics {
   broken_edge_ids: UUID[];
 }
 
+/* ------------------------------------------------------------------ */
+/* Draft edit history (undo/redo).                                     */
+/*                                                                     */
+/* The backend keeps a private revision timeline per draft, separate    */
+/* from the permanent `ActivityEvent` trail -- undo/redo walk that      */
+/* timeline; they do not rewrite or remove audit rows. See the undo/    */
+/* redo API contract for the full shape and error cases.                */
+/* ------------------------------------------------------------------ */
+
+/** The subset of `ActivityEventType` a content edit can produce -- the
+ * only kinds of step a draft's revision timeline ever holds. */
+export type DraftEditEventType =
+  | "section_added"
+  | "section_changed"
+  | "section_removed"
+  | "question_added"
+  | "question_changed"
+  | "question_archived"
+  | "questions_reordered"
+  | "option_added"
+  | "option_changed"
+  | "option_removed"
+  | "options_reordered"
+  | "edge_added"
+  | "edge_changed"
+  | "edge_removed"
+  | "edges_reordered";
+
+/** The one revision undo/redo would apply next -- what *would* happen,
+ * not a record of what already did (that is `ActivityEvent`). `detail` is
+ * already display-ready text, fit to show in a tooltip as-is. */
+export interface EditHistoryAction {
+  revision_id: UUID;
+  event_type: DraftEditEventType;
+  detail: string;
+}
+
+/**
+ * Undo/redo availability for one draft, served on `graph/` and echoed
+ * back by `undo/`/`redo/` themselves as the new state after either acts.
+ *
+ * Both flags false and both actions null is a real, reachable state -- a
+ * fresh draft with no tracked edits yet -- not a loading placeholder.
+ */
+export interface EditHistoryState {
+  can_undo: boolean;
+  can_redo: boolean;
+  undo: EditHistoryAction | null;
+  redo: EditHistoryAction | null;
+}
+
 export interface Graph {
   version: Version;
   /** Null for anything that is not a draft, so this doubles as "is this
@@ -314,6 +365,10 @@ export interface Graph {
   questions: Question[];
   edges: Edge[];
   diagnostics: GraphDiagnostics;
+  /** Null for anything that is not a draft -- undo/redo apply only to a
+   * draft's own private revision timeline, which a published version has
+   * none of. */
+  edit_history: EditHistoryState | null;
 }
 
 /**
@@ -541,10 +596,13 @@ export interface Paginated<T> {
  * Two groups, and the split is the point. The first eight are a proposal's
  * lifecycle, and two of them -- `published` and `rolled_back` -- are the
  * only entries in the whole table that change what a respondent is asked.
- * The remaining fifteen are the edits inside a proposal: they exist
+ * The remaining seventeen are the edits inside a proposal: they exist
  * because a proposal has one author and more than one person can edit it,
  * since the lock hands over once idle and a rejected proposal reopens for
- * anybody holding the edit code.
+ * anybody holding the edit code. `undone`/`redone` are content edits in
+ * that same sense -- they change what the draft says -- but stay their
+ * own kind rather than reusing e.g. `edge_added`, since what happened is
+ * "an earlier step was reapplied," not a fresh edit of that shape.
  */
 export type ActivityEventType =
   | "draft_opened"
@@ -569,7 +627,9 @@ export type ActivityEventType =
   | "edge_added"
   | "edge_changed"
   | "edge_removed"
-  | "edges_reordered";
+  | "edges_reordered"
+  | "undone"
+  | "redone";
 
 /**
  * One line of the trail: who did what, to which version, when.

@@ -103,6 +103,26 @@ describe("approve", () => {
   });
 });
 
+describe("undo/redo", () => {
+  it("posts an empty object to the version's undo path", async () => {
+    await api.undoDraft("v1");
+
+    const call = lastCall();
+    expect(call.url).toBe("/api/staff/flow-tool/versions/v1/undo/");
+    expect(call.method).toBe("POST");
+    expect(call.body).toEqual({});
+  });
+
+  it("posts an empty object to the version's redo path", async () => {
+    await api.redoDraft("v1");
+
+    const call = lastCall();
+    expect(call.url).toBe("/api/staff/flow-tool/versions/v1/redo/");
+    expect(call.method).toBe("POST");
+    expect(call.body).toEqual({});
+  });
+});
+
 describe("edge updates", () => {
   it("sends only the end being moved", async () => {
     // `FlowToolEdgeUpdateSerializer` has no defaults, so an absent key

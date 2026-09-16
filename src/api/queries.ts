@@ -293,6 +293,47 @@ export function useReleaseLock(versionId: UUID) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Draft edit history (undo/redo).                                     */
+/*                                                                     */
+/* Deliberately not patched into the cache from the mutation's own       */
+/* response the way `patchProposal` does for submit/withdraw: that       */
+/* response is only the new history-control state, not a restored       */
+/* graph, and drawing the map from anything but a real refetch would be  */
+/* exactly the optimistic update this app never does. `isPending` stays  */
+/* true until `invalidateGraph`'s refetch resolves (TanStack awaits a    */
+/* hook-level `onSuccess` before settling the mutation -- see             */
+/* `useDiscardDraft`'s own comment on the same mechanism), which is what  */
+/* keeps the buttons showing a spinner against the *old* graph rather     */
+/* than going idle before the restored one has painted.                  */
+/* ------------------------------------------------------------------ */
+
+export function useUndoDraft(versionId: UUID) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.undoDraft(versionId),
+    onSuccess: () =>
+      Promise.all([
+        invalidateGraph(client, versionId),
+        // The trail gets a new `undone` row; refresh the sidebar's
+        // History disclosure the same way every other edit already does.
+        client.invalidateQueries({ queryKey: ["history"] }),
+      ]),
+  });
+}
+
+export function useRedoDraft(versionId: UUID) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.redoDraft(versionId),
+    onSuccess: () =>
+      Promise.all([
+        invalidateGraph(client, versionId),
+        client.invalidateQueries({ queryKey: ["history"] }),
+      ]),
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Review and publish (phase 4).                                       */
 /*                                                                     */
 /* All three verbs invalidate the map as well as the diff. A review is  */

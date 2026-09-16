@@ -269,6 +269,109 @@ describe("DraftBar author actions", () => {
     expect(screen.queryByText(/2026-09-16T07:18:48/)).not.toBeInTheDocument();
   });
 
+  const SOME_UNDO_ACTION = {
+    revision_id: "revision-uuid",
+    event_type: "edge_added" as const,
+    detail: "Edge added: q1 (yes) -> q2",
+  };
+
+  it("shows Undo and Redo per the server's own can_undo/can_redo flags", () => {
+    signIn(AUTHOR);
+    renderBar({
+      ...draftGraph(openProposal({ created_by_email: AUTHOR })),
+      edit_history: {
+        can_undo: true,
+        can_redo: false,
+        undo: SOME_UNDO_ACTION,
+        redo: null,
+      },
+    });
+
+    const undo = screen.getByRole("button", { name: "Undo" });
+    const redo = screen.getByRole("button", { name: "Redo" });
+    expect(undo).toBeEnabled();
+    expect(redo).toBeDisabled();
+    // `detail` is already display-ready text from the server -- shown
+    // as-is in the native tooltip rather than reworded here.
+    expect(undo).toHaveAttribute("title", "Undo: Edge added: q1 (yes) -> q2");
+    expect(redo).toHaveAttribute("title", "Nothing to redo.");
+  });
+
+  it("shows both controls disabled on a fresh draft with no tracked edits", () => {
+    signIn(AUTHOR);
+    renderBar({
+      ...draftGraph(openProposal({ created_by_email: AUTHOR })),
+      edit_history: { can_undo: false, can_redo: false, undo: null, redo: null },
+    });
+
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+  });
+
+  it("hides undo/redo once the draft is frozen under review", () => {
+    signIn(AUTHOR);
+    renderBar({
+      ...draftGraph(openProposal({ created_by_email: AUTHOR, status: "submitted" })),
+      edit_history: {
+        can_undo: true,
+        can_redo: false,
+        undo: SOME_UNDO_ACTION,
+        redo: null,
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Redo" })).not.toBeInTheDocument();
+  });
+
+  it("hides undo/redo while someone else holds the lock", () => {
+    signIn(AUTHOR);
+    renderBar({
+      ...draftGraph(
+        openProposal({
+          created_by_email: AUTHOR,
+          lock: {
+            user_id: "77777777-7777-4777-8777-777777777777",
+            email: OTHER_EDITOR,
+            since: "2026-09-16T07:18:48.654757+00:00",
+            expires_at: "2026-09-16T08:18:48.654757+00:00",
+          },
+        }),
+      ),
+      edit_history: {
+        can_undo: true,
+        can_redo: false,
+        undo: SOME_UNDO_ACTION,
+        redo: null,
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Redo" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer undo/redo on a published version", () => {
+    renderWithProviders(
+      <MemoryRouter>
+        <DraftBar
+          graph={makeGraph({
+            edit_history: {
+              can_undo: true,
+              can_redo: false,
+              undo: SOME_UNDO_ACTION,
+              redo: null,
+            },
+          })}
+          versions={[]}
+          onOpenVersion={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Redo" })).not.toBeInTheDocument();
+  });
+
   it("offers Unlock with a confirm overlay when this user holds the lock", async () => {
     const user = userEvent.setup();
     signIn(AUTHOR);
