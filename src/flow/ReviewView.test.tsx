@@ -206,3 +206,43 @@ describe("ReviewView two-reviewer publish gate", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("ReviewView with no parent to compare against", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("says there is nothing to compare, not that everything changed", () => {
+    const graph = makeGraph({
+      version: { ...makeGraph().version, parent_version: null },
+      change_request: null,
+    });
+    harness.graph = graph;
+    harness.payload = {
+      version: graph.version,
+      base_version: null,
+      stale_against: null,
+      change_request: null,
+      diff: { is_empty: true, sections: [], questions: [], options: [], edges: [] },
+      preview_regions: [],
+      summary: { added: 0, removed: 0, changed: 0 },
+      publish_blocker: null,
+    };
+    renderWithProviders(
+      <MemoryRouter initialEntries={[`/versions/${VERSION_ID}/review`]}>
+        <Routes>
+          <Route path="/versions/:versionId/review" element={<ReviewView />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText(/this is the first version, so there is nothing to compare/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/no earlier version to diff this one against/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/everything here is new/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/still says exactly what/i)).not.toBeInTheDocument();
+  });
+});
