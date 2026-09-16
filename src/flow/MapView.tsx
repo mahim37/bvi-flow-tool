@@ -42,6 +42,12 @@ export function MapView() {
       ? { permissionCodes: identity.permission_codes }
       : {}),
     ...reviewRoundFrom(liveProposal),
+    ...(liveProposal?.reviewer_1_email
+      ? { reviewer1Email: liveProposal.reviewer_1_email }
+      : {}),
+    ...(liveProposal?.reviewer_2_email
+      ? { reviewer2Email: liveProposal.reviewer_2_email }
+      : {}),
   });
   const navigate = useNavigate();
   const { versionId } = useParams<{ versionId: string }>();

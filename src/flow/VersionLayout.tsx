@@ -38,6 +38,7 @@ import {
   isUnderReview,
   latestChangeRequest,
   proposalForVersion,
+  reviewApprovalProgress,
   reviewRoundFrom,
   sameEmail,
 } from "./draftState";
@@ -223,6 +224,8 @@ export function VersionLayout() {
       ? { permissionCodes: identity.permission_codes }
       : {}),
     ...reviewRoundFrom(proposal),
+    ...(proposal?.reviewer_1_email ? { reviewer1Email: proposal.reviewer_1_email } : {}),
+    ...(proposal?.reviewer_2_email ? { reviewer2Email: proposal.reviewer_2_email } : {}),
   });
   const chromeState = draftChromeState({
     discarded,
@@ -364,7 +367,9 @@ export function VersionLayout() {
                 ? { title: `Locked by ${lock.email}` }
                 : {})}
             >
-              {draftChromeLabel(chromeState)}
+              {chromeState === "under_review"
+                ? draftChromeLabel(chromeState, reviewApprovalProgress(proposal))
+                : draftChromeLabel(chromeState)}
             </Badge>
           )}
 

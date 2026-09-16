@@ -6,6 +6,7 @@ import {
   draftChromeState,
   isUnderReview,
   latestChangeRequest,
+  reviewApprovalProgress,
 } from "./draftState";
 
 describe("isUnderReview", () => {
@@ -119,16 +120,50 @@ describe("draftChromeLabel", () => {
     expect(draftChromeLabel("under_review")).toBe("Under review");
     expect(draftChromeLabel("discarded")).toBe("Discarded");
   });
+
+  it("puts the approval count on Under review", () => {
+    expect(draftChromeLabel("under_review", { approved: 0, required: 2 })).toBe(
+      "Under review 0/2",
+    );
+    expect(draftChromeLabel("under_review", { approved: 1, required: 2 })).toBe(
+      "Under review 1/2",
+    );
+  });
+});
+
+describe("reviewApprovalProgress", () => {
+  it("counts stamped approval timestamps out of two", () => {
+    expect(
+      reviewApprovalProgress({
+        reviewer_1_approved_at: null,
+        reviewer_2_approved_at: null,
+      }),
+    ).toEqual({ approved: 0, required: 2 });
+    expect(
+      reviewApprovalProgress({
+        reviewer_1_approved_at: "2026-09-16T12:00:00Z",
+        reviewer_2_approved_at: null,
+      }),
+    ).toEqual({ approved: 1, required: 2 });
+    expect(
+      reviewApprovalProgress({
+        reviewer_1_approved_at: "2026-09-16T12:00:00Z",
+        reviewer_2_approved_at: "2026-09-16T12:05:00Z",
+      }),
+    ).toEqual({ approved: 2, required: 2 });
+  });
 });
 
 describe("canvasCursorRole", () => {
-  it("is Reviewer while the draft is under review", () => {
+  it("is Reviewer only for a named reviewer while the draft is under review", () => {
     expect(
       canvasCursorRole({
         isDraft: true,
         status: "submitted",
         lockEmail: "me@example.com",
         identityEmail: "me@example.com",
+        reviewer1Email: "me@example.com",
+        reviewer2Email: "other@example.com",
       }),
     ).toBe("Reviewer");
     expect(
@@ -138,8 +173,30 @@ describe("canvasCursorRole", () => {
         submittedAt: "2026-09-16T12:00:00Z",
         lockEmail: "me@example.com",
         identityEmail: "me@example.com",
+        reviewer1Email: "me@example.com",
       }),
     ).toBe("Reviewer");
+  });
+
+  it("is Viewer under review when this account is not a named reviewer", () => {
+    expect(
+      canvasCursorRole({
+        isDraft: true,
+        status: "submitted",
+        lockEmail: "me@example.com",
+        identityEmail: "me@example.com",
+        reviewer1Email: "boaz.salik@fischerjordan.com",
+        reviewer2Email: "other@example.com",
+      }),
+    ).toBe("Viewer");
+    expect(
+      canvasCursorRole({
+        isDraft: true,
+        status: "submitted",
+        lockEmail: null,
+        identityEmail: "me@example.com",
+      }),
+    ).toBe("Viewer");
   });
 
   it("is Editor when this user holds the lock on an open draft", () => {

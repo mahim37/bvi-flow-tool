@@ -166,11 +166,13 @@ describe("MapView canvas cursor role", () => {
     expect(harness.cursorRole).toBe("Editor");
   });
 
-  it("is Reviewer while the draft is submitted, even if this user still holds a lock", () => {
+  it("is Reviewer while this user is a named reviewer on a submitted draft", () => {
     harness.graph = makeGraph({
       version: { ...makeGraph().version, is_draft: true, is_active: false },
       change_request: draftRequest({
         status: "submitted",
+        reviewer_1_email: "editor@example.com",
+        reviewer_2_email: "boaz.salik@fischerjordan.com",
         lock: {
           user_id: "77777777-7777-4777-8777-777777777777",
           email: "editor@example.com",
@@ -183,13 +185,26 @@ describe("MapView canvas cursor role", () => {
     expect(harness.cursorRole).toBe("Reviewer");
   });
 
-  it("is Reviewer when a review round is named even if status still says open", () => {
+  it("is Viewer under review when this user is not a named reviewer", () => {
+    harness.graph = makeGraph({
+      version: { ...makeGraph().version, is_draft: true, is_active: false },
+      change_request: draftRequest({
+        status: "submitted",
+        reviewer_1_email: "boaz.salik@fischerjordan.com",
+        reviewer_2_email: "other@example.com",
+      }),
+    });
+    renderMap();
+    expect(harness.cursorRole).toBe("Viewer");
+  });
+
+  it("is Reviewer when a review round names this user even if status still says open", () => {
     harness.graph = makeGraph({
       version: { ...makeGraph().version, is_draft: true, is_active: false },
       change_request: draftRequest({
         status: "open",
         submitted_at: "2026-09-16T12:00:00Z",
-        reviewer_1_email: "boaz.salik@fischerjordan.com",
+        reviewer_1_email: "editor@example.com",
       }),
     });
     renderMap();
