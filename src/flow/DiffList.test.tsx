@@ -7,17 +7,34 @@ import {
   E_NO_TO_END,
   E_Q2_TO_ARCHIVED,
   E_YES_TO_Q2,
+  OPTION_MAYBE_BASE,
   OPTION_YES,
   Q1,
   Q2,
+  RISK_BASE,
+  RISK_DRAFT,
+  RISK_PROMPT,
+  makeBaseGraph,
   makeGraph,
 } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 import { DiffList } from "./DiffList";
 import { groupDiffByNode } from "./diffGroups";
-import { diffSentence } from "./diffSentence";
+import { diffPieces, diffSentence } from "./diffSentence";
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** What `diffing` reports when the draft retires `risk_2`: still matched
+ * by code, so `changed`, with only the `archived` flag differing. */
+const RETIRED_RISK: ItemDiff = {
+  kind: "question",
+  key: "risk_2",
+  change: "changed",
+  base_id: RISK_BASE,
+  draft_id: RISK_DRAFT,
+  question_id: RISK_DRAFT,
+  fields: [{ field: "archived", base: false, draft: true }],
+};
 
 function item(
   overrides: Partial<ItemDiff> & Pick<ItemDiff, "change" | "key">,
@@ -65,9 +82,7 @@ describe("diffSentence", () => {
       }),
       graph,
     );
-    expect(toQ2).toBe(
-      `Added edge Yes from ${q1.prompt} to ${q2.prompt}`,
-    );
+    expect(toQ2).toBe(`Added edge Yes from ${q1.prompt} to ${q2.prompt}`);
     expect(toQ2).not.toMatch(/id:/);
     expectNoUuid(toQ2);
 
@@ -98,9 +113,7 @@ describe("diffSentence", () => {
     );
     const q3 = graph.questions.find((question) => question.code === "Q3");
     if (q3 === undefined) throw new Error("fixture is missing Q3");
-    expect(sentence).toBe(
-      `Added edge Default route from ${q2.prompt} to ${q3.prompt}`,
-    );
+    expect(sentence).toBe(`Added edge Default route from ${q2.prompt} to ${q3.prompt}`);
     expectNoUuid(sentence);
   });
 
@@ -136,6 +149,47 @@ describe("diffSentence", () => {
     expect(sentence).toBe(`Added section ${section.name}`);
     expect(sentence).not.toMatch(/id:/);
     expectNoUuid(sentence);
+  });
+
+  it("reads a retired question as removed and names it from the base version", () => {
+    // Nothing points at risk_2 any more, so the draft graph does not
+    // serve it: without the base graph the row can only say its kind.
+    expect(diffSentence(RETIRED_RISK, graph)).toBe("Removed question");
+
+    const sentence = diffSentence(RETIRED_RISK, graph, makeBaseGraph());
+    expect(sentence).toBe(`Removed question ${RISK_PROMPT}`);
+    expectNoUuid(sentence);
+
+    // Not on the draft map, so no link to a node that is not there.
+    const pieces = diffPieces(RETIRED_RISK, graph, makeBaseGraph());
+    expect(pieces).toEqual([
+      {
+        type: "ref",
+        prefix: "Removed question ",
+        label: RISK_PROMPT,
+        questionId: null,
+      },
+    ]);
+  });
+
+  it("names a removed option from the base version and still links its question", () => {
+    const row = item({
+      kind: "option",
+      key: "Q1.maybe",
+      change: "removed",
+      base_id: OPTION_MAYBE_BASE,
+      draft_id: null,
+      question_id: Q1,
+    });
+    expect(diffSentence(row, graph)).toBe(`Removed option on ${q1.prompt}`);
+    expect(diffSentence(row, graph, makeBaseGraph())).toBe(
+      `Removed option Maybe on ${q1.prompt}`,
+    );
+    expect(
+      diffPieces(row, graph, makeBaseGraph()).map((piece) =>
+        piece.type === "ref" ? piece.questionId : null,
+      ),
+    ).toEqual([Q1, null, Q1]);
   });
 });
 
@@ -204,6 +258,26 @@ describe("groupDiffByNode", () => {
     expect(groups[0]?.items).toHaveLength(1);
     expect(groups[0]?.items[0]?.kind).toBe("edge");
     expect(groups[1]?.items[0]?.kind).toBe("question");
+  });
+
+  it("titles a retired question the draft graph no longer draws by its base prompt", () => {
+    const rows = [
+      RETIRED_RISK,
+      item({
+        kind: "option",
+        key: "risk_2.high",
+        change: "changed",
+        question_id: RISK_DRAFT,
+      }),
+    ];
+    expect(groupDiffByNode(rows, graph).map((group) => group.title)).toEqual([
+      "risk_2",
+    ]);
+
+    const groups = groupDiffByNode(rows, graph, makeBaseGraph());
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.title).toBe(RISK_PROMPT);
+    expect(groups[0]?.items).toHaveLength(2);
   });
 });
 
@@ -285,6 +359,27 @@ describe("DiffList", () => {
     expect(screen.queryByText("Old prompt")).not.toBeInTheDocument();
     expect(screen.queryByText("New prompt")).not.toBeInTheDocument();
     expect(screen.queryByText("Goes to")).not.toBeInTheDocument();
+  });
+
+  it("shows a retired question as a named removal with no map link", async () => {
+    const onShowOnMap = vi.fn();
+    renderWithProviders(
+      <DiffList
+        items={[RETIRED_RISK]}
+        graph={makeGraph()}
+        baseGraph={makeBaseGraph()}
+        onShowOnMap={onShowOnMap}
+      />,
+    );
+
+    expect(screen.queryByText("risk_2")).not.toBeInTheDocument();
+    await expandNode(RISK_PROMPT);
+    expect(screen.getByText(/Removed question/)).toBeInTheDocument();
+    expect(screen.queryByText(/Changed question/)).not.toBeInTheDocument();
+    expect(screen.getByText("−")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Open on the map/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("lets a reviewer jump to the question the change hangs off", async () => {

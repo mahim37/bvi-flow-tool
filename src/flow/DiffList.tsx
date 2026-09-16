@@ -8,11 +8,17 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { subCount, subHeading } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
 import { groupDiffByNode } from "./diffGroups";
+import { effectiveChange } from "./diffItem";
 import { diffPieces } from "./diffSentence";
 
 interface DiffListProps {
   items: ItemDiff[];
   graph: Graph;
+  /** The version the diff was taken against. It names what the draft
+   * graph cannot: every removed option, edge and section, and a retired
+   * question `graph/` no longer serves. Rows fall back to their kind alone
+   * while it is absent. */
+  baseGraph?: Graph | undefined;
   /** Jump to this change's node on the map. Absent for a section, which
    * hangs off no question, and for a removed item whose question the draft
    * no longer contains -- `question_id` is null in both cases. */
@@ -85,32 +91,32 @@ function MapRef({
 function DiffItem({
   item,
   graph,
+  baseGraph,
   onShowOnMap,
 }: {
   item: ItemDiff;
   graph: Graph;
+  baseGraph: Graph | undefined;
   onShowOnMap: (questionId: string) => void;
 }) {
-  const pieces = diffPieces(item, graph);
+  const change = effectiveChange(item);
+  const pieces = diffPieces(item, graph, baseGraph);
 
   return (
     <li className="min-w-0">
       <article
-        className={cn(
-          "flex w-full min-w-0 flex-col text-left",
-          CHANGE_BG[item.change],
-        )}
+        className={cn("flex w-full min-w-0 flex-col text-left", CHANGE_BG[change])}
       >
         <header className="flex min-w-0 flex-row items-start gap-2 px-2 py-1.5">
-          {item.change !== "changed" && (
+          {change !== "changed" && (
             <span
               className={cn(
                 "w-3 shrink-0 font-mono text-sm font-bold",
-                MARKER_TONE[item.change],
+                MARKER_TONE[change],
               )}
               aria-hidden="true"
             >
-              {MARKER[item.change]}
+              {MARKER[change]}
             </span>
           )}
           <span className="min-w-0 flex-1 text-[0.85rem] leading-snug">
@@ -141,8 +147,11 @@ function DiffItem({
  * expandable section. Edges always hang off the from-question, not the
  * destination. Sections have no node, so each one is its own group.
  */
-export function DiffList({ items, graph, onShowOnMap }: DiffListProps) {
-  const groups = useMemo(() => groupDiffByNode(items, graph), [items, graph]);
+export function DiffList({ items, graph, baseGraph, onShowOnMap }: DiffListProps) {
+  const groups = useMemo(
+    () => groupDiffByNode(items, graph, baseGraph),
+    [items, graph, baseGraph],
+  );
 
   if (groups.length === 0) return null;
 
@@ -180,6 +189,7 @@ export function DiffList({ items, graph, onShowOnMap }: DiffListProps) {
                       key={`${item.kind}:${item.change}:${item.key}`}
                       item={item}
                       graph={graph}
+                      baseGraph={baseGraph}
                       onShowOnMap={onShowOnMap}
                     />
                   ))}

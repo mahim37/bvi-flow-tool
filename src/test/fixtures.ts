@@ -26,6 +26,15 @@ export const E_Q4_TO_MISSING = "cccccccc-0000-4000-8000-000000000005";
 export const E_FOREIGN_TO_Q2 = "cccccccc-0000-4000-8000-000000000006";
 export const FOREIGN_QUESTION = "dddddddd-0000-4000-8000-000000000009";
 
+export const BASE_VERSION_ID = "11111111-1111-4111-8111-111111111100";
+/** `risk_2` on the base version, and the draft's own copy of it. The diff
+ * row for its retirement carries both: `base_id` and `draft_id`. */
+export const RISK_BASE = "aaaaaaaa-0000-4000-8000-0000000000b5";
+export const RISK_DRAFT = "aaaaaaaa-0000-4000-8000-0000000000d5";
+export const RISK_PROMPT = "How comfortable are you with losing money in a bad year";
+/** An answer Q1 offered on the base version and no longer does. */
+export const OPTION_MAYBE_BASE = "bbbbbbbb-0000-4000-8000-0000000000b3";
+
 const option = (
   id: string,
   code: string,
@@ -223,4 +232,41 @@ export function makeGraph(overrides: Partial<Graph> = {}): Graph {
     edit_history: null,
   };
   return { ...graph, ...overrides };
+}
+
+/**
+ * The published version `makeGraph()`'s draft was copied from.
+ *
+ * The same questions, plus two things the draft has since dropped: a
+ * whole question, `risk_2`, and Q1's "Maybe" answer. Nothing points at the
+ * retired question, so the draft's `graph/` no longer serves it (§4.2),
+ * and neither it nor the removed option can be named from the draft
+ * payload -- only from this one, by `base_id`.
+ */
+export function makeBaseGraph(): Graph {
+  const draft = makeGraph();
+  return makeGraph({
+    version: { ...draft.version, id: BASE_VERSION_ID },
+    questions: [
+      ...draft.questions.map((item) =>
+        item.id === Q1
+          ? {
+              ...item,
+              options: [
+                ...item.options,
+                option(OPTION_MAYBE_BASE, "maybe", "Maybe", 2),
+              ],
+            }
+          : item,
+      ),
+      question({
+        id: RISK_BASE,
+        code: "risk_2",
+        prompt: RISK_PROMPT,
+        answer_type: "single_choice",
+        display_order: 5,
+        options: [option("bbbbbbbb-0000-4000-8000-0000000000b5", "high", "High", 0)],
+      }),
+    ],
+  });
 }

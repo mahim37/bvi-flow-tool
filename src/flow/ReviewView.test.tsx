@@ -10,7 +10,11 @@ import {
   Q1,
   Q2,
   Q4_UNREACHABLE,
+  RISK_BASE,
+  RISK_DRAFT,
+  RISK_PROMPT,
   VERSION_ID,
+  makeBaseGraph,
   makeGraph,
 } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
@@ -23,6 +27,7 @@ const REVIEWER_2 = REQUIRED_REVIEWER_EMAILS[1];
 
 const harness = vi.hoisted(() => ({
   graph: null as Graph | null,
+  baseGraph: null as Graph | null,
   payload: null as ReviewPayload | null,
   approveMutate: vi.fn(),
 }));
@@ -32,6 +37,11 @@ vi.mock("../api/queries", () => ({
     isPending: false,
     isError: false,
     data: harness.payload,
+    error: null,
+  }),
+  useGraph: () => ({
+    isLoading: false,
+    data: harness.baseGraph ?? undefined,
     error: null,
   }),
   useApproveDraft: () => ({
@@ -124,6 +134,7 @@ function renderReview(
   reviewOverrides?: Partial<ReviewPayload>,
 ) {
   harness.graph = draftGraph(changeRequest);
+  harness.baseGraph = makeBaseGraph();
   harness.payload = { ...emptyReview(changeRequest), ...reviewOverrides };
   return renderWithProviders(
     <MemoryRouter initialEntries={[`/versions/${VERSION_ID}/review`]}>
@@ -260,6 +271,7 @@ describe("ReviewView with no parent to compare against", () => {
       change_request: null,
     });
     harness.graph = graph;
+    harness.baseGraph = null;
     harness.payload = {
       version: graph.version,
       base_version: null,
@@ -344,5 +356,44 @@ describe("ReviewView change-count pills", () => {
     expect(counts).not.toHaveTextContent("added");
     expect(counts).not.toHaveTextContent("~");
     expect(counts).not.toHaveTextContent("99");
+  });
+
+  it("counts a retired question as removed and names it from the base version", async () => {
+    const user = userEvent.setup();
+    signIn(REVIEWER_1);
+    // `diffing` reports an archival as `changed` with the `archived` flag
+    // flipped -- the code still matches -- and the draft's `graph/` no
+    // longer serves a retired question nothing points at.
+    renderReview(proposal(), {
+      diff: {
+        is_empty: false,
+        sections: [],
+        options: [],
+        edges: [],
+        questions: [
+          diffRow({
+            kind: "question",
+            change: "changed",
+            key: "risk_2",
+            base_id: RISK_BASE,
+            draft_id: RISK_DRAFT,
+            question_id: RISK_DRAFT,
+            fields: [{ field: "archived", base: false, draft: true }],
+          }),
+        ],
+      },
+    });
+
+    const counts = screen.getByRole("list", { name: "Change counts" });
+    expect(counts).toHaveTextContent("+0 questions");
+    expect(counts).toHaveTextContent("−1 removed");
+    expect(counts).toHaveTextContent("0 changed");
+
+    expect(screen.queryByText("risk_2")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: new RegExp(`^${RISK_PROMPT}`) }),
+    );
+    expect(screen.getByText(/Removed question/)).toBeInTheDocument();
+    expect(screen.queryByText(/Changed question/)).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import type { ItemDiff } from "../api/types";
-import { Q1, Q2, Q3_ARCHIVED, Q4_UNREACHABLE, makeGraph } from "../test/fixtures";
+import {
+  Q1,
+  Q2,
+  Q3_ARCHIVED,
+  Q4_UNREACHABLE,
+  RISK_BASE,
+  RISK_DRAFT,
+  makeGraph,
+} from "../test/fixtures";
 import { questionDiffCounts, visibleDiffItems } from "./diffCounts";
 
 function item(
@@ -49,6 +57,34 @@ describe("questionDiffCounts", () => {
         makeGraph(),
       ),
     ).toEqual({ added: 1, removed: 1, changed: 2 });
+  });
+
+  it("counts a retired inherited question as removed, not changed", () => {
+    // `diffing._sides` reports an archival as a changed `archived` field,
+    // since the code still matches on both sides. Rows on that question
+    // ride along under it rather than counting on their own.
+    expect(
+      questionDiffCounts(
+        [
+          item({
+            kind: "question",
+            change: "changed",
+            key: "risk_2",
+            base_id: RISK_BASE,
+            draft_id: RISK_DRAFT,
+            question_id: RISK_DRAFT,
+            fields: [{ field: "archived", base: false, draft: true }],
+          }),
+          item({
+            kind: "option",
+            change: "changed",
+            key: "risk_2.high",
+            question_id: RISK_DRAFT,
+          }),
+        ],
+        makeGraph(),
+      ),
+    ).toEqual({ added: 0, removed: 1, changed: 0 });
   });
 
   it("is zeros when there are no rows", () => {

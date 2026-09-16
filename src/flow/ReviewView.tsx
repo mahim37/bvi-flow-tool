@@ -1,9 +1,9 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
-import { useApproveDraft, useRejectDraft, useReview } from "../api/queries";
+import { useApproveDraft, useGraph, useRejectDraft, useReview } from "../api/queries";
 import { bothReviewersApproved, type ChangeRequest, type UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { questionDiffCounts, visibleDiffItems } from "./diffCounts";
@@ -66,10 +66,19 @@ export function ReviewView() {
   const { versionId } = useParams<{ versionId: string }>();
   const navigate = useNavigate();
   const { graph } = useVersionContext();
-  const { identity, reviewRefused } = useAuth();
+  const { identity, reviewRefused, noteApiError } = useAuth();
   const onReviewError = useReviewErrorHandler();
 
   const review = useReview(versionId ?? null);
+  // The version this diff was taken against (`diffing.compare`'s `base`).
+  // Its graph names what the draft's cannot: a retired question `graph/`
+  // no longer serves, and every removed option, edge and section. A draft
+  // with no parent has none, and the list simply falls back to codes if
+  // this fetch fails -- same routing of a dead session as `VersionLayout`.
+  const baseGraph = useGraph(review.data?.base_version?.id ?? null);
+  useEffect(() => {
+    if (baseGraph.error) noteApiError(baseGraph.error);
+  }, [baseGraph.error, noteApiError]);
   const approve = useApproveDraft(versionId as UUID);
   const reject = useRejectDraft(versionId as UUID);
 
@@ -84,7 +93,9 @@ export function ReviewView() {
     navigate(`/versions/${versionId}?question=${questionId}`);
   }
 
-  if (review.isPending) {
+  // `isLoading` rather than `isPending`: the base graph query is idle, not
+  // loading, while the review has yet to say which version to fetch.
+  if (review.isPending || baseGraph.isLoading) {
     return (
       <main className="flex min-h-0 flex-1 flex-col">
         <LoadingStatus centered>Working out what changed…</LoadingStatus>
@@ -272,7 +283,12 @@ export function ReviewView() {
           </p>
         )}
 
-      <DiffList items={items} graph={graph} onShowOnMap={showOnMap} />
+      <DiffList
+        items={items}
+        graph={graph}
+        baseGraph={baseGraph.data}
+        onShowOnMap={showOnMap}
+      />
 
       {changeRequest !== null && <ReviewHistory changeRequest={changeRequest} />}
 
