@@ -7,9 +7,12 @@ import type { ChangeRequest } from "../api/types";
 import { VERSION_ID, makeGraph } from "../test/fixtures";
 import { renderWithProviders } from "../test/render";
 import { DraftBar } from "./DraftBar";
+import { REQUIRED_REVIEWER_EMAILS } from "./labels";
 
 const AUTHOR = "postman-demo@example.com";
 const OTHER_EDITOR = "boaz.salik@fischerjordan.com";
+const REVIEWER_1 = REQUIRED_REVIEWER_EMAILS[0];
+const REVIEWER_2 = REQUIRED_REVIEWER_EMAILS[1];
 
 function signIn(
   email: string,
@@ -160,6 +163,64 @@ describe("DraftBar", () => {
 
     expect(screen.getByRole("dialog", { name: "Create draft" })).toBeInTheDocument();
     expect(screen.getByLabelText("What's this draft for?")).toBeInTheDocument();
+  });
+});
+
+describe("DraftBar review-tab dot", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("dots the Review tab for a named reviewer with a verdict still owed", () => {
+    signIn(REVIEWER_1);
+    renderBar(
+      makeGraph({
+        version: { ...makeGraph().version, is_draft: true, is_active: false },
+        change_request: openProposal({
+          status: "submitted",
+          reviewer_1_email: REVIEWER_1,
+          reviewer_2_email: REVIEWER_2,
+        }),
+      }),
+    );
+
+    expect(
+      screen.getByRole("link", { name: /Review.*awaiting your review/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the Review tab undotted once this reviewer has already approved", () => {
+    signIn(REVIEWER_1);
+    renderBar(
+      makeGraph({
+        version: { ...makeGraph().version, is_draft: true, is_active: false },
+        change_request: openProposal({
+          status: "approved",
+          reviewer_1_email: REVIEWER_1,
+          reviewer_1_approved_at: "2026-08-02T10:00:00Z",
+          reviewer_2_email: REVIEWER_2,
+        }),
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "Review" })).toBeInTheDocument();
+  });
+
+  it("does not dot the tab for the proposal's own author, even if named as a reviewer", () => {
+    signIn(REVIEWER_1);
+    renderBar(
+      makeGraph({
+        version: { ...makeGraph().version, is_draft: true, is_active: false },
+        change_request: openProposal({
+          created_by_email: REVIEWER_1,
+          status: "submitted",
+          reviewer_1_email: REVIEWER_1,
+          reviewer_2_email: REVIEWER_2,
+        }),
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "Review" })).toBeInTheDocument();
   });
 });
 

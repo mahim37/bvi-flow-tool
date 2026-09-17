@@ -152,6 +152,28 @@ export function draftChromeState({
   return null;
 }
 
+/** Whether `identityEmail` is a named reviewer on `proposal` who hasn't
+ * approved it yet, while it's still under review -- the "you have
+ * something to review" signal the Review tab's dot (`DraftBar.tsx`)
+ * reads. Mirrors `ReviewView.tsx`'s own `isNamedReviewer`/
+ * `myApprovalTimestamp`/`canApprove` trio, which keeps them separate for
+ * its reject button and status wording; this is the one boolean a tab
+ * badge needs. */
+export function isPendingReviewFor(
+  proposal: ChangeRequest | null | undefined,
+  isDraft: boolean,
+  identityEmail: string | null | undefined,
+): boolean {
+  if (proposal == null || !isDraft) return false;
+  if (!isUnderReview(proposal.status, reviewRoundFrom(proposal))) return false;
+  if (sameEmail(proposal.created_by_email, identityEmail)) return false;
+  if (!isNamedReviewer(proposal, identityEmail)) return false;
+  const myApprovedAt = sameEmail(proposal.reviewer_1_email, identityEmail)
+    ? proposal.reviewer_1_approved_at
+    : proposal.reviewer_2_approved_at;
+  return myApprovedAt === null;
+}
+
 export const REQUIRED_REVIEWER_COUNT = 2;
 
 /** How many of the two named reviewers have actually approved. */

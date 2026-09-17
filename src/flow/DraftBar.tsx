@@ -28,7 +28,12 @@ import { AlertsButton } from "./AlertsButton";
 import type { ChromeAlert } from "./AlertsButton";
 import { ConfirmAction } from "./ConfirmAction";
 import { EditorDialog } from "./EditorDialog";
-import { isUnderReview, reviewRoundFrom, sameEmail } from "./draftState";
+import {
+  isPendingReviewFor,
+  isUnderReview,
+  reviewRoundFrom,
+  sameEmail,
+} from "./draftState";
 import {
   editHistoryTooltip,
   formatTimestamp,
@@ -63,15 +68,35 @@ interface DraftBarProps {
 }
 
 /** Map/Review/Preview — a compact cluster centered in the sidebar
- * column, not stretched to its edges. */
-function VersionTabs({ versionId, isDraft }: { versionId: UUID; isDraft: boolean }) {
+ * column, not stretched to its edges. The Review tab carries a red dot
+ * while `needsReview` -- this account is a named reviewer with a verdict
+ * still owed -- so a reviewer who lands on Map first can see there's
+ * something waiting without opening the tab. */
+function VersionTabs({
+  versionId,
+  isDraft,
+  needsReview,
+}: {
+  versionId: UUID;
+  isDraft: boolean;
+  needsReview: boolean;
+}) {
   return (
     <TabsNav label="Version views">
       <TabsLink end to={`/versions/${versionId}`}>
         Map
       </TabsLink>
-      <TabsLink to={`/versions/${versionId}/review`}>
+      <TabsLink to={`/versions/${versionId}/review`} className="relative">
         {isDraft ? "Review" : "What changed"}
+        {needsReview && (
+          <>
+            <span
+              className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500"
+              aria-hidden="true"
+            />
+            <span className="sr-only"> — awaiting your review</span>
+          </>
+        )}
       </TabsLink>
       <TabsLink to={`/versions/${versionId}/preview`}>Preview</TabsLink>
     </TabsNav>
@@ -83,11 +108,13 @@ function VersionTabs({ versionId, isDraft }: { versionId: UUID; isDraft: boolean
 function DraftChrome({
   versionId,
   isDraft,
+  needsReview = false,
   children,
   after,
 }: {
   versionId: UUID;
   isDraft: boolean;
+  needsReview?: boolean;
   children: ReactNode;
   after?: ReactNode;
 }) {
@@ -95,7 +122,7 @@ function DraftChrome({
     <div className="border-t border-border bg-background">
       <div className="flex items-stretch">
         <div className="flex w-(--sidebar-width) min-w-(--sidebar-width) max-w-(--sidebar-width) items-center justify-center border-r border-border px-2">
-          <VersionTabs versionId={versionId} isDraft={isDraft} />
+          <VersionTabs versionId={versionId} isDraft={isDraft} needsReview={needsReview} />
         </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 px-4 py-2">
           {children}
@@ -148,6 +175,11 @@ export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarP
   const onReviewError = useReviewErrorHandler();
   const versionId = graph.version.id;
   const changeRequest = proposal ?? graph.change_request;
+  const needsReview = isPendingReviewFor(
+    changeRequest,
+    graph.version.is_draft,
+    identity?.email,
+  );
   // Assigned to a local rather than read off `graph.edit_history` at each
   // use, the same reasoning `changeRequest` above already follows: TS
   // narrows a `const` across the closures below, which it will not do for
@@ -437,7 +469,7 @@ export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarP
   }
 
   return (
-    <DraftChrome versionId={versionId} isDraft={true}>
+    <DraftChrome versionId={versionId} isDraft={true} needsReview={needsReview}>
       <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md bg-card/80 px-3 py-1.5">
         <span
           className="inline-block size-2 shrink-0 rounded-full bg-gold"
