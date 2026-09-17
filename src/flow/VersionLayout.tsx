@@ -9,7 +9,13 @@ import {
 } from "react-router-dom";
 
 import { ApiError } from "../api/client";
-import { useGraph, useProposals, useReview, useVersions } from "../api/queries";
+import {
+  useGraph,
+  useOrgProposals,
+  useProposals,
+  useReview,
+  useVersions,
+} from "../api/queries";
 import type { UUID, VersionListItem } from "../api/types";
 import croppedLogo from "../assets/predmind-logo - cropped.webp";
 import { useAuth } from "../auth/useAuth";
@@ -35,6 +41,7 @@ import {
   canvasCursorRole,
   draftChromeLabel,
   draftChromeState,
+  isPendingReviewFor,
   isUnderReview,
   latestChangeRequest,
   proposalForVersion,
@@ -154,6 +161,41 @@ export function VersionLayout() {
     status: "approved",
   });
 
+  // Unscoped by product, unlike the pair above -- a reviewer sitting on
+  // product1 has to find out product2 needs them too, and the picker is
+  // the one piece of chrome visible regardless of which product is open.
+  const orgSubmittedProposals = useOrgProposals("submitted");
+  const orgApprovedProposals = useOrgProposals("approved");
+  const pendingReviewProposals = useMemo(
+    () =>
+      [
+        ...(orgSubmittedProposals.data?.results ?? []),
+        ...(orgApprovedProposals.data?.results ?? []),
+      ].filter((row) => isPendingReviewFor(row, true, identity?.email)),
+    [orgSubmittedProposals.data, orgApprovedProposals.data, identity?.email],
+  );
+  // Questionnaire-level: which products' pickers get a dot at all (the
+  // dropdown row) and, of those, which are not the one currently open
+  // (the corner badge -- "look elsewhere", not "look here", since the
+  // Review tab already covers here).
+  const questionnairesNeedingMyReview = useMemo(
+    () => new Set(pendingReviewProposals.map((row) => row.version.questionnaire)),
+    [pendingReviewProposals],
+  );
+  const otherProductNeedsMyReview = [...questionnairesNeedingMyReview].some(
+    (id) => id !== effectiveQuestionnaireId,
+  );
+  // Version-level: same split, one level down -- which versions of the
+  // *current* product carry the pending proposal, and whether the one on
+  // screen right now is one of them.
+  const versionsNeedingMyReview = useMemo(
+    () => new Set(pendingReviewProposals.map((row) => row.version.id)),
+    [pendingReviewProposals],
+  );
+  const otherVersionNeedsMyReview = (versions.data ?? []).some(
+    (version) => versionsNeedingMyReview.has(version.id) && version.id !== versionId,
+  );
+
   // Picking a questionnaire in `topbar__picker` only ever changed which
   // product the *version* select's own options belonged to -- the page
   // itself stayed on whatever version was already loaded, which wasn't
@@ -205,6 +247,15 @@ export function VersionLayout() {
     () => groupByQuestionnaire(versions.data ?? []),
     [versions.data],
   );
+
+  // Plain text for the pickers' triggers -- see the `SelectValue` comments
+  // below for why these are passed as explicit children rather than left
+  // for Radix to fill in from the selected row.
+  const effectiveQuestionnaireName =
+    questionnaires.find(([id]) => id === effectiveQuestionnaireId)?.[1] ?? "";
+  const selectedVersion = versions.data?.find((version) => version.id === versionId);
+  const selectedVersionLabel =
+    selectedVersion === undefined ? "" : versionOptionLabel(selectedVersion);
 
   const proposal = latestChangeRequest([
     graphData?.change_request,
@@ -311,14 +362,44 @@ export function VersionLayout() {
             >
               <SelectTrigger
                 aria-label="Questionnaire"
-                className={`${toolbarSelectTrigger} max-w-[220px]`}
+                className={`${toolbarSelectTrigger} relative max-w-[220px]`}
               >
-                <SelectValue />
+                {/* Explicit children rather than a bare `<SelectValue />`:
+                      Radix otherwise mirrors the selected `SelectItem`'s
+                      own rendered content in here, which would drag its
+                      dot along once this product is the one selected --
+                      redundant chrome once you're already looking at it,
+                      and the Review tab's own dot already covers that
+                      case. The corner badge below is the only signal this
+                      trigger needs once you're on the right product. */}
+                <SelectValue>{effectiveQuestionnaireName}</SelectValue>
+                {otherProductNeedsMyReview && (
+                  <>
+                    <span
+                      className="absolute -top-1 -right-1 size-2.5 rounded-full bg-red-500 ring-2 ring-background"
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">
+                      {" "}
+                      — another product has a proposal awaiting your review
+                    </span>
+                  </>
+                )}
               </SelectTrigger>
               <SelectContent align="start" position="popper" className="min-w-56">
                 {questionnaires.map(([id, name]) => (
                   <SelectItem key={id} value={id}>
                     {name}
+                    {questionnairesNeedingMyReview.has(id) && (
+                      <>
+                        {" "}
+                        <span
+                          className="inline-block size-1.5 rounded-full bg-red-500 align-middle"
+                          aria-hidden="true"
+                        />
+                        <span className="sr-only"> — awaiting your review</span>
+                      </>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -332,9 +413,26 @@ export function VersionLayout() {
           >
             <SelectTrigger
               aria-label="Version"
-              className={`${toolbarSelectTrigger} max-w-[min(100%,420px)] flex-1`}
+              className={`${toolbarSelectTrigger} relative max-w-[min(100%,420px)] flex-1`}
             >
-              <SelectValue placeholder="Choose a version" />
+              {/* Same reasoning as the product picker above: explicit
+                    children so Radix doesn't mirror the selected row's own
+                    dot in here too -- the Review tab already says "you're
+                    on it" once this is the right draft. */}
+              <SelectValue placeholder="Choose a version">{selectedVersionLabel}</SelectValue>
+              {otherVersionNeedsMyReview && (
+                <>
+                  <span
+                    className="absolute -top-1 -right-1 size-2.5 rounded-full bg-red-500 ring-2 ring-background"
+                    aria-hidden="true"
+                  />
+                  <span className="sr-only">
+                    {" "}
+                    — another version of this product has a proposal awaiting your
+                    review
+                  </span>
+                </>
+              )}
             </SelectTrigger>
             <SelectContent align="start" position="popper" className="min-w-80">
               {grouped.map(([id, group]) => (
@@ -345,6 +443,16 @@ export function VersionLayout() {
                   {group.versions.map((version) => (
                     <SelectItem key={version.id} value={version.id}>
                       {versionOptionLabel(version)}
+                      {versionsNeedingMyReview.has(version.id) && (
+                        <>
+                          {" "}
+                          <span
+                            className="inline-block size-1.5 rounded-full bg-red-500 align-middle"
+                            aria-hidden="true"
+                          />
+                          <span className="sr-only"> — awaiting your review</span>
+                        </>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectGroup>

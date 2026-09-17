@@ -7,6 +7,7 @@ import { ApiError } from "./client";
 import {
   bothReviewersApproved,
   type ChangeRequest,
+  type ChangeRequestStatus,
   type Edge,
   type Graph,
   type PreviewAnswer,
@@ -95,6 +96,20 @@ export function useProposals(filters: api.ProposalFilters) {
     queryKey: ["proposals", filters] as const,
     queryFn: ({ signal }) => api.listProposals(filters, signal),
     enabled: filters.questionnaire !== null && filters.questionnaire !== undefined,
+    retry: retryUnlessRefused,
+    refetchOnMount: "always",
+  });
+}
+
+/** Every proposal at `status`, across every product -- deliberately not
+ * `useProposals`, which refuses to run without a `questionnaire` (see its
+ * own docstring). The one place that actually wants "every product" is
+ * the header's cross-product review dot: a reviewer sitting on product1
+ * has no other way to learn product2 needs them too. */
+export function useOrgProposals(status: ChangeRequestStatus) {
+  return useQuery({
+    queryKey: ["proposals", "org", status] as const,
+    queryFn: ({ signal }) => api.listProposals({ status }, signal),
     retry: retryUnlessRefused,
     refetchOnMount: "always",
   });
