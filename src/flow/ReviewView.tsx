@@ -8,6 +8,7 @@ import { bothReviewersApproved, type ChangeRequest, type UUID } from "../api/typ
 import { useAuth } from "../auth/useAuth";
 import { questionDiffCounts, visibleDiffItems } from "./diffCounts";
 import { DiffList } from "./DiffList";
+import { withRemovedDraftEntities } from "./graphElements";
 import { AlertsButton } from "./AlertsButton";
 import type { ChromeAlert } from "./AlertsButton";
 import { draftIssues } from "./draftIssues";
@@ -285,7 +286,7 @@ export function ReviewView() {
 
       <DiffList
         items={items}
-        graph={graph}
+        graph={withRemovedDraftEntities(graph, baseGraph.data, diff)}
         baseGraph={baseGraph.data}
         onShowOnMap={showOnMap}
       />

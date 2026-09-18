@@ -221,6 +221,47 @@ describe("DraftBar review-tab dot", () => {
     );
 
     expect(screen.getByRole("link", { name: "Review" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /awaiting your review/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not dot the tab for an account that is not a named reviewer", () => {
+    signIn("viewer@example.com", ["view_flow_tool"]);
+    renderBar(
+      makeGraph({
+        version: { ...makeGraph().version, is_draft: true, is_active: false },
+        change_request: openProposal({
+          status: "submitted",
+          submitted_at: "2026-08-02T10:00:00Z",
+          reviewer_1_email: REVIEWER_1,
+          reviewer_2_email: REVIEWER_2,
+        }),
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "Review" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /awaiting your review/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not dot the tab on an open draft that has not been submitted", () => {
+    signIn(REVIEWER_1);
+    renderBar(
+      makeGraph({
+        version: { ...makeGraph().version, is_draft: true, is_active: false },
+        change_request: openProposal({
+          reviewer_1_email: REVIEWER_1,
+          reviewer_2_email: REVIEWER_2,
+        }),
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "Review" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /awaiting your review/ }),
+    ).not.toBeInTheDocument();
   });
 });
 

@@ -29,7 +29,7 @@ import {
  * alone rather than invented a break equivalent for.
  */
 const FONT =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 // ---------------------------------------------------------------------------
 // Corner badges: a small circular icon rendered as a Cytoscape
@@ -216,6 +216,16 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       height: 88,
       "z-index": 20,
       "z-index-compare": "manual",
+    },
+  },
+  {
+    selector: 'node[kind = "question"], node[kind = "archived"]',
+    css: {
+      "font-size": 11,
+      "font-weight": 500,
+      padding: "16px 14px 12px",
+      "text-max-width": "168px",
+      "line-height": 1.3,
     },
   },
   {
@@ -417,6 +427,15 @@ export const CANVAS_STYLE: StylesheetCSS[] = [
       "line-color": "#9a5209",
       "target-arrow-color": "#9a5209",
       opacity: 0.95,
+    },
+  },
+  {
+    selector: "edge[?isRemoved]",
+    css: {
+      "line-style": "dashed",
+      "line-color": "#a89878",
+      "target-arrow-color": "#a89878",
+      "line-opacity": 0.4,
     },
   },
   {

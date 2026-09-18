@@ -122,7 +122,11 @@ function DraftChrome({
     <div className="border-t border-border bg-background">
       <div className="flex items-stretch">
         <div className="flex w-(--sidebar-width) min-w-(--sidebar-width) max-w-(--sidebar-width) items-center justify-center border-r border-border px-2">
-          <VersionTabs versionId={versionId} isDraft={isDraft} needsReview={needsReview} />
+          <VersionTabs
+            versionId={versionId}
+            isDraft={isDraft}
+            needsReview={needsReview}
+          />
         </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 px-4 py-2">
           {children}
@@ -175,11 +179,9 @@ export function DraftBar({ graph, proposal, versions, onOpenVersion }: DraftBarP
   const onReviewError = useReviewErrorHandler();
   const versionId = graph.version.id;
   const changeRequest = proposal ?? graph.change_request;
-  const needsReview = isPendingReviewFor(
-    changeRequest,
-    graph.version.is_draft,
-    identity?.email,
-  );
+  const needsReview =
+    !reviewRefused &&
+    isPendingReviewFor(changeRequest, graph.version.is_draft, identity?.email);
   // Assigned to a local rather than read off `graph.edit_history` at each
   // use, the same reasoning `changeRequest` above already follows: TS
   // narrows a `const` across the closures below, which it will not do for

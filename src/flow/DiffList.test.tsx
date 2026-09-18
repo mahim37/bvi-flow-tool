@@ -66,12 +66,12 @@ describe("diffSentence", () => {
       item({ key: "Q1", change: "added", draft_id: Q1 }),
       graph,
     );
-    expect(sentence).toBe(`Added question ${q1.prompt}`);
+    expect(sentence).toBe(`Added question "${q1.prompt}"`);
     expect(sentence).not.toMatch(/id:/);
     expectNoUuid(sentence);
   });
 
-  it("names an added edge, including End of flow", () => {
+  it("names an added connection, including End of flow", () => {
     const toQ2 = diffSentence(
       item({
         kind: "edge",
@@ -82,8 +82,11 @@ describe("diffSentence", () => {
       }),
       graph,
     );
-    expect(toQ2).toBe(`Added edge Yes from ${q1.prompt} to ${q2.prompt}`);
+    expect(toQ2).toBe(
+      `Added connection "Yes" from Question "${q1.prompt}" to Question "${q2.prompt}"`,
+    );
     expect(toQ2).not.toMatch(/id:/);
+    expect(toQ2).not.toMatch(/edge/i);
     expectNoUuid(toQ2);
 
     const toEnd = diffSentence(
@@ -96,11 +99,13 @@ describe("diffSentence", () => {
       }),
       graph,
     );
-    expect(toEnd).toBe(`Added edge No from ${q1.prompt} to End of flow`);
+    expect(toEnd).toBe(
+      `Added connection "No" from Question "${q1.prompt}" to "End of flow"`,
+    );
     expectNoUuid(toEnd);
   });
 
-  it("names a default-route edge by its label, not an edge UUID", () => {
+  it("names a question-level connection without calling it a default edge", () => {
     const sentence = diffSentence(
       item({
         kind: "edge",
@@ -113,7 +118,11 @@ describe("diffSentence", () => {
     );
     const q3 = graph.questions.find((question) => question.code === "Q3");
     if (q3 === undefined) throw new Error("fixture is missing Q3");
-    expect(sentence).toBe(`Added edge Default route from ${q2.prompt} to ${q3.prompt}`);
+    expect(sentence).toBe(
+      `Added connection from Question "${q2.prompt}" to Question "${q3.prompt}"`,
+    );
+    expect(sentence).not.toMatch(/default/i);
+    expect(sentence).not.toMatch(/edge/i);
     expectNoUuid(sentence);
   });
 
@@ -128,7 +137,7 @@ describe("diffSentence", () => {
       }),
       graph,
     );
-    expect(sentence).toBe(`Added option Yes on ${q1.prompt}`);
+    expect(sentence).toBe(`Added option "Yes" on Question "${q1.prompt}"`);
     expect(sentence).not.toMatch(/id:/);
     expectNoUuid(sentence);
   });
@@ -146,7 +155,7 @@ describe("diffSentence", () => {
       }),
       graph,
     );
-    expect(sentence).toBe(`Added section ${section.name}`);
+    expect(sentence).toBe(`Added section "${section.name}"`);
     expect(sentence).not.toMatch(/id:/);
     expectNoUuid(sentence);
   });
@@ -157,17 +166,19 @@ describe("diffSentence", () => {
     expect(diffSentence(RETIRED_RISK, graph)).toBe("Removed question");
 
     const sentence = diffSentence(RETIRED_RISK, graph, makeBaseGraph());
-    expect(sentence).toBe(`Removed question ${RISK_PROMPT}`);
+    expect(sentence).toBe(`Removed question "${RISK_PROMPT}"`);
     expectNoUuid(sentence);
 
     // Not on the draft map, so no link to a node that is not there.
     const pieces = diffPieces(RETIRED_RISK, graph, makeBaseGraph());
     expect(pieces).toEqual([
+      { type: "text", text: "Removed " },
       {
         type: "ref",
-        prefix: "Removed question ",
+        prefix: "question ",
         label: RISK_PROMPT,
         questionId: null,
+        quoted: true,
       },
     ]);
   });
@@ -181,15 +192,15 @@ describe("diffSentence", () => {
       draft_id: null,
       question_id: Q1,
     });
-    expect(diffSentence(row, graph)).toBe(`Removed option on ${q1.prompt}`);
+    expect(diffSentence(row, graph)).toBe(`Removed option on Question "${q1.prompt}"`);
     expect(diffSentence(row, graph, makeBaseGraph())).toBe(
-      `Removed option Maybe on ${q1.prompt}`,
+      `Removed option "Maybe" on Question "${q1.prompt}"`,
     );
     expect(
       diffPieces(row, graph, makeBaseGraph()).map((piece) =>
         piece.type === "ref" ? piece.questionId : null,
       ),
-    ).toEqual([Q1, null, Q1]);
+    ).toEqual([null, Q1, null, Q1]);
   });
 });
 
@@ -282,6 +293,12 @@ describe("groupDiffByNode", () => {
 });
 
 describe("DiffList", () => {
+  function articleMatching(pattern: RegExp) {
+    return screen
+      .getAllByRole("article")
+      .find((element) => pattern.test(element.textContent ?? ""));
+  }
+
   async function expandNode(title: string) {
     const user = userEvent.setup();
     const trigger = screen.getByRole("button", { name: new RegExp(`^${title}`) });
@@ -329,8 +346,8 @@ describe("DiffList", () => {
     expect(screen.queryByText(/Added question/)).not.toBeInTheDocument();
 
     await expandNode(q1.prompt);
-    expect(screen.getByText(/Added question/)).toBeInTheDocument();
-    expect(screen.getByText("End of flow")).toBeInTheDocument();
+    expect(articleMatching(/Added question/)).toBeDefined();
+    expect(screen.getByText(/End of flow/)).toBeInTheDocument();
     expect(screen.queryByText(/id:/)).not.toBeInTheDocument();
   });
 
@@ -354,7 +371,7 @@ describe("DiffList", () => {
     );
 
     await expandNode(q1.prompt);
-    expect(screen.getByText(/Changed question/)).toBeInTheDocument();
+    expect(articleMatching(/Changed question/)).toBeDefined();
     expect(screen.queryByText("Prompt")).not.toBeInTheDocument();
     expect(screen.queryByText("Old prompt")).not.toBeInTheDocument();
     expect(screen.queryByText("New prompt")).not.toBeInTheDocument();
@@ -374,8 +391,8 @@ describe("DiffList", () => {
 
     expect(screen.queryByText("risk_2")).not.toBeInTheDocument();
     await expandNode(RISK_PROMPT);
-    expect(screen.getByText(/Removed question/)).toBeInTheDocument();
-    expect(screen.queryByText(/Changed question/)).not.toBeInTheDocument();
+    expect(articleMatching(/Removed question/)).toBeDefined();
+    expect(articleMatching(/Changed question/)).toBeUndefined();
     expect(screen.getByText("−")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Open on the map/ }),
@@ -398,11 +415,19 @@ describe("DiffList", () => {
     const user = await expandNode(q1.prompt);
     await user.click(
       screen.getByRole("button", {
-        name: `Added question ${q1.prompt}. Open on the map`,
+        name: `question "${q1.prompt}". Open on the map`,
       }),
     );
     expect(onShowOnMap).toHaveBeenCalledWith(Q1);
     expect(screen.queryByText("Show on map")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Added/ })).not.toBeInTheDocument();
+    const link = screen.getByRole("button", {
+      name: `question "${q1.prompt}". Open on the map`,
+    });
+    expect(link.className).toMatch(/cursor-pointer/);
+    expect(link.className).toMatch(/hover:opacity-90/);
+    expect(link.className).toMatch(/transition-opacity/);
+    expect(link.querySelector(".underline")).not.toBeNull();
   });
 
   it("opens an edge's route and its from-question as separate map links", async () => {
@@ -433,17 +458,21 @@ describe("DiffList", () => {
     expect(screen.queryByText(/\(/)).not.toBeInTheDocument();
 
     await user.click(
-      screen.getByRole("button", { name: "Added edge Yes. Open on the map" }),
+      screen.getByRole("button", { name: `connection "Yes". Open on the map` }),
     );
     expect(onShowOnMap).toHaveBeenCalledWith(Q1);
 
     await user.click(
-      screen.getByRole("button", { name: `${q1.prompt}. Open on the map` }),
+      screen.getByRole("button", {
+        name: `Question "${q1.prompt}". Open on the map`,
+      }),
     );
     expect(onShowOnMap).toHaveBeenNthCalledWith(2, Q1);
 
     await user.click(
-      screen.getByRole("button", { name: `${q2.prompt}. Open on the map` }),
+      screen.getByRole("button", {
+        name: `Question "${q2.prompt}". Open on the map`,
+      }),
     );
     expect(onShowOnMap).toHaveBeenNthCalledWith(3, Q2);
   });

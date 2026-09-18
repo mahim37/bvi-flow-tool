@@ -17,6 +17,12 @@ const harness = vi.hoisted(() => ({
 
 vi.mock("../api/queries", () => ({
   useReview: () => ({ data: undefined, isPending: false, isError: false }),
+  useGraph: () => ({
+    data: undefined,
+    isPending: false,
+    isError: false,
+    isLoading: false,
+  }),
   useAddEdge: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateEdge: () => ({ mutate: vi.fn(), isPending: false }),
 }));

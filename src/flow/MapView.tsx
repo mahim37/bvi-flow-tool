@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
-import { useAddEdge, useReview, useUpdateEdge } from "../api/queries";
+import { useAddEdge, useGraph, useReview, useUpdateEdge } from "../api/queries";
 import type { UUID } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { AddQuestion } from "./AddQuestion";
@@ -19,6 +19,7 @@ import {
   changeKindsFromDiff,
   isSectionNode,
   isSyntheticNode,
+  withRemovedDraftEntities,
 } from "./graphElements";
 
 /** A pending canvas click-to-pick, one of two shapes: retargeting an
@@ -69,29 +70,25 @@ export function MapView() {
   // rather than in a handler, so "show me this change on the map" is a
   // link somebody can send, and so a reload lands on the same node.
   const focusId = searchParams.get("question");
-  useEffect(() => {
-    setSelectedQuestionId(focusId);
-    setSelectedEdgeId(null);
-    setHighlightedIds(focusId === null ? [] : [focusId]);
-    if (focusId === null) return;
-    const focused = graph.questions.find((question) => question.id === focusId);
-    if (focused?.section === null || focused?.section === undefined) return;
-    const sectionId = focused.section;
-    setCollapsedSections((current) => {
-      if (!current.has(sectionId)) return current;
-      const next = new Set(current);
-      next.delete(sectionId);
-      return next;
-    });
-  }, [versionId, focusId, graph.questions]);
 
   // Only a draft has anything "pending" to highlight -- a published
   // version's own diff (`ReviewView`'s "What changed" tab) is history, not
   // work still to publish, so there's nothing to fetch for one.
   const review = useReview(graph.version.is_draft ? graph.version.id : null);
+  const parentVersionId = graph.version.is_draft
+    ? (review.data?.base_version?.id ?? graph.version.parent_version)
+    : null;
+  const parentGraph = useGraph(parentVersionId);
+  // Retired questions drop off `graph/` once nothing live points at them.
+  // Draft/review still need the node (and the arrows that used to reach
+  // it) so a reviewer can see what left the flow.
+  const canvasGraph = useMemo(
+    () => withRemovedDraftEntities(graph, parentGraph.data, review.data?.diff),
+    [graph, parentGraph.data, review.data?.diff],
+  );
   const elements = useMemo(
-    () => buildElements(graph, review.data?.diff, collapsedSections),
-    [graph, review.data, collapsedSections],
+    () => buildElements(canvasGraph, review.data?.diff, collapsedSections),
+    [canvasGraph, review.data, collapsedSections],
   );
   // Computed once here rather than separately in `DetailPanel`/`Options`
   // too -- both the canvas and the detail panel highlight the same
@@ -100,6 +97,22 @@ export function MapView() {
     () => changeKindsFromDiff(review.data?.diff),
     [review.data],
   );
+
+  useEffect(() => {
+    setSelectedQuestionId(focusId);
+    setSelectedEdgeId(null);
+    setHighlightedIds(focusId === null ? [] : [focusId]);
+    if (focusId === null) return;
+    const focused = canvasGraph.questions.find((question) => question.id === focusId);
+    if (focused?.section === null || focused?.section === undefined) return;
+    const sectionId = focused.section;
+    setCollapsedSections((current) => {
+      if (!current.has(sectionId)) return current;
+      const next = new Set(current);
+      next.delete(sectionId);
+      return next;
+    });
+  }, [versionId, focusId, canvasGraph.questions]);
 
   // Archived questions, section boxes, and cross-version missing
   // placeholders aren't valid pick destinations. The shared end-of-flow
@@ -162,14 +175,15 @@ export function MapView() {
   const selectedQuestion = useMemo(() => {
     if (selectedQuestionId === null) return null;
     return (
-      graph.questions.find((question) => question.id === selectedQuestionId) ?? null
+      canvasGraph.questions.find((question) => question.id === selectedQuestionId) ??
+      null
     );
-  }, [graph.questions, selectedQuestionId]);
+  }, [canvasGraph.questions, selectedQuestionId]);
 
   const selectedEdge = useMemo(() => {
     if (selectedEdgeId === null) return null;
-    return graph.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
-  }, [graph.edges, selectedEdgeId]);
+    return canvasGraph.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
+  }, [canvasGraph.edges, selectedEdgeId]);
 
   useEffect(() => {
     if (selectedEdgeId !== null && selectedEdge === null) setSelectedEdgeId(null);
@@ -202,7 +216,7 @@ export function MapView() {
   return (
     <div className={layoutClassName}>
       <Sidebar
-        graph={graph}
+        graph={canvasGraph}
         selectedId={selectedQuestionId}
         onSelectQuestion={selectQuestion}
         onHighlight={setHighlightedIds}
@@ -218,7 +232,7 @@ export function MapView() {
           )
         }
         onSelectEdge={(edgeId) => {
-          const edge = graph.edges.find((candidate) => candidate.id === edgeId);
+          const edge = canvasGraph.edges.find((candidate) => candidate.id === edgeId);
           if (edge === undefined) return;
           if (edge.from_option === null) {
             setSelectedQuestionId(null);
@@ -250,18 +264,18 @@ export function MapView() {
             else next.add(sectionId);
             return next;
           });
-          const selected = graph.questions.find(
+          const selected = canvasGraph.questions.find(
             (question) => question.id === selectedQuestionId,
           );
           if (selected?.section === sectionId) setSelectedQuestionId(null);
           if (collapsing && selectedEdge !== null) {
-            const from = graph.questions.find(
+            const from = canvasGraph.questions.find(
               (question) => question.id === selectedEdge.from_question,
             );
             const to =
               selectedEdge.to_question === null
                 ? undefined
-                : graph.questions.find(
+                : canvasGraph.questions.find(
                     (question) => question.id === selectedEdge.to_question,
                   );
             if (from?.section === sectionId && to?.section === sectionId) {
@@ -272,13 +286,13 @@ export function MapView() {
       />
       {selectedEdge !== null ? (
         <RouteChoicesPanel
-          graph={graph}
+          graph={canvasGraph}
           edge={selectedEdge}
           onClose={() => setSelectedEdgeId(null)}
         />
       ) : (
         <DetailPanel
-          graph={graph}
+          graph={canvasGraph}
           question={selectedQuestion}
           editable={editable}
           changeKinds={changeKinds}

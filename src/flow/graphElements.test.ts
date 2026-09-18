@@ -10,8 +10,10 @@ import {
   questionFullLabel,
   questionLabel,
   sectionNodeId,
+  withRemovedDraftEntities,
 } from "./graphElements";
 import {
+  BASE_VERSION_ID,
   E_FOREIGN_TO_Q2,
   E_NO_TO_END,
   E_Q2_DEAD,
@@ -24,6 +26,10 @@ import {
   Q2,
   Q3_ARCHIVED,
   Q4_UNREACHABLE,
+  RISK_BASE,
+  RISK_DRAFT,
+  RISK_PROMPT,
+  makeBaseGraph,
   makeGraph,
 } from "../test/fixtures";
 import type { ItemDiff, VersionDiff } from "../api/types";
@@ -87,8 +93,8 @@ describe("nodes", () => {
     // Under graph routing `display_order` is presentational. A label built
     // from it would reintroduce the identity problem explicit edges exist
     // to remove: insert a question and every label shifts. The visible
-    // label (break-backend parity: prompt first, then a type glyph and
-    // the code) still has to carry that same code regardless of
+    // label (ID on top, prompt, then the answer type in parentheses)
+    // still has to carry that same code regardless of
     // `display_order`, even though the code is no longer the whole label.
     const graph = makeGraph();
     const shuffled = makeGraph({
@@ -101,8 +107,10 @@ describe("nodes", () => {
     const shuffledLabels = nodes(shuffled);
     expect(nodes().get(Q1)?.label).toBe(shuffledLabels.get(Q1)?.label);
     expect(nodes().get(Q2)?.label).toBe(shuffledLabels.get(Q2)?.label);
-    expect(shuffledLabels.get(Q1)?.label?.endsWith("Q1")).toBe(true);
-    expect(shuffledLabels.get(Q2)?.label?.endsWith("Q2")).toBe(true);
+    expect(shuffledLabels.get(Q1)?.label?.startsWith("ID: Q1")).toBe(true);
+    expect(shuffledLabels.get(Q2)?.label?.startsWith("ID: Q2")).toBe(true);
+    expect(shuffledLabels.get(Q1)?.label).toContain("(single)");
+    expect(shuffledLabels.get(Q2)?.label).toContain("(integer)");
   });
 
   it("marks the entry, the decision point and the terminal from the audit", () => {
@@ -538,5 +546,85 @@ describe("section anchor", () => {
     // Q1 → End leaves the section: it now leaves the box.
     expect(builtEdges.get(E_NO_TO_END)?.source).toBe(boxId);
     expect(builtEdges.get(E_NO_TO_END)?.target).toBe(END_NODE_ID);
+  });
+});
+
+describe("withRemovedDraftEntities", () => {
+  const retiredDiff: VersionDiff = {
+    is_empty: false,
+    sections: [],
+    questions: [
+      {
+        kind: "question",
+        key: "risk_2",
+        change: "changed",
+        base_id: RISK_BASE,
+        draft_id: RISK_DRAFT,
+        question_id: RISK_DRAFT,
+        fields: [{ field: "archived", base: false, draft: true }],
+      },
+    ],
+    options: [],
+    edges: [],
+  };
+
+  function draftGraph() {
+    return makeGraph({
+      version: {
+        ...makeGraph().version,
+        is_draft: true,
+        is_active: false,
+        parent_version: BASE_VERSION_ID,
+      },
+    });
+  }
+
+  it("puts a retired question back on the draft canvas after nothing points at it", () => {
+    const draft = draftGraph();
+    expect(nodes(draft, retiredDiff).has(RISK_DRAFT)).toBe(false);
+
+    const merged = withRemovedDraftEntities(draft, makeBaseGraph(), retiredDiff);
+    const ghost = merged.questions.find((question) => question.id === RISK_DRAFT);
+    expect(ghost?.prompt).toBe(RISK_PROMPT);
+    expect(ghost?.archived_at).not.toBeNull();
+    expect(nodes(merged, retiredDiff).get(RISK_DRAFT)?.kind).toBe("archived");
+  });
+
+  it("keeps the removed incoming connection so the retired question still has a route", () => {
+    const incomingId = "cccccccc-0000-4000-8000-0000000000b5";
+    const base = makeBaseGraph();
+    const baseWithIncoming = makeGraph({
+      ...base,
+      edges: [
+        ...base.edges,
+        {
+          id: incomingId,
+          from_question: Q1,
+          from_option: null,
+          to_question: RISK_BASE,
+          priority: 2,
+        },
+      ],
+    });
+    const diff: VersionDiff = {
+      ...retiredDiff,
+      edges: [
+        {
+          kind: "edge",
+          key: "Q1.maybe",
+          change: "removed",
+          base_id: incomingId,
+          draft_id: null,
+          question_id: Q1,
+          fields: [],
+        },
+      ],
+    };
+    const merged = withRemovedDraftEntities(draftGraph(), baseWithIncoming, diff);
+    const ghostEdge = merged.edges.find((edge) => edge.id === incomingId);
+    expect(ghostEdge?.to_question).toBe(RISK_DRAFT);
+    expect(ghostEdge?.from_question).toBe(Q1);
+    expect(edges(merged, diff).get(incomingId)?.isRemoved).toBe(true);
+    expect(edges(merged, diff).get(incomingId)?.target).toBe(RISK_DRAFT);
   });
 });

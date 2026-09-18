@@ -11,6 +11,7 @@ import {
   type UUID,
   type VersionDiff,
 } from "../api/types";
+import { effectiveChange } from "./diffItem";
 
 /**
  * Ported from break-backend's question_graph_editor (static/question_graph_editor/app.js)
@@ -39,11 +40,14 @@ const PALETTE = [
   "#8324d6",
 ];
 
-const TYPE_GLYPH: Record<AnswerType, string> = {
-  single_choice: "◉",
-  multi_choice: "☰",
-  scale: "#",
-  free_text: "✎",
+/** Short type tag under a canvas prompt -- `(single)` / `(multiple)` /
+ * `(integer)` / `(text)`, matching the words the rest of the product
+ * already uses for those four answer types. */
+const ANSWER_TYPE_PAREN: Record<AnswerType, string> = {
+  single_choice: "single",
+  multi_choice: "multiple",
+  scale: "integer",
+  free_text: "text",
 };
 
 /** Exported so `labels.ts`'s `targetLabel` can truncate a target's prompt
@@ -104,8 +108,10 @@ export type NodeKind = "question" | "archived" | "end" | "missing" | "section";
  * added/removed option or edge underneath it. `null` off a live/
  * published version, which has nothing pending to show, and for
  * anything the diff doesn't mention. Same two values `DiffChange` itself
- * uses for "added"/"changed" (`labels.ts`'s `diffChangeLabel`), minus
- * "removed" -- nothing removed is drawn to badge in the first place. */
+ * uses for "added"/"changed" (`labels.ts`'s `diffChangeLabel`). Removed
+ * questions still draw as `kind: "archived"` in draft/review (see
+ * `withRemovedDraftEntities`); removed routes carry `isRemoved` instead
+ * of a third `ChangeKind`. */
 export type ChangeKind = "added" | "changed";
 
 /** Exactly one badge per node (break's `badgeClassFor`) -- a node is never
@@ -120,13 +126,13 @@ export type BadgeKind =
 export interface NodeData {
   id: string;
   kind: NodeKind;
-  /** The on-canvas label: the prompt (truncated), then the answer-type
-   * glyph and the question's `code` on a second line -- never
-   * `display_order`, which is presentational under graph routing, so a
-   * position-based label would shift every time a question is inserted
-   * elsewhere in the flow. Structural state (entry/branch/terminal/
-   * unreachable) is carried entirely by `badgeKind`, not by anything in
-   * this text -- see break's own `nodeLabel`/`badgeClassFor` split. */
+  /** The on-canvas label: `ID: <code>` on the first line, the prompt
+   * (truncated) in the middle, then `(single)` / `(multiple)` /
+   * `(integer)` / `(text)` underneath. Never `display_order`, which is
+   * presentational under graph routing, so a position-based label would
+   * shift every time a question is inserted elsewhere in the flow.
+   * Structural state (entry/branch/terminal/unreachable) is carried
+   * entirely by `badgeKind`, not by anything in this text. */
   label: string;
   /** Untruncated canvas wording. Hover shows this at a larger size so
    * ellipsis and wrap are only the resting state, including on nodes
@@ -174,14 +180,22 @@ export interface EdgeData {
   isBroken: boolean;
   isBack: boolean;
   changeKind: ChangeKind | null;
+  /** A route the draft removed, kept on the canvas in draft/review so a
+   * retired question (and the arrows that used to reach it) do not
+   * vanish the moment nothing live points at them. */
+  isRemoved: boolean;
+}
+
+export function questionTypeParen(type: AnswerType): string {
+  return ANSWER_TYPE_PAREN[type];
 }
 
 export function questionLabel(question: Question): string {
-  return `${trunc(question.prompt, 60)}\n${TYPE_GLYPH[question.answer_type]} ${question.code}`;
+  return `ID: ${question.code}\n${trunc(question.prompt, 60)}\n(${questionTypeParen(question.answer_type)})`;
 }
 
 export function questionFullLabel(question: Question): string {
-  return `${question.prompt}\n${TYPE_GLYPH[question.answer_type]} ${question.code}`;
+  return `ID: ${question.code}\n${question.prompt}\n(${questionTypeParen(question.answer_type)})`;
 }
 
 /** Break's `badgeClassFor`, `changeKind` standing in for its pending-new/
@@ -253,6 +267,115 @@ export function changeKindsFromDiff(diff: VersionDiff | undefined): ChangeKinds 
   return { questions, options, edges };
 }
 
+/**
+ * Put retired questions (and the routes that used to reach them) back on
+ * a draft graph so the canvas can still draw them.
+ *
+ * `graph/` omits an archived question once nothing live points at it, so
+ * retiring a question and deleting its incoming edges makes the node
+ * vanish. The parent graph plus the diff still know both. Ids are the
+ * draft-side ones (`draft_id`) so `?question=` from the review list
+ * lands on the ghost, and sections are remapped by code so a ghost can
+ * sit in the same category box as its live neighbours.
+ */
+export function withRemovedDraftEntities(
+  draft: Graph,
+  base: Graph | undefined,
+  diff: VersionDiff | undefined,
+): Graph {
+  if (!draft.version.is_draft || base === undefined || diff === undefined) {
+    return draft;
+  }
+
+  const draftQuestionIds = new Set(draft.questions.map((question) => question.id));
+  const draftCodes = new Set(draft.questions.map((question) => question.code));
+  const draftSectionIds = new Set(draft.sections.map((section) => section.id));
+  const draftSectionByCode = new Map(
+    draft.sections.map((section) => [section.code, section.id]),
+  );
+  const baseSectionById = new Map(
+    base.sections.map((section) => [section.id, section]),
+  );
+  const baseQuestionById = new Map(
+    base.questions.map((question) => [question.id, question]),
+  );
+
+  function remapSection(sectionId: UUID | null): UUID | null {
+    if (sectionId === null) return null;
+    if (draftSectionIds.has(sectionId)) return sectionId;
+    const parentSection = baseSectionById.get(sectionId);
+    if (parentSection === undefined) return null;
+    return draftSectionByCode.get(parentSection.code) ?? null;
+  }
+
+  const ghosts: Question[] = [];
+  const parentIdToGhostId = new Map<UUID, UUID>();
+
+  for (const item of diff.questions) {
+    if (effectiveChange(item) !== "removed") continue;
+    if (item.draft_id !== null && draftQuestionIds.has(item.draft_id)) continue;
+    const parent =
+      item.base_id !== null ? baseQuestionById.get(item.base_id) : undefined;
+    if (parent === undefined) continue;
+    if (draftCodes.has(parent.code)) continue;
+    if (ghosts.some((ghost) => ghost.code === parent.code)) continue;
+    const id = item.draft_id ?? parent.id;
+    ghosts.push({
+      ...parent,
+      id,
+      section: remapSection(parent.section),
+      archived_at: parent.archived_at ?? draft.version.modified,
+      diagnostics: null,
+    });
+    parentIdToGhostId.set(parent.id, id);
+  }
+
+  const draftByCode = new Map(
+    draft.questions.map((question) => [question.code, question]),
+  );
+
+  function remapQuestionId(id: UUID | null): UUID | null {
+    if (id === null) return null;
+    if (draftQuestionIds.has(id)) return id;
+    const ghostId = parentIdToGhostId.get(id);
+    if (ghostId !== undefined) return ghostId;
+    const parent = baseQuestionById.get(id);
+    if (parent !== undefined) {
+      const live = draftByCode.get(parent.code);
+      if (live !== undefined) return live.id;
+    }
+    return id;
+  }
+
+  const draftEdgeIds = new Set(draft.edges.map((edge) => edge.id));
+  const ghostEdges: Edge[] = [];
+  const baseEdgeById = new Map(base.edges.map((edge) => [edge.id, edge]));
+
+  for (const item of diff.edges) {
+    if (effectiveChange(item) !== "removed") continue;
+    const parent = item.base_id !== null ? baseEdgeById.get(item.base_id) : undefined;
+    if (parent === undefined) continue;
+    const id = item.draft_id ?? parent.id;
+    if (draftEdgeIds.has(id) || ghostEdges.some((edge) => edge.id === id)) continue;
+    const fromQuestion = remapQuestionId(parent.from_question);
+    if (fromQuestion === null) continue;
+    ghostEdges.push({
+      ...parent,
+      id,
+      from_question: fromQuestion,
+      to_question: remapQuestionId(parent.to_question),
+    });
+  }
+
+  if (ghosts.length === 0 && ghostEdges.length === 0) return draft;
+
+  return {
+    ...draft,
+    questions: [...draft.questions, ...ghosts],
+    edges: [...draft.edges, ...ghostEdges],
+  };
+}
+
 export function guardLabel(edge: Edge, question: Question | undefined): string {
   if (edge.from_option === null) return "anything else";
   const option = question?.options.find(
@@ -317,6 +440,14 @@ export function buildElements(
   const brokenEdges = new Set(graph.diagnostics.broken_edge_ids);
   const backEdges = new Set(graph.diagnostics.back_edge_ids);
   const changeKinds = changeKindsFromDiff(diff);
+  const removedEdgeIds = new Set<UUID>();
+  if (diff !== undefined) {
+    for (const item of diff.edges) {
+      if (effectiveChange(item) !== "removed") continue;
+      if (item.draft_id !== null) removedEdgeIds.add(item.draft_id);
+      if (item.base_id !== null) removedEdgeIds.add(item.base_id);
+    }
+  }
 
   const faultedQuestions = new Set(uncovered);
   for (const edge of graph.edges) {
@@ -545,6 +676,7 @@ export function buildElements(
       isBroken: brokenEdges.has(edge.id),
       isBack: backEdges.has(edge.id),
       changeKind: changeKinds.edges.get(edge.id) ?? null,
+      isRemoved: removedEdgeIds.has(edge.id),
     };
     elements.push({ data, group: "edges" });
   }

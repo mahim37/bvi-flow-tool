@@ -171,8 +171,15 @@ export function VersionLayout() {
       [
         ...(orgSubmittedProposals.data?.results ?? []),
         ...(orgApprovedProposals.data?.results ?? []),
-      ].filter((row) => isPendingReviewFor(row, true, identity?.email)),
-    [orgSubmittedProposals.data, orgApprovedProposals.data, identity?.email],
+      ].filter(
+        (row) => !reviewRefused && isPendingReviewFor(row, true, identity?.email),
+      ),
+    [
+      orgSubmittedProposals.data,
+      orgApprovedProposals.data,
+      identity?.email,
+      reviewRefused,
+    ],
   );
   // Questionnaire-level: which products' pickers get a dot at all (the
   // dropdown row) and, of those, which are not the one currently open
@@ -189,7 +196,7 @@ export function VersionLayout() {
   // *current* product carry the pending proposal, and whether the one on
   // screen right now is one of them.
   const versionsNeedingMyReview = useMemo(
-    () => new Set(pendingReviewProposals.map((row) => row.version.id)),
+    () => new Set(pendingReviewProposals.map((row) => row.draft_version)),
     [pendingReviewProposals],
   );
   const otherVersionNeedsMyReview = (versions.data ?? []).some(
@@ -275,8 +282,12 @@ export function VersionLayout() {
       ? { permissionCodes: identity.permission_codes }
       : {}),
     ...reviewRoundFrom(proposal),
-    ...(proposal?.reviewer_1_email ? { reviewer1Email: proposal.reviewer_1_email } : {}),
-    ...(proposal?.reviewer_2_email ? { reviewer2Email: proposal.reviewer_2_email } : {}),
+    ...(proposal?.reviewer_1_email
+      ? { reviewer1Email: proposal.reviewer_1_email }
+      : {}),
+    ...(proposal?.reviewer_2_email
+      ? { reviewer2Email: proposal.reviewer_2_email }
+      : {}),
   });
   const chromeState = draftChromeState({
     discarded,
@@ -350,7 +361,7 @@ export function VersionLayout() {
         <header className="flex h-14 items-center gap-3 px-4">
           <div className="flex shrink-0 items-center gap-2.5">
             <img className="block h-7 w-auto" src={croppedLogo} alt="" />
-            <h1 className="m-0 text-[15px] font-semibold tracking-[0.2px] whitespace-nowrap">
+            <h1 className="font-serif m-0 text-[15px] font-semibold tracking-[0.2px] whitespace-nowrap">
               Flow Tool
             </h1>
           </div>
@@ -419,7 +430,9 @@ export function VersionLayout() {
                     children so Radix doesn't mirror the selected row's own
                     dot in here too -- the Review tab already says "you're
                     on it" once this is the right draft. */}
-              <SelectValue placeholder="Choose a version">{selectedVersionLabel}</SelectValue>
+              <SelectValue placeholder="Choose a version">
+                {selectedVersionLabel}
+              </SelectValue>
               {otherVersionNeedsMyReview && (
                 <>
                   <span

@@ -39,14 +39,14 @@ describe("labelTipForNodeData", () => {
       {
         id: "q1",
         kind: "question",
-        fullLabel: "Short prompt\n◉ Q1",
+        fullLabel: "ID: Q1\nShort prompt\n(single)",
         sectionColor: "#2f6fd6",
         box: { x1: 40, y1: 50, x2: 160, y2: 110 },
       },
       VIEW,
     );
     expect(tip).not.toBeNull();
-    expect(tip?.text).toBe("Short prompt\n◉ Q1");
+    expect(tip?.text).toBe("ID: Q1\nShort prompt\n(single)");
     expect(tip?.role).toBe("node");
     expect(tip?.minWidth).toBeGreaterThanOrEqual(120);
   });

@@ -1,7 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/source-serif-4";
 /*
  ---break---
  */
@@ -492,8 +493,10 @@ input[type="radio"] {
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans:
-    "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
+    "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-serif:
+    "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", serif;
   --color-gold: var(--gold);
   --color-green: var(--green);
   --color-emphasis: var(--emphasis);

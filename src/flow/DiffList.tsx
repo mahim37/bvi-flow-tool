@@ -41,32 +41,52 @@ const CHANGE_BG: Record<DiffChange, string> = {
   changed: "bg-gold/10",
 };
 
-/** Caps only the human label so "Added edge" / "from" / "to" stay visible. */
-function TruncLabel({ text }: { text: string }) {
+/** Caps only the human label so "connection" / "from" / "to" stay visible. */
+function TruncLabel({ text, className }: { text: string; className?: string }) {
   return (
-    <span className="inline-block max-w-[24ch] truncate align-bottom" title={text}>
+    <span
+      className={cn("inline-block max-w-[24ch] truncate align-bottom", className)}
+      title={text}
+    >
       {text}
     </span>
   );
 }
 
+const LINK_UNDERLINE = "underline decoration-foreground/40 underline-offset-2";
+
 function MapRef({
   prefix,
   label,
   questionId,
+  quoted = false,
   onShowOnMap,
 }: {
   prefix: string;
   label: string;
   questionId: UUID | null;
+  quoted?: boolean;
   onShowOnMap: (questionId: string) => void;
 }) {
+  // Underline starts at connection/question/option and runs through the
+  // closing quote. The verb ("Added") is a separate text piece so it
+  // stays plain. TruncLabel is inline-block, so it needs the underline
+  // class of its own or the quoted words would skip the decoration.
   const body = (
-    <>
+    <span className={LINK_UNDERLINE}>
       {prefix}
-      <TruncLabel text={label} />
-    </>
+      {quoted ? (
+        <>
+          "
+          <TruncLabel text={label} className={cn("font-bold", LINK_UNDERLINE)} />"
+        </>
+      ) : (
+        <TruncLabel text={label} className={LINK_UNDERLINE} />
+      )}
+    </span>
   );
+
+  const spoken = quoted ? `${prefix}"${label}"` : `${prefix}${label}`;
 
   if (questionId === null) {
     return <span className="font-medium">{body}</span>;
@@ -75,8 +95,8 @@ function MapRef({
   return (
     <button
       type="button"
-      className="text-foreground inline-flex max-w-full items-baseline gap-0.5 text-left font-medium underline decoration-foreground/40 underline-offset-2"
-      aria-label={`${prefix}${label}. Open on the map`}
+      className="text-foreground inline-flex max-w-full cursor-pointer items-baseline gap-0.5 text-left font-medium opacity-100 transition-opacity duration-150 hover:opacity-90"
+      aria-label={`${spoken}. Open on the map`}
       onClick={() => onShowOnMap(questionId)}
     >
       {body}
@@ -129,6 +149,7 @@ function DiffItem({
                   prefix={piece.prefix}
                   label={piece.label}
                   questionId={piece.questionId}
+                  quoted={piece.quoted === true}
                   onShowOnMap={onShowOnMap}
                 />
               ),

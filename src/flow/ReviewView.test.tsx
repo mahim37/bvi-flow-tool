@@ -291,9 +291,6 @@ describe("ReviewView with no parent to compare against", () => {
     );
 
     expect(
-      screen.getByText(/this is the first version, so there is nothing to compare/i),
-    ).toBeInTheDocument();
-    expect(
       screen.getByText(/no earlier version to diff this one against/i),
     ).toBeInTheDocument();
     expect(screen.queryByText(/everything here is new/i)).not.toBeInTheDocument();
@@ -393,7 +390,15 @@ describe("ReviewView change-count pills", () => {
     await user.click(
       screen.getByRole("button", { name: new RegExp(`^${RISK_PROMPT}`) }),
     );
-    expect(screen.getByText(/Removed question/)).toBeInTheDocument();
-    expect(screen.queryByText(/Changed question/)).not.toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("article")
+        .some((element) => /Removed question/.test(element.textContent ?? "")),
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole("article")
+        .some((element) => /Changed question/.test(element.textContent ?? "")),
+    ).toBe(false);
   });
 });

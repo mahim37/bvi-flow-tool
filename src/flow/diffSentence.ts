@@ -7,14 +7,23 @@ import {
   findSection,
   locate,
 } from "./diffItem";
-import { DEFAULT_ROUTE_LABEL } from "./labels";
 
 export type DiffPiece =
   | { type: "text"; text: string }
-  | { type: "ref"; prefix: string; label: string; questionId: UUID | null };
+  | {
+      type: "ref";
+      prefix: string;
+      label: string;
+      questionId: UUID | null;
+      quoted?: boolean;
+    };
 
-function edgeLabel(graph: Graph, fromQuestion: UUID, fromOption: UUID | null): string {
-  if (fromOption === null) return DEFAULT_ROUTE_LABEL;
+function edgeOptionLabel(
+  graph: Graph,
+  fromQuestion: UUID,
+  fromOption: UUID | null,
+): string | null {
+  if (fromOption === null) return null;
   const option =
     findQuestion(graph, fromQuestion)?.options.find(
       (candidate) => candidate.id === fromOption,
@@ -29,18 +38,29 @@ function changeVerb(change: DiffChange): string {
 }
 
 function kindWord(kind: ItemDiff["kind"]): string {
-  if (kind === "edge") return "edge";
+  if (kind === "edge") return "connection";
   if (kind === "option") return "option";
   if (kind === "section") return "section";
   return "question";
 }
 
-function ref(prefix: string, label: string, questionId: UUID | null): DiffPiece {
-  return { type: "ref", prefix, label, questionId };
+function ref(
+  prefix: string,
+  label: string,
+  questionId: UUID | null,
+  quoted = false,
+): DiffPiece {
+  return quoted
+    ? { type: "ref", prefix, label, questionId, quoted: true }
+    : { type: "ref", prefix, label, questionId };
 }
 
 function text(value: string): DiffPiece {
   return { type: "text", text: value };
+}
+
+function questionRef(label: string, questionId: UUID | null): DiffPiece {
+  return ref("Question ", label, questionId, true);
 }
 
 /** The draft-side question a row hangs off (`diffing.ItemDiff.question_id`),
@@ -54,6 +74,9 @@ function mapNode(graph: Graph, questionId: UUID | null): Question | undefined {
 /**
  * Structured review row: human labels only, each question a separate ref.
  *
+ * Quoted values are the actual prompts / option labels. Edges read as
+ * "connection"; a question-level fallback never says "default".
+ *
  * `baseGraph` is the version the diff was taken against. Without it a
  * removed item, or a retired question the draft graph no longer serves,
  * can only be described by its kind.
@@ -64,30 +87,32 @@ export function diffPieces(
   baseGraph?: Graph,
 ): DiffPiece[] {
   const verb = changeVerb(effectiveChange(item));
-  const lead = `${verb} ${kindWord(item.kind)} `;
-  const bare = text(`${verb} ${kindWord(item.kind)}`);
+  const kind = kindWord(item.kind);
+  const kindLead = `${kind} `;
+  const bare = text(`${verb} ${kind}`);
 
   switch (item.kind) {
     case "question": {
       const found = locate(item, graph, baseGraph, findQuestion);
       if (found === undefined) return [bare];
-      return [ref(lead, found.value.prompt, found.onMap ? found.value.id : null)];
+      return [
+        text(`${verb} `),
+        ref(kindLead, found.value.prompt, found.onMap ? found.value.id : null, true),
+      ];
     }
     case "option": {
       const found = locate(item, graph, baseGraph, findOption);
-      // The parent is named from the draft graph whenever it is there --
-      // that is the node the map would open -- and from wherever the
-      // option itself turned up otherwise.
       const draftParent =
         mapNode(graph, item.question_id) ??
         (found?.onMap ? found.value.question : undefined);
       const parent = draftParent ?? found?.value.question;
       const parentId = draftParent?.id ?? null;
-      const pieces: DiffPiece[] = [
-        found === undefined ? bare : ref(lead, found.value.option.label, parentId),
-      ];
+      const pieces: DiffPiece[] =
+        found === undefined
+          ? [bare]
+          : [text(`${verb} `), ref(kindLead, found.value.option.label, parentId, true)];
       if (parent !== undefined) {
-        pieces.push(text(" on "), ref("", parent.prompt, parentId));
+        pieces.push(text(" on "), questionRef(parent.prompt, parentId));
       }
       return pieces;
     }
@@ -106,29 +131,31 @@ export function diffPieces(
       if (found === undefined) {
         pieces.push(bare);
       } else {
-        const edge = found.value;
-        pieces.push(
-          ref(
-            lead,
-            edgeLabel(found.graph, edge.from_question, edge.from_option),
-            fromId,
-          ),
+        const optionLabel = edgeOptionLabel(
+          found.graph,
+          found.value.from_question,
+          found.value.from_option,
         );
+        if (optionLabel === null) {
+          pieces.push(text(`${verb} connection`));
+        } else {
+          pieces.push(text(`${verb} `), ref(kindLead, optionLabel, fromId, true));
+        }
       }
       if (from !== undefined) {
-        pieces.push(text(" from "), ref("", from.prompt, fromId));
+        pieces.push(text(" from "), questionRef(from.prompt, fromId));
       }
       if (found !== undefined) {
         pieces.push(text(" to "));
         const edge = found.value;
         if (edge.to_question === null) {
-          pieces.push(text("End of flow"));
+          pieces.push(text('"End of flow"'));
         } else {
           const destination = findQuestion(found.graph, edge.to_question);
           if (destination === undefined) pieces.push(text("question"));
           else {
             pieces.push(
-              ref("", destination.prompt, found.onMap ? destination.id : null),
+              questionRef(destination.prompt, found.onMap ? destination.id : null),
             );
           }
         }
@@ -139,7 +166,10 @@ export function diffPieces(
       const found = locate(item, graph, baseGraph, findSection);
       if (found === undefined) return [bare];
       const section = found.value;
-      return [ref(lead, section.name !== "" ? section.name : section.code, null)];
+      return [
+        text(`${verb} `),
+        ref(kindLead, section.name !== "" ? section.name : section.code, null, true),
+      ];
     }
   }
 }
@@ -147,7 +177,9 @@ export function diffPieces(
 export function diffSentence(item: ItemDiff, graph: Graph, baseGraph?: Graph): string {
   return diffPieces(item, graph, baseGraph)
     .map((piece) =>
-      piece.type === "text" ? piece.text : `${piece.prefix}${piece.label}`,
+      piece.type === "text"
+        ? piece.text
+        : `${piece.prefix}${piece.quoted === true ? `"${piece.label}"` : piece.label}`,
     )
     .join("");
 }

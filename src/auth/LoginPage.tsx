@@ -46,7 +46,9 @@ export function LoginPage() {
             <div className="flex items-start gap-3">
               <img className="block h-8 w-auto shrink-0" src={croppedLogo} alt="" />
               <div>
-                <h1 className="m-0 text-xl font-extrabold tracking-tight">Flow Tool</h1>
+                <h1 className="font-serif m-0 text-xl font-extrabold tracking-tight">
+                  Flow Tool
+                </h1>
                 <p className="text-muted-foreground mt-1 mb-0 text-[0.85rem]">
                   Internal tool. Staff sign-in required.
                 </p>

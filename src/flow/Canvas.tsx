@@ -63,7 +63,7 @@ function fitToChainStart(cy: Core, count: number) {
 }
 
 const CANVAS_LABEL_FONT =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 /** Direct DOM write so the highlight tracks pan/zoom on the same frame.
  * React state on `pan` lagged a frame behind the stroke (or missed the
@@ -318,6 +318,28 @@ function repositionNewSiblings(cy: Core, newNodeIds: ReadonlySet<string>) {
     const anchorPosition = anchor.position();
     node.position({ x: anchorPosition.x + 220, y: anchorPosition.y + index * 90 });
   }
+}
+
+function QuestionNodeTip({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const idLine = lines[0];
+  if (idLine === undefined || !idLine.startsWith("ID: ") || lines.length < 2) {
+    return text;
+  }
+  const last = lines[lines.length - 1];
+  const typeLine = last !== undefined && last.startsWith("(") ? last : undefined;
+  const prompt = lines.slice(1, typeLine === undefined ? undefined : -1).join("\n");
+  return (
+    <>
+      <div className="text-[11px] font-medium tracking-[0.02em] text-[#9a9080]">
+        {idLine}
+      </div>
+      <div className="mt-0.5 font-semibold">{prompt}</div>
+      {typeLine !== undefined && (
+        <div className="mt-0.5 text-[11px] font-medium text-[#9a9080]">{typeLine}</div>
+      )}
+    </>
+  );
 }
 
 export function Canvas({
@@ -668,8 +690,7 @@ export function Canvas({
           } else {
             // Compound parent is fixed at add time -- `.data({ parent })`
             // updates the field but leaves the node outside the box.
-            const nextParent =
-              (element.data as { parent?: string }).parent ?? null;
+            const nextParent = (element.data as { parent?: string }).parent ?? null;
             const currentParent = existing.isNode()
               ? ((existing.data("parent") as string | undefined) ?? null)
               : null;
@@ -1013,7 +1034,7 @@ export function Canvas({
           }}
           aria-hidden="true"
         >
-          {tip.text}
+          {tip.role === "node" ? <QuestionNodeTip text={tip.text} /> : tip.text}
         </div>
       ))}
 

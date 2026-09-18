@@ -4,6 +4,7 @@ import {
   canvasCursorRole,
   draftChromeLabel,
   draftChromeState,
+  isPendingReviewFor,
   isUnderReview,
   latestChangeRequest,
   reviewApprovalProgress,
@@ -244,6 +245,69 @@ describe("canvasCursorRole", () => {
         identityEmail: "me@example.com",
       }),
     ).toBe("Viewer");
+  });
+});
+
+describe("isPendingReviewFor", () => {
+  const submitted = {
+    id: "1",
+    draft_version: "v",
+    created_by: "a",
+    created_by_email: "author@example.com",
+    summary: "",
+    status: "submitted" as const,
+    submitted_at: "2026-09-16T11:00:00Z",
+    published_at: null,
+    published_by: null,
+    published_by_email: null,
+    reviewer_1: "r1",
+    reviewer_1_email: "reviewer-1@example.com",
+    reviewer_1_approved_at: null,
+    reviewer_2: "r2",
+    reviewer_2_email: "reviewer-2@example.com",
+    reviewer_2_approved_at: null,
+    lock: null,
+    reviews: [],
+    created: "2026-09-16T10:00:00Z",
+    modified: "2026-09-16T11:00:00Z",
+    break_draft_version_id: null,
+  };
+
+  it("is true only for a named reviewer who has not approved yet", () => {
+    expect(isPendingReviewFor(submitted, true, "reviewer-1@example.com")).toBe(true);
+    expect(isPendingReviewFor(submitted, true, "reviewer-2@example.com")).toBe(true);
+    expect(
+      isPendingReviewFor(
+        { ...submitted, reviewer_1_approved_at: "2026-09-16T12:00:00Z" },
+        true,
+        "reviewer-1@example.com",
+      ),
+    ).toBe(false);
+  });
+
+  it("is false for bystanders, the author, and a missing email", () => {
+    expect(isPendingReviewFor(submitted, true, "viewer@example.com")).toBe(false);
+    expect(isPendingReviewFor(submitted, true, "author@example.com")).toBe(false);
+    expect(isPendingReviewFor(submitted, true, null)).toBe(false);
+    expect(isPendingReviewFor(submitted, true, "  ")).toBe(false);
+  });
+
+  it("is false on an open draft even if reviewer emails are already filled in", () => {
+    expect(
+      isPendingReviewFor(
+        {
+          ...submitted,
+          status: "open",
+          submitted_at: null,
+        },
+        true,
+        "reviewer-1@example.com",
+      ),
+    ).toBe(false);
+  });
+
+  it("is false on a published version", () => {
+    expect(isPendingReviewFor(submitted, false, "reviewer-1@example.com")).toBe(false);
   });
 });
 
